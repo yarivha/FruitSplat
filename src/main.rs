@@ -732,20 +732,7 @@ impl Game {
     // which is what makes a Spike Layer good against splits.
     // ─────────────────────────────────────────────────────────────────────────
     fn update_spikes(&mut self) {
-        let mut pops: Vec<(usize, u32)> = Vec::new();
-
-        for pile in &mut self.spikes {
-            for (i, f) in self.fruits.iter().enumerate() {
-                if pile.spent() {
-                    break;
-                }
-                if pile.covers(f.dist, f.radius()) {
-                    pile.charges -= 1;
-                    pops.push((i, pile.owner));
-                }
-            }
-        }
-
+        let pops = run_over_spikes(&mut self.spikes, &self.fruits);
         self.spikes.retain(|p| !p.spent());
         self.apply_pops(pops);
     }
@@ -865,6 +852,36 @@ impl Game {
             }
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Walk the fruit over the spike piles, spending one spike per fruit popped.
+// Returns (fruit index, owning tower id) for every fruit a pile got.
+//
+// A fruit costs exactly one spike however many piles it is standing on. Piles
+// are dropped SPIKE_SPACING apart and each reaches radius + SPIKE_RADIUS along
+// the track, so overlap is the norm rather than the exception — a watermelon is
+// wide enough to sit on three at once. Charging every pile that covered it spent
+// three spikes to pop a single fruit, which quietly broke the rule the tower is
+// sold on: a pile pops one fruit per spike.
+// ─────────────────────────────────────────────────────────────────────────────
+fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32)> {
+    let mut pops = Vec::new();
+
+    for (i, f) in fruits.iter().enumerate() {
+        // Which of the covering piles pays is arbitrary — every spike is worth
+        // the same — so it is simply the first one with any left.
+        let hit = piles
+            .iter_mut()
+            .find(|p| !p.spent() && p.covers(f.dist, f.radius()));
+
+        if let Some(pile) = hit {
+            pile.charges -= 1;
+            pops.push((i, pile.owner));
+        }
+    }
+
+    pops
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1035,5 +1052,133 @@ async fn main() {
         }
 
         next_frame().await;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Only the free functions are covered here. The Game methods can't be reached
+// from a test: they read macroquad's input globals and hold an Audio, neither
+// of which exists without a window.
+// ─────────────────────────────────────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tower::SPIKE_RADIUS;
+
+    /// A long straight run, so a fruit's distance along it is easy to reason
+    /// about. Spike collision is measured along the track, never in pixels.
+    fn straight_path() -> Path {
+        Path::new(vec![vec2(0.0, 0.0), vec2(2000.0, 0.0)])
+    }
+
+    fn fruit_at(kind: FruitKind, dist: f32, path: &Path) -> Fruit {
+        Fruit::new(kind, dist, path, 1.0)
+    }
+
+    fn pile_at(dist: f32, charges: u32, owner: u32) -> SpikePile {
+        SpikePile::new(Vec2::ZERO, dist, charges, owner, 0.0)
+    }
+
+    #[test]
+    fn a_fruit_standing_on_two_piles_only_costs_one_spike() {
+        let path = straight_path();
+        // The tightest two piles can ever sit, and a watermelon parked between
+        // them — the arrangement a saturated stretch of track produces.
+        let mut piles = vec![pile_at(500.0, 4, 7), pile_at(500.0 + SPIKE_SPACING, 4, 7)];
+        let fruits = vec![fruit_at(
+            FruitKind::Watermelon,
+            500.0 + SPIKE_SPACING * 0.5,
+            &path,
+        )];
+        assert!(
+            piles
+                .iter()
+                .all(|p| p.covers(fruits[0].dist, fruits[0].radius())),
+            "setup is wrong: both piles must cover the fruit"
+        );
+
+        let pops = run_over_spikes(&mut piles, &fruits);
+
+        assert_eq!(pops.len(), 1, "one fruit can only be popped once");
+        assert_eq!(
+            piles.iter().map(|p| p.charges).sum::<u32>(),
+            7,
+            "one spike spent, not one per overlapping pile"
+        );
+    }
+
+    #[test]
+    fn each_fruit_on_a_pile_costs_its_own_spike() {
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 4, 7)];
+        let fruits = vec![
+            fruit_at(FruitKind::Blueberry, 495.0, &path),
+            fruit_at(FruitKind::Blueberry, 505.0, &path),
+        ];
+
+        assert_eq!(run_over_spikes(&mut piles, &fruits).len(), 2);
+        assert_eq!(piles[0].charges, 2);
+    }
+
+    #[test]
+    fn a_pile_stops_popping_once_its_spikes_run_out() {
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 1, 7)];
+        let fruits = vec![
+            fruit_at(FruitKind::Blueberry, 498.0, &path),
+            fruit_at(FruitKind::Blueberry, 502.0, &path),
+        ];
+
+        assert_eq!(run_over_spikes(&mut piles, &fruits).len(), 1);
+        assert!(piles[0].spent());
+    }
+
+    #[test]
+    fn a_pile_ignores_fruit_walking_a_neighbouring_lane() {
+        // On the switchback routes two stretches of track run within a few
+        // dozen pixels of each other. Far apart along the route is far apart.
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 4, 7)];
+        let fruits = vec![fruit_at(FruitKind::Watermelon, 900.0, &path)];
+
+        assert!(run_over_spikes(&mut piles, &fruits).is_empty());
+        assert_eq!(piles[0].charges, 4, "an untouched pile keeps its spikes");
+    }
+
+    #[test]
+    fn a_pop_is_credited_to_the_tower_that_dropped_the_pile() {
+        let path = straight_path();
+        let mut piles = vec![pile_at(200.0, 4, 11), pile_at(900.0, 4, 22)];
+        let fruits = vec![fruit_at(FruitKind::Lime, 900.0, &path)];
+
+        assert_eq!(run_over_spikes(&mut piles, &fruits), vec![(0, 22)]);
+    }
+
+    #[test]
+    fn a_spike_spot_is_inside_range_and_clear_of_the_piles_already_down() {
+        let path = straight_path();
+        let tower = vec2(600.0, 0.0);
+        let existing = vec![pile_at(640.0, 4, 0)];
+
+        let (dist, pos) = pick_spike_spot(&path, tower, 120.0, &existing).unwrap();
+
+        assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+        assert!(
+            (dist - existing[0].dist).abs() >= SPIKE_SPACING,
+            "spot crowded a pile already on the track"
+        );
+        // Coverage runs to the far edge of range, then works backwards as spots
+        // fill, so a tower spreads its piles over its whole stretch.
+        assert!(dist > tower.x, "should favour the far end of the coverage");
+    }
+
+    #[test]
+    fn a_pile_and_a_fruit_that_only_just_touch_still_connect() {
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 4, 7)];
+        let r = FruitKind::Lime.radius();
+        let fruits = vec![fruit_at(FruitKind::Lime, 500.0 + r + SPIKE_RADIUS - 0.1, &path)];
+
+        assert_eq!(run_over_spikes(&mut piles, &fruits).len(), 1);
     }
 }

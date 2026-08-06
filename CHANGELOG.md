@@ -61,10 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 59 unit tests covering path maths (corner traversal, end clamping,
+- 66 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
-  sell values, validation that every authored route enters and exits off-screen
+  sell values, spike-pile charge accounting and where a Spike Layer drops its
+  next pile, validation that every authored route enters and exits off-screen
   and leaves room for towers beside it, UI layout assertions that the four shop
   buttons and the hint column fit the window without overlapping, and scenery
   checks covering prop placement, determinism and the local RNG's range.
@@ -212,3 +213,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   narrowing it left the shop buttons taking clicks from where they were no
   longer drawn, and shortening it dropped the whole bar off the bottom, since
   PLAYFIELD_H never yields the strip back. The window is now fixed size.
+- A fruit standing on several spike piles at once spent a spike from every one
+  of them while only ever being popped once. Piles sit `SPIKE_SPACING` apart and
+  each reaches `radius + SPIKE_RADIUS` along the track, so overlap is the norm
+  rather than the exception — a watermelon is wide enough to sit on three at
+  once, burning three spikes for one pop against the rule the tower is sold on.
+  Fruit are now walked over the piles rather than piles over the fruit, so one
+  fruit costs exactly one spike. Guarded by tests.
