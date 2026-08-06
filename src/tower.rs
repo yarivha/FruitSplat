@@ -170,6 +170,10 @@ fn level_index(level: u8) -> usize {
 
 /// A placed tower. `angle` is kept purely so the barrel can face its target;
 /// `invested` accumulates the purchase and every upgrade, for the sell refund.
+///
+/// `id` is a stable handle that survives other towers being sold, unlike a
+/// position in the tower list. Projectiles carry it so kills can be credited
+/// back to whichever tower actually fired the shot.
 pub struct Tower {
     pub kind: TowerKind,
     pub pos: Vec2,
@@ -177,10 +181,18 @@ pub struct Tower {
     pub angle: f32,
     pub level: u8,
     pub invested: u32,
+    pub id: u32,
+
+    /// Projectiles fired, or pulses emitted for a Freezer.
+    pub shots_fired: u32,
+    /// Fruit popped by this tower's shots. Always 0 for a Freezer.
+    pub kills: u32,
+    /// Fruit chilled across every pulse. Freezer only.
+    pub chills: u32,
 }
 
 impl Tower {
-    pub fn new(kind: TowerKind, pos: Vec2) -> Self {
+    pub fn new(kind: TowerKind, pos: Vec2, id: u32) -> Self {
         Tower {
             kind,
             pos,
@@ -188,6 +200,10 @@ impl Tower {
             angle: 0.0,
             level: 1,
             invested: kind.cost(),
+            id,
+            shots_fired: 0,
+            kills: 0,
+            chills: 0,
         }
     }
 
@@ -324,7 +340,7 @@ mod tests {
 
     #[test]
     fn selling_refunds_a_fraction_of_everything_invested() {
-        let mut t = Tower::new(TowerKind::SeedShooter, Vec2::ZERO);
+        let mut t = Tower::new(TowerKind::SeedShooter, Vec2::ZERO, 0);
         assert_eq!(t.invested, 90);
         assert_eq!(t.sell_value(), 54); // 60% of 90
 
@@ -338,7 +354,7 @@ mod tests {
     #[test]
     fn selling_never_pays_more_than_was_spent() {
         for kind in TowerKind::ALL {
-            let mut t = Tower::new(kind, Vec2::ZERO);
+            let mut t = Tower::new(kind, Vec2::ZERO, 0);
             while let Some(cost) = t.upgrade_cost() {
                 t.upgrade(cost);
             }
@@ -348,7 +364,7 @@ mod tests {
 
     #[test]
     fn a_maxed_tower_cannot_be_upgraded_further() {
-        let mut t = Tower::new(TowerKind::Blender, Vec2::ZERO);
+        let mut t = Tower::new(TowerKind::Blender, Vec2::ZERO, 0);
         while let Some(cost) = t.upgrade_cost() {
             t.upgrade(cost);
         }

@@ -31,6 +31,10 @@ const BTN_H: f32 = 62.0;
 const BTN_GAP: f32 = 16.0;
 const BTN_X0: f32 = 24.0;
 
+/// Floating tower-panel size.
+const PANEL_W: f32 = 250.0;
+const PANEL_H: f32 = 206.0;
+
 /// Route-selection card layout.
 const CARD_W: f32 = 220.0;
 const CARD_H: f32 = 210.0;
@@ -417,7 +421,7 @@ pub fn shop_button_rect(i: usize) -> Rect {
 // Bottom shop bar: one button per tower, dimmed when it can't be afforded and
 // outlined when it's the current selection.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_shop(selected: Option<TowerKind>, cash: u32, inspected: Option<&Tower>) {
+pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
     draw_rectangle(
         0.0,
         PLAYFIELD_H,
@@ -466,78 +470,198 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32, inspected: Option<&Towe
         );
     }
 
-    // The right-hand strip shows either the generic hints or, when a placed
-    // tower is selected, that tower's upgrade and sell options.
-    let panel_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
-    match inspected {
-        Some(t) => draw_tower_panel(t, panel_x, cash),
-        None => draw_shop_hints(panel_x),
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Default right-hand strip: what the player can do with the shop.
-// ─────────────────────────────────────────────────────────────────────────────
-fn draw_shop_hints(x: f32) {
     let dim = Color::new(0.70, 0.70, 0.78, 1.0);
-    draw_text("click to place", x, PLAYFIELD_H + 30.0, 18.0, dim);
-    draw_text("right-click cancels", x, PLAYFIELD_H + 52.0, 18.0, dim);
-    draw_text("click a tower to upgrade", x, PLAYFIELD_H + 74.0, 18.0, dim);
+    let hint_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
+    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 18.0, dim);
+    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 18.0, dim);
+    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 18.0, dim);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Right-hand strip for the selected tower: level, next upgrade, sell value.
-// The upgrade line turns red when it can't currently be afforded.
+// Where the floating tower panel sits for a tower at `tower_pos`.
+//
+// Prefers the right of the tower and flips to the left when that would run off
+// the window, then clamps vertically so it always stays inside the playfield.
+// main.rs hit-tests clicks against this same rect.
 // ─────────────────────────────────────────────────────────────────────────────
-fn draw_tower_panel(t: &Tower, x: f32, cash: u32) {
+pub fn tower_panel_rect(tower_pos: Vec2) -> Rect {
+    let gap = TOWER_RADIUS + 14.0;
+
+    let mut x = tower_pos.x + gap;
+    if x + PANEL_W > screen_width() - 10.0 {
+        x = tower_pos.x - gap - PANEL_W;
+    }
+    x = x.clamp(10.0, (screen_width() - PANEL_W - 10.0).max(10.0));
+
+    let y = (tower_pos.y - PANEL_H * 0.5).clamp(10.0, PLAYFIELD_H - PANEL_H - 10.0);
+
+    Rect::new(x, y, PANEL_W, PANEL_H)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The upgrade button inside a panel.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn panel_upgrade_button(panel: Rect) -> Rect {
+    Rect::new(panel.x + 12.0, panel.y + 130.0, panel.w - 24.0, 32.0)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The sell button inside a panel.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn panel_sell_button(panel: Rect) -> Rect {
+    Rect::new(panel.x + 12.0, panel.y + 168.0, panel.w - 24.0, 28.0)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The floating panel for the selected tower: what it is, how it's performing,
+// and buttons to upgrade or sell it.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_tower_panel(t: &Tower, cash: u32) {
+    let r = tower_panel_rect(t.pos);
+    let mouse = mouse_vec();
+
+    draw_rectangle(r.x, r.y, r.w, r.h, Color::new(0.10, 0.11, 0.14, 0.95));
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, Color::new(1.0, 0.92, 0.55, 1.0));
+
     draw_text(
         format!("{}  Lv{}", t.kind.name(), t.level),
-        x,
-        PLAYFIELD_H + 30.0,
-        20.0,
+        r.x + 12.0,
+        r.y + 26.0,
+        21.0,
         WHITE,
     );
+    draw_line(
+        r.x + 12.0,
+        r.y + 36.0,
+        r.x + r.w - 12.0,
+        r.y + 36.0,
+        1.0,
+        Color::new(0.4, 0.4, 0.48, 1.0),
+    );
 
-    match t.upgrade_cost() {
-        Some(cost) => {
-            let color = if cash >= cost {
-                Color::new(0.65, 1.0, 0.70, 1.0)
-            } else {
-                Color::new(1.0, 0.55, 0.50, 1.0)
-            };
-            draw_text(
-                format!("U  upgrade ${cost}"),
-                x,
-                PLAYFIELD_H + 52.0,
-                18.0,
-                color,
-            );
-            draw_text(
-                t.upgrade_label(),
-                x + 148.0,
-                PLAYFIELD_H + 52.0,
-                16.0,
-                Color::new(0.78, 0.78, 0.84, 1.0),
-            );
-        }
-        None => {
-            draw_text(
-                "fully upgraded",
-                x,
-                PLAYFIELD_H + 52.0,
-                18.0,
-                Color::new(1.0, 0.85, 0.45, 1.0),
-            );
-        }
+    draw_tower_stats(t, r);
+    draw_upgrade_button(t, r, cash, mouse);
+    draw_sell_button(t, r, mouse);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The stat rows: current numbers first, then this tower's running tally.
+// A Freezer deals no damage, so it reports what it has chilled instead.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_tower_stats(t: &Tower, panel: Rect) {
+    let rows: [(&str, String); 4] = match t.kind {
+        TowerKind::Freezer => [
+            ("Range", format!("{:.0}", t.range())),
+            ("Chill", format!("{:.0}%", t.slow_factor() * 100.0)),
+            ("Pulses", t.shots_fired.to_string()),
+            ("Chilled", t.chills.to_string()),
+        ],
+        TowerKind::Blender => [
+            ("Range", format!("{:.0}", t.range())),
+            ("Splash", format!("{:.0}", t.splash_radius())),
+            ("Shots", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
+        TowerKind::SeedShooter => [
+            ("Range", format!("{:.0}", t.range())),
+            ("Rate", format!("{:.2}s", t.fire_cooldown())),
+            ("Shots", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
+    };
+
+    let label = Color::new(0.70, 0.70, 0.78, 1.0);
+    for (i, (name, value)) in rows.iter().enumerate() {
+        let y = panel.y + 58.0 + i as f32 * 21.0;
+        draw_text(*name, panel.x + 14.0, y, 17.0, label);
+
+        // Values are right-aligned so the column reads as a table.
+        let dims = measure_text(value, None, 17, 1.0);
+        draw_text(value, panel.x + panel.w - dims.width - 14.0, y, 17.0, WHITE);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upgrade button: green when affordable, red when not, inert once maxed.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_upgrade_button(t: &Tower, panel: Rect, cash: u32, mouse: Vec2) {
+    let b = panel_upgrade_button(panel);
+
+    let Some(cost) = t.upgrade_cost() else {
+        draw_rectangle(b.x, b.y, b.w, b.h, Color::new(0.16, 0.16, 0.19, 1.0));
+        draw_text(
+            "fully upgraded",
+            b.x + 10.0,
+            b.y + 21.0,
+            18.0,
+            Color::new(1.0, 0.85, 0.45, 1.0),
+        );
+        return;
+    };
+
+    let affordable = cash >= cost;
+    let hovered = b.contains(mouse) && affordable;
+
+    let bg = if !affordable {
+        Color::new(0.20, 0.14, 0.14, 1.0)
+    } else if hovered {
+        Color::new(0.24, 0.40, 0.26, 1.0)
+    } else {
+        Color::new(0.18, 0.30, 0.20, 1.0)
+    };
+    let accent = if affordable {
+        Color::new(0.60, 1.0, 0.65, 1.0)
+    } else {
+        Color::new(1.0, 0.50, 0.45, 1.0)
+    };
+
+    draw_rectangle(b.x, b.y, b.w, b.h, bg);
+    draw_rectangle_lines(b.x, b.y, b.w, b.h, 2.0, accent);
+
+    draw_text(format!("Upgrade ${cost}"), b.x + 10.0, b.y + 21.0, 18.0, accent);
+
+    // The label for what the money buys, right-aligned against the button edge.
+    let label = t.upgrade_label();
+    let dims = measure_text(label, None, 14, 1.0);
+    draw_text(
+        label,
+        b.x + b.w - dims.width - 10.0,
+        b.y + 21.0,
+        14.0,
+        Color::new(0.78, 0.78, 0.84, 1.0),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sell button, showing what the refund is worth right now.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_sell_button(t: &Tower, panel: Rect, mouse: Vec2) {
+    let b = panel_sell_button(panel);
+    let hovered = b.contains(mouse);
+
+    let bg = if hovered {
+        Color::new(0.32, 0.22, 0.22, 1.0)
+    } else {
+        Color::new(0.22, 0.17, 0.17, 1.0)
+    };
+    draw_rectangle(b.x, b.y, b.w, b.h, bg);
+    draw_rectangle_lines(b.x, b.y, b.w, b.h, 1.5, Color::new(0.75, 0.55, 0.55, 1.0));
 
     draw_text(
-        format!("S  sell ${}", t.sell_value()),
-        x,
-        PLAYFIELD_H + 74.0,
-        18.0,
-        Color::new(0.85, 0.85, 0.90, 1.0),
+        format!("Sell ${}", t.sell_value()),
+        b.x + 10.0,
+        b.y + 19.0,
+        17.0,
+        Color::new(0.95, 0.80, 0.78, 1.0),
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Current mouse position as a Vec2.
+// ─────────────────────────────────────────────────────────────────────────────
+fn mouse_vec() -> Vec2 {
+    let (x, y) = mouse_position();
+    vec2(x, y)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

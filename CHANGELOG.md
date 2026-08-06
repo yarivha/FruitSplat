@@ -57,11 +57,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     across the two lead fruit at Lv3.
   - Blender ($120, $240): splash widens from 58px to 90px and the rate climbs.
   - Freezer ($100, $200): chill deepens from 45% to 25% speed and lasts longer.
-- Tower selling — click a placed tower and press `S` to refund 60% of everything
-  invested in it, upgrades included.
-- Tower inspection UI: click any placed tower to see its level, next upgrade and
-  sell value, with its range ring drawn on the field. Gold pips under each tower
-  show its level without needing a click.
+- Tower selling — refunds 60% of everything invested in a tower, upgrades
+  included.
+- Per-tower statistics panel: clicking a placed tower opens a floating panel
+  showing its level, current range and rate, shots fired and kills. A Freezer
+  reports pulses and fruit chilled instead, since it deals no damage. Upgrade
+  and Sell are buttons in that panel — there are no keyboard shortcuts for them.
+- Kill attribution: projectiles carry the id of the tower that fired them, so
+  kills are credited to the right tower even after other towers are sold. A
+  Blender's splash banks every fruit caught in the blast.
+- The inspected tower's range ring is drawn on the field, and gold pips under
+  each tower show its level without needing a click.
 - Overlapping Freezers now stack by keeping the strongest chill and the longest
   remaining duration, instead of the last one to fire winning.
 - Route selection — four hand-authored tracks to choose from at the start of a

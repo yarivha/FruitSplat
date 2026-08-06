@@ -80,6 +80,9 @@ struct Game {
     selected_tower: Option<usize>,
     /// Which entry of tracks::TRACKS the current run is being played on.
     track: usize,
+    /// Handed out to each placed tower so projectiles can credit kills back to
+    /// a specific tower even after others are sold.
+    next_tower_id: u32,
     audio: Audio,
 }
 
@@ -108,6 +111,7 @@ impl Game {
             selected: None,
             selected_tower: None,
             track: 0,
+            next_tower_id: 0,
             audio,
         }
     }
@@ -132,6 +136,7 @@ impl Game {
         self.cash = START_CASH;
         self.selected = None;
         self.selected_tower = None;
+        self.next_tower_id = 0;
         self.state = State::Playing;
         self.audio.play_music(Track::Game);
     }
@@ -233,21 +238,37 @@ impl Game {
             self.start_wave();
         }
 
-        if is_key_pressed(KeyCode::U) {
-            self.upgrade_selected();
-        }
-        if is_key_pressed(KeyCode::S) {
-            self.sell_selected();
-        }
-
         if is_mouse_button_pressed(MouseButton::Left) {
             let m = mouse_vec();
             if m.y >= PLAYFIELD_H {
                 self.click_shop(m);
-            } else {
+            } else if !self.click_tower_panel(m) {
+                // Only treat it as a field click if the panel didn't take it.
                 self.click_field(m);
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Route a click at the open tower panel. Returns true when the panel
+    // consumed it, so a click on the panel never also places or deselects.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn click_tower_panel(&mut self, m: Vec2) -> bool {
+        let Some(t) = self.inspected_tower() else {
+            return false;
+        };
+
+        let panel = render::tower_panel_rect(t.pos);
+        if !panel.contains(m) {
+            return false;
+        }
+
+        if render::panel_upgrade_button(panel).contains(m) {
+            self.upgrade_selected();
+        } else if render::panel_sell_button(panel).contains(m) {
+            self.sell_selected();
+        }
+        true
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -337,7 +358,8 @@ impl Game {
         }
 
         self.cash -= kind.cost();
-        self.towers.push(Tower::new(kind, p));
+        self.towers.push(Tower::new(kind, p, self.next_tower_id));
+        self.next_tower_id += 1;
         self.audio.play_place();
     }
 
@@ -431,16 +453,18 @@ impl Game {
 
             if t.kind == TowerKind::Freezer {
                 let (factor, duration) = (t.slow_factor(), t.freeze_duration());
-                let mut chilled_any = false;
+                let mut chilled = 0;
                 for f in &mut self.fruits {
                     if f.pos.distance(t.pos) <= range {
                         f.chill(factor, duration);
-                        chilled_any = true;
+                        chilled += 1;
                     }
                 }
                 // Only spend the cooldown when there was something to chill.
-                if chilled_any {
+                if chilled > 0 {
                     t.cooldown = t.fire_cooldown();
+                    t.shots_fired += 1;
+                    t.chills += chilled;
                     self.pulses.push(Pulse::new(t.pos, range));
                     self.audio.play_freeze();
                 }
@@ -473,8 +497,14 @@ impl Game {
             // A Lv3 Seed Shooter engages the two lead fruit; everything else
             // fires a single shot.
             for (_, target) in in_range.iter().take(t.shots()) {
-                self.projectiles
-                    .push(Projectile::new(t.pos, *target, projectile_kind, splash));
+                self.projectiles.push(Projectile::new(
+                    t.pos,
+                    *target,
+                    projectile_kind,
+                    splash,
+                    t.id,
+                ));
+                t.shots_fired += 1;
             }
 
             let lead = in_range[0].1 - t.pos;
@@ -493,7 +523,8 @@ impl Game {
             p.update(dt);
         }
 
-        let mut pops: Vec<usize> = Vec::new();
+        // (fruit index, id of the tower that gets the credit)
+        let mut pops: Vec<(usize, u32)> = Vec::new();
         let mut spent: Vec<usize> = Vec::new();
 
         for (pi, p) in self.projectiles.iter().enumerate() {
@@ -516,12 +547,12 @@ impl Game {
                 let center = self.fruits[fi].pos;
                 for (i, f) in self.fruits.iter().enumerate() {
                     if f.pos.distance(center) <= splash {
-                        pops.push(i);
+                        pops.push((i, p.owner));
                     }
                 }
                 self.audio.play_splash();
             } else {
-                pops.push(fi);
+                pops.push((fi, p.owner));
             }
         }
 
@@ -538,21 +569,29 @@ impl Game {
     // Pop the listed fruit, pay out, and add their children to the track.
     // Indices are deduped because two shots can land on one fruit in a frame.
     // ─────────────────────────────────────────────────────────────────────────
-    fn apply_pops(&mut self, mut idx: Vec<usize>) {
-        if idx.is_empty() {
+    fn apply_pops(&mut self, mut pops: Vec<(usize, u32)>) {
+        if pops.is_empty() {
             return;
         }
-        idx.sort_unstable();
-        idx.dedup();
+        // Two shots can land on the same fruit in one frame; the first one to
+        // be recorded takes the credit.
+        pops.sort_unstable_by_key(|&(i, _)| i);
+        pops.dedup_by_key(|&mut (i, _)| i);
 
         // Remove highest index first so the earlier indices stay valid.
         let mut children = Vec::new();
-        for &i in idx.iter().rev() {
+        for &(i, owner) in pops.iter().rev() {
             let f = self.fruits.remove(i);
             self.cash += CASH_PER_POP;
             self.splats.push(Splat::burst(f.pos, f.kind));
             self.audio.play_pop(f.kind.tier());
             children.extend(f.split(&self.path));
+
+            // The firing tower may already have been sold, in which case the
+            // credit is simply dropped.
+            if let Some(t) = self.towers.iter_mut().find(|t| t.id == owner) {
+                t.kills += 1;
+            }
         }
         self.fruits.extend(children);
     }
@@ -634,7 +673,12 @@ impl Game {
                     self.wave_active,
                     self.audio.muted(),
                 );
-                render::draw_shop(self.selected, self.cash, self.inspected_tower());
+                render::draw_shop(self.selected, self.cash);
+
+                // The tower panel floats over the field, above everything else.
+                if let Some(t) = self.inspected_tower() {
+                    render::draw_tower_panel(t, self.cash);
+                }
 
                 // Placement preview follows the cursor while a tower is armed.
                 if let Some(kind) = self.selected {

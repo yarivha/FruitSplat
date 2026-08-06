@@ -53,6 +53,10 @@ pub struct Projectile {
     pub life: f32,
     pub spin: f32,
     pub splash: f32,
+    /// Stable id of the tower that fired this, so kills can be credited back.
+    /// The tower may be sold before the shot lands, in which case the credit is
+    /// simply dropped.
+    pub owner: u32,
 }
 
 impl Projectile {
@@ -61,7 +65,13 @@ impl Projectile {
     // fast fruit can be missed — that's the trade-off for cheap towers.
     // `splash` of zero makes it single-target.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn new(origin: Vec2, target: Vec2, kind: ProjectileKind, splash: f32) -> Self {
+    pub fn new(
+        origin: Vec2,
+        target: Vec2,
+        kind: ProjectileKind,
+        splash: f32,
+        owner: u32,
+    ) -> Self {
         // Guard against a zero-length direction if the fruit is exactly on top
         // of the tower, which would produce a NaN velocity.
         let dir = (target - origin).normalize_or_zero();
@@ -74,6 +84,7 @@ impl Projectile {
             life: PROJECTILE_LIFE,
             spin: 0.0,
             splash,
+            owner,
         }
     }
 

@@ -20,10 +20,9 @@ cargo run --release
 | `1` `2` `3` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
-| Left click a placed tower | Inspect it (nothing armed) |
-| `U` | Upgrade the inspected tower |
-| `S` | Sell the inspected tower |
-| Right click | Cancel placement / deselect |
+| Left click a placed tower | Open its stats panel (nothing armed) |
+| Click **Upgrade** / **Sell** | Upgrade or sell that tower |
+| Right click | Cancel placement / close the panel |
 | `Space` | Send the next wave |
 | `M` | Mute / unmute |
 
@@ -55,11 +54,24 @@ Towers use "first" targeting — they shoot whichever fruit in range is furthest
 along the track. Shots travel in a straight line and do not home, so fast fruit
 can be missed.
 
-### Upgrades
+### Stats and upgrades
 
-Click a placed tower with nothing armed to inspect it, then `U` to upgrade or
-`S` to sell. Every tower runs Lv1 → Lv3 along one track, and selling refunds
-**60%** of everything invested, upgrades included.
+Click a placed tower with nothing armed to open its panel. The panel floats
+beside the tower — flipping to its other side near the window edge — and reports
+what that specific tower has actually done:
+
+| Tower | Stats shown |
+|---|---|
+| Seed Shooter | Range, rate, shots fired, kills |
+| Blender | Range, splash, shots fired, kills |
+| Freezer | Range, chill strength, pulses, fruit chilled |
+
+Kills are credited to the tower whose shot landed, so a Blender's splash banks
+every fruit in the blast. A Freezer never gets kills — it deals no damage — so it
+reports what it has slowed instead.
+
+Upgrade and sell are buttons in that panel. Every tower runs Lv1 → Lv3 along one
+track, and selling refunds **60%** of everything invested, upgrades included.
 
 | Tower | Lv2 | Lv3 |
 |---|---|---|
