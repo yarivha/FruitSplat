@@ -1,0 +1,17 @@
+[package]
+name = "fruit-splat"
+version = "0.1.0"
+edition = "2021"
+description = "Fruit Splat — a balloon-pop arcade game reskinned with fruit"
+license = "MIT"
+
+[dependencies]
+# macroquad ships with NO default features, so the audio backend (quad-snd) must
+# be enabled explicitly or every sound call silently becomes a no-op stub.
+# Enabled up front so adding SFX later doesn't hit that trap.
+macroquad = { version = "0.4", features = ["audio"] }
+
+# Optimized release builds keep the splat particles smooth at high fruit counts.
+[profile.release]
+opt-level = 3
+lto = true
