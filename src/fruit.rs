@@ -16,8 +16,6 @@ use crate::path::Path;
 const PARTICLE_GRAVITY: f32 = 620.0;
 /// Base travel speed along the track before the per-tier multiplier.
 pub const FRUIT_BASE_SPEED: f32 = 105.0;
-/// Speed multiplier applied while a fruit is chilled by a Freezer.
-pub const SLOW_FACTOR: f32 = 0.45;
 /// How far behind its sibling the second child spawns, so splits fan out.
 const SPLIT_TRAIL: f32 = 18.0;
 
@@ -133,6 +131,9 @@ pub struct Fruit {
     pub pos: Vec2,
     /// Seconds of Freezer slow remaining.
     pub slow_timer: f32,
+    /// Speed multiplier while chilled; 1.0 means unaffected. Set by whichever
+    /// Freezer hit this fruit, so upgraded Freezers bite harder.
+    pub slow_factor: f32,
     pub rot: f32,
     pub spin: f32,
 }
@@ -147,6 +148,7 @@ impl Fruit {
             dist,
             pos: path.point_at(dist),
             slow_timer: 0.0,
+            slow_factor: 1.0,
             rot: gen_range(0.0, 360.0),
             spin: gen_range(-50.0, 50.0),
         }
@@ -158,15 +160,38 @@ impl Fruit {
     pub fn update(&mut self, dt: f32, path: &Path) {
         let speed = FRUIT_BASE_SPEED
             * self.kind.speed_scale()
-            * if self.slow_timer > 0.0 { SLOW_FACTOR } else { 1.0 };
+            * if self.slow_timer > 0.0 {
+                self.slow_factor
+            } else {
+                1.0
+            };
 
         self.dist += speed * dt;
         self.pos = path.point_at(self.dist);
 
         if self.slow_timer > 0.0 {
             self.slow_timer -= dt;
+            // Drop back to full speed the moment the chill runs out, so a stale
+            // factor from an old Freezer can't linger.
+            if self.slow_timer <= 0.0 {
+                self.slow_factor = 1.0;
+            }
         }
         self.rot += self.spin * dt;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Apply a Freezer's chill. Overlapping Freezers stack by taking the
+    // strongest slow and the longest remaining duration, rather than the last
+    // one to fire winning.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn chill(&mut self, factor: f32, duration: f32) {
+        self.slow_factor = if self.slow_timer > 0.0 {
+            self.slow_factor.min(factor)
+        } else {
+            factor
+        };
+        self.slow_timer = self.slow_timer.max(duration);
     }
 
     pub fn radius(&self) -> f32 {
@@ -345,12 +370,41 @@ mod tests {
 
         let mut normal = Fruit::new(FruitKind::Lime, 0.0, &path);
         let mut chilled = Fruit::new(FruitKind::Lime, 0.0, &path);
-        chilled.slow_timer = 1.0;
+        chilled.chill(0.45, 1.0);
 
         normal.update(0.5, &path);
         chilled.update(0.5, &path);
 
         assert!(chilled.dist < normal.dist);
-        assert!((chilled.dist - normal.dist * SLOW_FACTOR).abs() < 0.001);
+        assert!((chilled.dist - normal.dist * 0.45).abs() < 0.001);
+    }
+
+    #[test]
+    fn overlapping_freezers_keep_the_strongest_chill() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path);
+
+        f.chill(0.45, 1.6);
+        f.chill(0.25, 1.0);
+
+        // Strongest slow wins, and the longer duration is kept.
+        assert_eq!(f.slow_factor, 0.25);
+        assert_eq!(f.slow_timer, 1.6);
+
+        // A weaker Freezer must not undo a stronger one already in effect.
+        f.chill(0.45, 1.0);
+        assert_eq!(f.slow_factor, 0.25);
+    }
+
+    #[test]
+    fn a_chill_wearing_off_restores_full_speed() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(9000.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path);
+        f.chill(0.25, 0.1);
+
+        f.update(0.2, &path);
+
+        assert_eq!(f.slow_factor, 1.0);
+        assert!(f.slow_timer <= 0.0);
     }
 }

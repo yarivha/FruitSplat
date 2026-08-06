@@ -22,7 +22,7 @@ use audio::{Audio, Track};
 use fruit::{Fruit, FruitKind, Splat};
 use path::Path;
 use projectile::{Projectile, ProjectileKind};
-use tower::{Pulse, Tower, TowerKind, FREEZE_DURATION, PATH_CLEARANCE, TOWER_RADIUS};
+use tower::{Pulse, Tower, TowerKind, PATH_CLEARANCE, TOWER_RADIUS};
 
 /// Height of the playable field; the shop bar occupies the strip below it.
 pub const PLAYFIELD_H: f32 = 650.0;
@@ -93,6 +93,8 @@ struct Game {
     cash: u32,
     /// Tower type armed for placement, if any.
     selected: Option<TowerKind>,
+    /// Index into `towers` of the placed tower being inspected, if any.
+    selected_tower: Option<usize>,
     audio: Audio,
 }
 
@@ -117,6 +119,7 @@ impl Game {
             lives: START_LIVES,
             cash: START_CASH,
             selected: None,
+            selected_tower: None,
             audio,
         }
     }
@@ -137,6 +140,7 @@ impl Game {
         self.lives = START_LIVES;
         self.cash = START_CASH;
         self.selected = None;
+        self.selected_tower = None;
         self.state = State::Playing;
         self.audio.play_music(Track::Game);
     }
@@ -206,10 +210,18 @@ impl Game {
 
         if is_mouse_button_pressed(MouseButton::Right) {
             self.selected = None;
+            self.selected_tower = None;
         }
 
         if is_key_pressed(KeyCode::Space) && !self.wave_active {
             self.start_wave();
+        }
+
+        if is_key_pressed(KeyCode::U) {
+            self.upgrade_selected();
+        }
+        if is_key_pressed(KeyCode::S) {
+            self.sell_selected();
         }
 
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -217,9 +229,62 @@ impl Game {
             if m.y >= PLAYFIELD_H {
                 self.click_shop(m);
             } else {
-                self.try_place(m);
+                self.click_field(m);
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // A click on the playfield either places the armed tower, or — when nothing
+    // is armed — picks a placed tower to inspect, upgrade or sell.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn click_field(&mut self, p: Vec2) {
+        if self.selected.is_some() {
+            self.try_place(p);
+            return;
+        }
+
+        // Clicking empty ground clears the selection, which position() gives
+        // for free by returning None.
+        self.selected_tower = self
+            .towers
+            .iter()
+            .position(|t| t.pos.distance(p) <= TOWER_RADIUS + 4.0);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Buy the next level for the inspected tower.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn upgrade_selected(&mut self) {
+        let Some(i) = self.selected_tower else { return };
+        let Some(cost) = self.towers[i].upgrade_cost() else {
+            // Already maxed out.
+            self.audio.play_deny();
+            return;
+        };
+
+        if self.cash < cost {
+            self.audio.play_deny();
+            return;
+        }
+
+        self.cash -= cost;
+        self.towers[i].upgrade(cost);
+        self.audio.play_upgrade();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sell the inspected tower back for a fraction of what went into it.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn sell_selected(&mut self) {
+        let Some(i) = self.selected_tower else { return };
+
+        self.cash += self.towers[i].sell_value();
+        self.towers.remove(i);
+        // Every index past the removed one has shifted, so drop the selection
+        // rather than try to fix it up.
+        self.selected_tower = None;
+        self.audio.play_sell();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -231,6 +296,8 @@ impl Game {
         } else {
             Some(kind)
         };
+        // Arming a tower type takes over the panel, so drop any inspected tower.
+        self.selected_tower = None;
     }
 
     fn click_shop(&mut self, m: Vec2) {
@@ -344,19 +411,20 @@ impl Game {
                 continue;
             }
 
-            let range = t.kind.range();
+            let range = t.range();
 
             if t.kind == TowerKind::Freezer {
+                let (factor, duration) = (t.slow_factor(), t.freeze_duration());
                 let mut chilled_any = false;
                 for f in &mut self.fruits {
                     if f.pos.distance(t.pos) <= range {
-                        f.slow_timer = FREEZE_DURATION;
+                        f.chill(factor, duration);
                         chilled_any = true;
                     }
                 }
                 // Only spend the cooldown when there was something to chill.
                 if chilled_any {
-                    t.cooldown = t.kind.cooldown();
+                    t.cooldown = t.fire_cooldown();
                     self.pulses.push(Pulse::new(t.pos, range));
                     self.audio.play_freeze();
                 }
@@ -364,28 +432,39 @@ impl Game {
             }
 
             // "First" targeting: the fruit closest to the exit is the threat.
-            let mut target: Option<Vec2> = None;
-            let mut best_dist = f32::MIN;
-            for f in &self.fruits {
-                if f.pos.distance(t.pos) <= range && f.dist > best_dist {
-                    best_dist = f.dist;
-                    target = Some(f.pos);
-                }
+            // Collect owned copies so the fruit list isn't borrowed while firing.
+            let mut in_range: Vec<(f32, Vec2)> = self
+                .fruits
+                .iter()
+                .filter(|f| f.pos.distance(t.pos) <= range)
+                .map(|f| (f.dist, f.pos))
+                .collect();
+
+            if in_range.is_empty() {
+                continue;
             }
 
-            if let Some(target) = target {
-                let delta = target - t.pos;
-                t.angle = delta.y.atan2(delta.x);
+            // Furthest along the track first.
+            in_range.sort_by(|a, b| b.0.total_cmp(&a.0));
 
-                let kind = if t.kind == TowerKind::Blender {
-                    ProjectileKind::Pulp
-                } else {
-                    ProjectileKind::Seed
-                };
-                self.projectiles.push(Projectile::new(t.pos, target, kind));
-                t.cooldown = t.kind.cooldown();
-                self.audio.play_shoot();
+            let projectile_kind = if t.kind == TowerKind::Blender {
+                ProjectileKind::Pulp
+            } else {
+                ProjectileKind::Seed
+            };
+            let splash = t.splash_radius();
+
+            // A Lv3 Seed Shooter engages the two lead fruit; everything else
+            // fires a single shot.
+            for (_, target) in in_range.iter().take(t.shots()) {
+                self.projectiles
+                    .push(Projectile::new(t.pos, *target, projectile_kind, splash));
             }
+
+            let lead = in_range[0].1 - t.pos;
+            t.angle = lead.y.atan2(lead.x);
+            t.cooldown = t.fire_cooldown();
+            self.audio.play_shoot();
         }
     }
 
@@ -415,7 +494,7 @@ impl Game {
             let Some(fi) = hit else { continue };
             spent.push(pi);
 
-            let splash = p.kind.splash_radius();
+            let splash = p.splash;
             if splash > 0.0 {
                 // Splash catches every fruit around the one actually struck.
                 let center = self.fruits[fi].pos;
@@ -462,6 +541,14 @@ impl Game {
         self.fruits.extend(children);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // The placed tower currently being inspected, if the selection is still
+    // valid. Returns None once a selected tower has been sold.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn inspected_tower(&self) -> Option<&Tower> {
+        self.selected_tower.and_then(|i| self.towers.get(i))
+    }
+
     fn update_effects(&mut self, dt: f32) {
         for s in &mut self.splats {
             s.update(dt);
@@ -493,6 +580,11 @@ impl Game {
         render::draw_background();
         render::draw_path(&self.path);
 
+        // Range footprint of the inspected tower sits under the towers.
+        if let Some(t) = self.inspected_tower() {
+            render::draw_tower_selection(t);
+        }
+
         for t in &self.towers {
             render::draw_tower(t);
         }
@@ -513,8 +605,14 @@ impl Game {
             State::Menu => render::draw_menu(),
             State::GameOver => render::draw_game_over(self.wave),
             State::Playing => {
-                render::draw_hud(self.lives, self.cash, self.wave, self.wave_active);
-                render::draw_shop(self.selected, self.cash, self.audio.muted());
+                render::draw_hud(
+                    self.lives,
+                    self.cash,
+                    self.wave,
+                    self.wave_active,
+                    self.audio.muted(),
+                );
+                render::draw_shop(self.selected, self.cash, self.inspected_tower());
 
                 // Placement preview follows the cursor while a tower is armed.
                 if let Some(kind) = self.selected {

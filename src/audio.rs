@@ -20,6 +20,8 @@ const SPLASH_VOLUME: f32 = 0.50;
 const FREEZE_VOLUME: f32 = 0.35;
 const PLACE_VOLUME: f32 = 0.50;
 const DENY_VOLUME: f32 = 0.40;
+const UPGRADE_VOLUME: f32 = 0.55;
+const SELL_VOLUME: f32 = 0.45;
 const LEAK_VOLUME: f32 = 0.60;
 const WAVE_START_VOLUME: f32 = 0.50;
 const WAVE_CLEAR_VOLUME: f32 = 0.55;
@@ -49,6 +51,8 @@ pub struct Audio {
     freeze: Sound,
     place: Sound,
     deny: Sound,
+    upgrade: Sound,
+    sell: Sound,
     leak: Sound,
     wave_start: Sound,
     wave_clear: Sound,
@@ -85,6 +89,8 @@ impl Audio {
             freeze: decode(include_bytes!("../assets/freeze.wav")).await,
             place: decode(include_bytes!("../assets/place.wav")).await,
             deny: decode(include_bytes!("../assets/deny.wav")).await,
+            upgrade: decode(include_bytes!("../assets/upgrade.wav")).await,
+            sell: decode(include_bytes!("../assets/sell.wav")).await,
             leak: decode(include_bytes!("../assets/leak.wav")).await,
             wave_start: decode(include_bytes!("../assets/wave_start.wav")).await,
             wave_clear: decode(include_bytes!("../assets/wave_clear.wav")).await,
@@ -150,6 +156,14 @@ impl Audio {
 
     pub fn play_deny(&self) {
         self.sfx(&self.deny, DENY_VOLUME);
+    }
+
+    pub fn play_upgrade(&self) {
+        self.sfx(&self.upgrade, UPGRADE_VOLUME);
+    }
+
+    pub fn play_sell(&self) {
+        self.sfx(&self.sell, SELL_VOLUME);
     }
 
     pub fn play_leak(&self) {

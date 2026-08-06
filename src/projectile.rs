@@ -27,14 +27,6 @@ impl ProjectileKind {
         }
     }
 
-    /// Radius of the pop applied on impact. Zero means single-target.
-    pub fn splash_radius(&self) -> f32 {
-        match self {
-            ProjectileKind::Seed => 0.0,
-            ProjectileKind::Pulp => 58.0,
-        }
-    }
-
     /// How fast this shot travels, in pixels per second.
     pub fn speed(&self) -> f32 {
         match self {
@@ -51,21 +43,25 @@ impl ProjectileKind {
     }
 }
 
-/// A shot in flight. Travels in a straight line — no homing.
+/// A shot in flight. Travels in a straight line — no homing. `splash` is baked
+/// in at fire time from the firing tower's level, so an upgraded Blender's shots
+/// stay wide even if the tower is sold before they land.
 pub struct Projectile {
     pub pos: Vec2,
     pub vel: Vec2,
     pub kind: ProjectileKind,
     pub life: f32,
     pub spin: f32,
+    pub splash: f32,
 }
 
 impl Projectile {
     // ─────────────────────────────────────────────────────────────────────────
     // Fire from `origin` toward `target`. The shot does not track the fruit, so
     // fast fruit can be missed — that's the trade-off for cheap towers.
+    // `splash` of zero makes it single-target.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn new(origin: Vec2, target: Vec2, kind: ProjectileKind) -> Self {
+    pub fn new(origin: Vec2, target: Vec2, kind: ProjectileKind, splash: f32) -> Self {
         // Guard against a zero-length direction if the fruit is exactly on top
         // of the tower, which would produce a NaN velocity.
         let dir = (target - origin).normalize_or_zero();
@@ -77,6 +73,7 @@ impl Projectile {
             kind,
             life: PROJECTILE_LIFE,
             spin: 0.0,
+            splash,
         }
     }
 

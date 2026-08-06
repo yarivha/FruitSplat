@@ -237,6 +237,46 @@ pub fn draw_tower(t: &Tower) {
             draw_circle(x, y, TOWER_RADIUS * 0.28, Color::new(0.85, 0.95, 1.0, 1.0));
         }
     }
+
+    draw_level_pips(t);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gold pips under a tower showing its level, so upgrades are visible on the
+// field without having to click each tower.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_level_pips(t: &Tower) {
+    if t.level <= 1 {
+        return;
+    }
+
+    let gold = Color::new(1.0, 0.82, 0.30, 1.0);
+    let pips = (t.level - 1) as i32;
+    let spacing = 9.0;
+    let start_x = t.pos.x - (pips - 1) as f32 * spacing * 0.5;
+    let y = t.pos.y + TOWER_RADIUS + 7.0;
+
+    for i in 0..pips {
+        let x = start_x + i as f32 * spacing;
+        draw_circle(x, y, 3.5, gold);
+        draw_circle_lines(x, y, 3.5, 1.0, Color::new(0.35, 0.25, 0.05, 0.8));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Highlight the tower being inspected: its range footprint plus a ring.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_tower_selection(t: &Tower) {
+    let accent = Color::new(1.0, 0.92, 0.55, 1.0);
+
+    draw_circle(
+        t.pos.x,
+        t.pos.y,
+        t.range(),
+        Color::new(1.0, 1.0, 1.0, 0.08),
+    );
+    draw_circle_lines(t.pos.x, t.pos.y, t.range(), 2.0, accent);
+    draw_circle_lines(t.pos.x, t.pos.y, TOWER_RADIUS + 5.0, 2.5, accent);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,13 +290,15 @@ pub fn draw_ghost(pos: Vec2, kind: TowerKind, valid: bool) {
     };
 
     // Range footprint, so the player can judge coverage before committing.
+    // Always the Lv1 range — that's what actually gets placed.
+    let range = kind.range(1);
     draw_circle(
         pos.x,
         pos.y,
-        kind.range(),
+        range,
         Color::new(tint.r, tint.g, tint.b, 0.10),
     );
-    draw_circle_lines(pos.x, pos.y, kind.range(), 2.0, tint);
+    draw_circle_lines(pos.x, pos.y, range, 2.0, tint);
 
     let c = kind.color();
     draw_circle(pos.x, pos.y, TOWER_RADIUS, Color::new(c.r, c.g, c.b, 0.55));
@@ -308,7 +350,7 @@ pub fn draw_splat(s: &Splat) {
 // Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
 // the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool) {
+pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool, muted: bool) {
     // Dark strip so white text stays readable over the grass.
     draw_rectangle(
         0.0,
@@ -325,6 +367,14 @@ pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool) {
     };
     draw_text(&format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
     draw_text(&format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
+
+    // Mute state doubles as the hint for the key that toggles it.
+    let (mute_label, mute_color) = if muted {
+        ("M  muted", Color::new(1.0, 0.55, 0.5, 1.0))
+    } else {
+        ("M  sound on", Color::new(0.62, 0.85, 0.68, 1.0))
+    };
+    draw_text(mute_label, 360.0, 34.0, 22.0, mute_color);
 
     let wave_txt = format!("WAVE {wave}");
     let dims = measure_text(&wave_txt, None, 30, 1.0);
@@ -357,7 +407,7 @@ pub fn shop_button_rect(i: usize) -> Rect {
 // Bottom shop bar: one button per tower, dimmed when it can't be afforded and
 // outlined when it's the current selection.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_shop(selected: Option<TowerKind>, cash: u32, muted: bool) {
+pub fn draw_shop(selected: Option<TowerKind>, cash: u32, inspected: Option<&Tower>) {
     draw_rectangle(
         0.0,
         PLAYFIELD_H,
@@ -406,29 +456,78 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32, muted: bool) {
         );
     }
 
-    let hint_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
+    // The right-hand strip shows either the generic hints or, when a placed
+    // tower is selected, that tower's upgrade and sell options.
+    let panel_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
+    match inspected {
+        Some(t) => draw_tower_panel(t, panel_x, cash),
+        None => draw_shop_hints(panel_x),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Default right-hand strip: what the player can do with the shop.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_shop_hints(x: f32) {
+    let dim = Color::new(0.70, 0.70, 0.78, 1.0);
+    draw_text("click to place", x, PLAYFIELD_H + 30.0, 18.0, dim);
+    draw_text("right-click cancels", x, PLAYFIELD_H + 52.0, 18.0, dim);
+    draw_text("click a tower to upgrade", x, PLAYFIELD_H + 74.0, 18.0, dim);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Right-hand strip for the selected tower: level, next upgrade, sell value.
+// The upgrade line turns red when it can't currently be afforded.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_tower_panel(t: &Tower, x: f32, cash: u32) {
     draw_text(
-        "click to place",
-        hint_x,
-        PLAYFIELD_H + 32.0,
-        18.0,
-        Color::new(0.7, 0.7, 0.78, 1.0),
-    );
-    draw_text(
-        "right-click cancels",
-        hint_x,
-        PLAYFIELD_H + 52.0,
-        18.0,
-        Color::new(0.7, 0.7, 0.78, 1.0),
+        &format!("{}  Lv{}", t.kind.name(), t.level),
+        x,
+        PLAYFIELD_H + 30.0,
+        20.0,
+        WHITE,
     );
 
-    // Mute state doubles as the hint for the key that toggles it.
-    let (label, color) = if muted {
-        ("M  muted", Color::new(1.0, 0.55, 0.5, 1.0))
-    } else {
-        ("M  sound on", Color::new(0.6, 0.85, 0.65, 1.0))
-    };
-    draw_text(label, hint_x, PLAYFIELD_H + 76.0, 18.0, color);
+    match t.upgrade_cost() {
+        Some(cost) => {
+            let color = if cash >= cost {
+                Color::new(0.65, 1.0, 0.70, 1.0)
+            } else {
+                Color::new(1.0, 0.55, 0.50, 1.0)
+            };
+            draw_text(
+                &format!("U  upgrade ${cost}"),
+                x,
+                PLAYFIELD_H + 52.0,
+                18.0,
+                color,
+            );
+            draw_text(
+                t.upgrade_label(),
+                x + 148.0,
+                PLAYFIELD_H + 52.0,
+                16.0,
+                Color::new(0.78, 0.78, 0.84, 1.0),
+            );
+        }
+        None => {
+            draw_text(
+                "fully upgraded",
+                x,
+                PLAYFIELD_H + 52.0,
+                18.0,
+                Color::new(1.0, 0.85, 0.45, 1.0),
+            );
+        }
+    }
+
+    draw_text(
+        &format!("S  sell ${}", t.sell_value()),
+        x,
+        PLAYFIELD_H + 74.0,
+        18.0,
+        Color::new(0.85, 0.85, 0.90, 1.0),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

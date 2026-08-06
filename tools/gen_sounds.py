@@ -237,6 +237,25 @@ def make_wave_clear():
     return normalize(out, 0.78)
 
 
+def make_upgrade():
+    """Two rising notes with a shimmer on top — a tower just got stronger."""
+    n = int(0.5 * SR)
+    out = [0.0] * n
+    for i, f in enumerate((523.25, 783.99)):
+        tone(out, f, 0.30, vol=0.40, kind="tri", decay=9.0, offset=i * 0.09)
+    tone(out, 1567.98, 0.30, vol=0.15, kind="sine", decay=8.0, offset=0.18)
+    return normalize(out, 0.72)
+
+
+def make_sell():
+    """A short descending blip for cashing a tower back in."""
+    n = int(0.32 * SR)
+    out = [0.0] * n
+    for i, f in enumerate((659.25, 440.0)):
+        tone(out, f, 0.18, vol=0.40, kind="tri", decay=16.0, offset=i * 0.08)
+    return normalize(out, 0.60)
+
+
 def make_game_over():
     """A descending minor figure for being overrun."""
     n = int(1.8 * SR)
@@ -264,6 +283,8 @@ def main():
     write_wav("freeze.wav", make_freeze())
     write_wav("place.wav", make_place())
     write_wav("deny.wav", make_deny())
+    write_wav("upgrade.wav", make_upgrade())
+    write_wav("sell.wav", make_sell())
     write_wav("leak.wav", make_leak())
     write_wav("wave_start.wav", make_wave_start())
     write_wav("wave_clear.wav", make_wave_clear())
