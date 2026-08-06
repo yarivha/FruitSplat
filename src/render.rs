@@ -11,14 +11,12 @@ use macroquad::prelude::*;
 use crate::fruit::{Fruit, FruitKind, Splat};
 use crate::path::Path;
 use crate::projectile::{Projectile, ProjectileKind};
+use crate::scenery::{Palette, Prop, PropKind};
 use crate::tower::{Pulse, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
 use crate::PLAYFIELD_H;
 
-/// Grass colours for the vertical gradient behind the track.
-const FIELD_TOP: Color = Color::new(0.36, 0.51, 0.31, 1.0);
-const FIELD_BOTTOM: Color = Color::new(0.24, 0.38, 0.24, 1.0);
-/// Number of bands used to fake the gradient.
+/// Number of bands used to fake the grass gradient.
 const FIELD_BANDS: i32 = 40;
 
 /// Track widths — the outer band is the dirt border, the inner the worn middle.
@@ -131,16 +129,16 @@ fn specular(center: Vec2, r: f32) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Paint the grass gradient behind the whole playfield.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_background() {
+pub fn draw_background(p: &Palette) {
     let w = screen_width();
     let band_h = PLAYFIELD_H / FIELD_BANDS as f32;
 
     for i in 0..FIELD_BANDS {
         let t = i as f32 / (FIELD_BANDS - 1) as f32;
         let c = Color::new(
-            FIELD_TOP.r + (FIELD_BOTTOM.r - FIELD_TOP.r) * t,
-            FIELD_TOP.g + (FIELD_BOTTOM.g - FIELD_TOP.g) * t,
-            FIELD_TOP.b + (FIELD_BOTTOM.b - FIELD_TOP.b) * t,
+            p.grass_top.r + (p.grass_bottom.r - p.grass_top.r) * t,
+            p.grass_top.g + (p.grass_bottom.g - p.grass_top.g) * t,
+            p.grass_top.b + (p.grass_bottom.b - p.grass_top.b) * t,
             1.0,
         );
         // Overdraw each band by a pixel so seams never show at odd heights.
@@ -149,14 +147,184 @@ pub fn draw_background() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Draw the route's decorative props. They arrive already sorted back to front,
+// so this just walks the list.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_scenery(props: &[Prop], p: &Palette) {
+    for prop in props {
+        draw_prop(prop, p);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One piece of scenery. Sizes are all relative to the prop's scale so the same
+// code covers the small and large variants.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_prop(prop: &Prop, palette: &Palette) {
+    let c = prop.pos;
+    let s = prop.scale;
+    // Per-prop jitter keeps a stand of trees from looking stamped out.
+    let leaf = tint(shade(palette.foliage, 1.0 - prop.shade), prop.shade.max(0.0));
+
+    match prop.kind {
+        PropKind::Tree => {
+            let h = 30.0 * s;
+            soft_shadow(vec2(c.x + 4.0 * s, c.y + 9.0 * s), 15.0 * s, 6.5 * s);
+
+            // Trunk, tapering slightly toward the canopy.
+            let trunk = Color::new(0.36, 0.26, 0.17, 1.0);
+            draw_line(c.x, c.y + 6.0 * s, c.x, c.y - h * 0.35, 5.5 * s, trunk);
+            draw_line(
+                c.x - 1.0 * s,
+                c.y + 6.0 * s,
+                c.x - 1.0 * s,
+                c.y - h * 0.30,
+                2.0 * s,
+                tint(trunk, 0.18),
+            );
+
+            // Canopy: three overlapping blobs read as foliage more than one
+            // circle does.
+            let top = vec2(c.x, c.y - h * 0.62);
+            draw_circle(top.x - 9.0 * s, top.y + 5.0 * s, 12.5 * s, shade(leaf, 0.82));
+            draw_circle(top.x + 9.0 * s, top.y + 4.0 * s, 11.5 * s, shade(leaf, 0.88));
+            draw_circle(top.x, top.y - 2.0 * s, 14.5 * s, leaf);
+            draw_circle(top.x - 4.0 * s, top.y - 6.0 * s, 8.0 * s, tint(leaf, 0.16));
+        }
+
+        PropKind::Bush => {
+            soft_shadow(vec2(c.x + 2.0 * s, c.y + 5.0 * s), 10.0 * s, 4.0 * s);
+            draw_circle(c.x - 6.0 * s, c.y, 7.5 * s, shade(leaf, 0.84));
+            draw_circle(c.x + 6.0 * s, c.y + 1.0 * s, 7.0 * s, shade(leaf, 0.90));
+            draw_circle(c.x, c.y - 3.0 * s, 9.5 * s, leaf);
+            draw_circle(c.x - 3.0 * s, c.y - 6.0 * s, 4.5 * s, tint(leaf, 0.18));
+        }
+
+        PropKind::Rock => {
+            soft_shadow(vec2(c.x + 2.0 * s, c.y + 4.0 * s), 9.0 * s, 3.5 * s);
+            let stone = Color::new(0.55, 0.54, 0.52, 1.0);
+            draw_poly(c.x, c.y, 6, 9.0 * s, prop.angle.to_degrees(), shade(stone, 0.78));
+            draw_poly(
+                c.x - 1.5 * s,
+                c.y - 2.0 * s,
+                6,
+                6.5 * s,
+                prop.angle.to_degrees() + 12.0,
+                stone,
+            );
+            draw_circle(c.x - 3.0 * s, c.y - 4.0 * s, 2.4 * s, tint(stone, 0.30));
+        }
+
+        PropKind::Flowers => {
+            // A little clump of stems with coloured heads.
+            let petal = [
+                Color::new(0.95, 0.85, 0.35, 1.0),
+                Color::new(0.92, 0.52, 0.66, 1.0),
+                Color::new(0.80, 0.80, 0.95, 1.0),
+            ][(prop.angle * 3.0) as usize % 3];
+
+            for i in 0..3 {
+                let dx = (i as f32 - 1.0) * 6.0 * s;
+                let top = c.y - 8.0 * s - (i % 2) as f32 * 3.0 * s;
+                draw_line(c.x + dx, c.y + 3.0 * s, c.x + dx, top, 1.6 * s, shade(leaf, 1.1));
+                draw_circle(c.x + dx, top, 3.2 * s, petal);
+                draw_circle(c.x + dx, top, 1.3 * s, tint(petal, 0.55));
+            }
+        }
+
+        PropKind::Crate => {
+            soft_shadow(vec2(c.x + 3.0 * s, c.y + 8.0 * s), 12.0 * s, 4.5 * s);
+            let wood = Color::new(0.62, 0.45, 0.26, 1.0);
+            let w = 20.0 * s;
+            let h = 16.0 * s;
+
+            draw_rectangle(c.x - w * 0.5, c.y - h * 0.5, w, h, shade(wood, 0.72));
+            draw_rectangle(
+                c.x - w * 0.5 + 1.5 * s,
+                c.y - h * 0.5 + 1.5 * s,
+                w - 3.0 * s,
+                h - 3.0 * s,
+                wood,
+            );
+            // Slats.
+            draw_line(
+                c.x - w * 0.5,
+                c.y - h * 0.12,
+                c.x + w * 0.5,
+                c.y - h * 0.12,
+                1.6 * s,
+                shade(wood, 0.70),
+            );
+            draw_line(c.x, c.y - h * 0.5, c.x, c.y + h * 0.5, 1.6 * s, shade(wood, 0.70));
+        }
+
+        PropKind::Fence => {
+            let wood = Color::new(0.58, 0.46, 0.32, 1.0);
+            let span = 26.0 * s;
+            soft_shadow(vec2(c.x + 2.0 * s, c.y + 7.0 * s), span * 0.55, 3.5 * s);
+
+            // Two rails across three posts.
+            for rail in 0..2 {
+                let ry = c.y - 3.0 * s - rail as f32 * 6.0 * s;
+                draw_line(c.x - span * 0.5, ry, c.x + span * 0.5, ry, 2.6 * s, wood);
+            }
+            for post in 0..3 {
+                let px = c.x - span * 0.5 + post as f32 * span * 0.5;
+                draw_line(px, c.y + 5.0 * s, px, c.y - 12.0 * s, 3.2 * s, shade(wood, 0.82));
+            }
+        }
+
+        PropKind::Pond => {
+            let w = 46.0 * s;
+            let h = 26.0 * s;
+            // Muddy bank, then water, then a lighter shallow edge.
+            draw_ellipse(c.x, c.y, w, h, 0.0, Color::new(0.40, 0.36, 0.26, 1.0));
+            draw_ellipse(
+                c.x,
+                c.y,
+                w * 0.90,
+                h * 0.88,
+                0.0,
+                Color::new(0.22, 0.42, 0.58, 1.0),
+            );
+            draw_ellipse(
+                c.x - w * 0.08,
+                c.y - h * 0.14,
+                w * 0.62,
+                h * 0.52,
+                0.0,
+                Color::new(0.32, 0.56, 0.72, 1.0),
+            );
+            // A couple of glints on the surface.
+            draw_ellipse(
+                c.x - w * 0.22,
+                c.y - h * 0.24,
+                w * 0.20,
+                h * 0.10,
+                0.0,
+                Color::new(0.85, 0.94, 1.0, 0.55),
+            );
+            draw_ellipse(
+                c.x + w * 0.16,
+                c.y + h * 0.20,
+                w * 0.13,
+                h * 0.07,
+                0.0,
+                Color::new(0.85, 0.94, 1.0, 0.32),
+            );
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Draw the track as a thick dirt polyline. Circles at the joints round off the
 // corners, which macroquad's square line caps would otherwise leave notched.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_path(path: &Path) {
-    let border = Color::new(0.38, 0.28, 0.18, 1.0);
-    let dirt = Color::new(0.55, 0.43, 0.29, 1.0);
-
-    for (width, color) in [(TRACK_OUTER, border), (TRACK_INNER, dirt)] {
+pub fn draw_path(path: &Path, palette: &Palette) {
+    for (width, color) in [
+        (TRACK_OUTER, palette.track_border),
+        (TRACK_INNER, palette.track_dirt),
+    ] {
         for w in path.points().windows(2) {
             draw_line(w[0].x, w[0].y, w[1].x, w[1].y, width, color);
         }
@@ -1051,7 +1219,9 @@ pub fn draw_track_select() {
             WHITE,
         );
 
-        draw_track_preview(track.points, r);
+        // Preview in the route's own colours, so the backdrops are comparable
+        // before committing to a run.
+        draw_track_preview(track.points, r, &crate::scenery::palette(i));
 
         draw_text(
             track.difficulty,
@@ -1090,19 +1260,32 @@ pub fn draw_track_select() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Draw a route's polyline scaled down to fit inside a selection card.
 // ─────────────────────────────────────────────────────────────────────────────
-fn draw_track_preview(points: &[(f32, f32)], card: Rect) {
+fn draw_track_preview(points: &[(f32, f32)], card: Rect, palette: &Palette) {
     let inner_x = card.x + 10.0;
     let inner_y = card.y + 40.0;
     let inner_w = card.w - 20.0;
     let inner_h = 130.0;
 
-    draw_rectangle(
-        inner_x,
-        inner_y,
-        inner_w,
-        inner_h,
-        Color::new(0.30, 0.42, 0.28, 1.0),
-    );
+    // Ramp the preview the same way the real field is shaded. Two flat halves
+    // left an obvious seam across the middle of every card.
+    let bands = 10;
+    let band_h = inner_h / bands as f32;
+    for i in 0..bands {
+        let t = i as f32 / (bands - 1) as f32;
+        let c = Color::new(
+            palette.grass_top.r + (palette.grass_bottom.r - palette.grass_top.r) * t,
+            palette.grass_top.g + (palette.grass_bottom.g - palette.grass_top.g) * t,
+            palette.grass_top.b + (palette.grass_bottom.b - palette.grass_top.b) * t,
+            1.0,
+        );
+        draw_rectangle(
+            inner_x,
+            inner_y + i as f32 * band_h,
+            inner_w,
+            band_h + 1.0,
+            c,
+        );
+    }
 
     // Uniform scale keeps the route's shape honest rather than stretching it.
     let scale = (inner_w / AUTHOR_W).min(inner_h / AUTHOR_H);

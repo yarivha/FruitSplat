@@ -15,6 +15,7 @@ mod fruit;
 mod path;
 mod projectile;
 mod render;
+mod scenery;
 mod tower;
 mod tracks;
 mod wave;
@@ -27,8 +28,12 @@ use tower::{Pulse, Tower, TowerKind, PATH_CLEARANCE, TOWER_RADIUS};
 
 /// Height of the playable field; the shop bar occupies the strip below it.
 pub const PLAYFIELD_H: f32 = 650.0;
+/// Width of the playable field. Routes and scenery are authored against this
+/// fixed space rather than the live window size, so layout is reproducible
+/// without a graphics context.
+pub const PLAYFIELD_W: f32 = 1000.0;
 
-const WINDOW_W: i32 = 1000;
+const WINDOW_W: i32 = PLAYFIELD_W as i32;
 const WINDOW_H: i32 = 740;
 const START_LIVES: u32 = 20;
 const START_CASH: u32 = 250;
@@ -80,6 +85,10 @@ struct Game {
     selected_tower: Option<usize>,
     /// Which entry of tracks::TRACKS the current run is being played on.
     track: usize,
+    /// Backdrop for the current route: colours plus decorative props. Laid out
+    /// once per run, since placement is rejection sampling and not cheap.
+    palette: scenery::Palette,
+    props: Vec<scenery::Prop>,
     /// Handed out to each placed tower so projectiles can credit kills back to
     /// a specific tower even after others are sold.
     next_tower_id: u32,
@@ -111,6 +120,8 @@ impl Game {
             selected: None,
             selected_tower: None,
             track: 0,
+            palette: scenery::palette(0),
+            props: Vec::new(),
             next_tower_id: 0,
             audio,
         }
@@ -122,6 +133,8 @@ impl Game {
     fn start_run(&mut self, track: usize) {
         self.track = track.min(tracks::TRACKS.len() - 1);
         self.path = tracks::TRACKS[self.track].path();
+        self.palette = scenery::palette(self.track);
+        self.props = scenery::generate(self.track, &self.path);
 
         self.fruits.clear();
         self.towers.clear();
@@ -652,12 +665,15 @@ impl Game {
     // Draw the current frame, back to front.
     // ─────────────────────────────────────────────────────────────────────────
     fn draw(&self) {
-        render::draw_background();
+        render::draw_background(&self.palette);
 
         // The selection screen shows its own route previews, so the live board
         // is hidden behind it rather than drawn as a stale backdrop.
         if self.state != State::TrackSelect {
-            render::draw_path(&self.path);
+            // Scenery sits under the track, so foliage can never obscure the
+            // route the fruit are walking.
+            render::draw_scenery(&self.props, &self.palette);
+            render::draw_path(&self.path, &self.palette);
 
             // Range footprint of the inspected tower sits under the towers.
             if let Some(t) = self.inspected_tower() {
@@ -735,7 +751,13 @@ fn off_field(p: Vec2) -> bool {
 // ─────────────────────────────────────────────────────────────────────────────
 impl Game {
     fn stage_art_demo(&mut self) {
-        self.start_run(0);
+        // FRUITSPLAT_TRACK picks which route's backdrop to stage.
+        let track = std::env::var("FRUITSPLAT_TRACK")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0);
+
+        self.start_run(track);
         self.cash = 500;
 
         let spots = [

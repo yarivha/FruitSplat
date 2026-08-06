@@ -35,12 +35,21 @@ dial — a longer route means more seconds under fire before a fruit reaches the
 exit. Turn count matters too: tight switchbacks let one tower cover several
 lanes at once.
 
-| Route | Difficulty | Length | Character |
-|---|---|---|---|
-| Market Run | Hard | 1500 px | Short and direct |
-| Orchard Snake | Medium | 2370 px | A steady weave |
-| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two at once |
-| The Long Orchard | Gentle | 2870 px | Plenty of time to shoot |
+| Route | Difficulty | Length | Character | Backdrop |
+|---|---|---|---|---|
+| Market Run | Hard | 1500 px | Short and direct | Dusty market of crates and fences |
+| Orchard Snake | Medium | 2370 px | A steady weave | Temperate orchard |
+| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
+| The Long Orchard | Gentle | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+
+Each route has its own palette and a themed scatter of scenery — trees, bushes,
+rocks, flowers, crates, fences, ponds — laid out once when the run starts.
+Placement is seeded from the route index, so a given route always looks the
+same, and it uses a local random generator rather than the global one so making
+the scenery repeatable doesn't also make the fruit order repeatable.
+
+Scenery is purely decorative: it never blocks tower placement, and it is drawn
+underneath the track so foliage can't obscure the route.
 
 ## Towers
 

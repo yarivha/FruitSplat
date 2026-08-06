@@ -94,6 +94,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scene, renders a few frames, writes a PNG and exits. Added to make the
   artwork reviewable without playing to the right moment.
 
+- Per-route backdrops. Each route gets its own palette and a themed scatter of
+  decorative props, generated procedurally like the rest of the artwork:
+  - **Orchard Snake** — temperate orchard of trees, bushes and flowers.
+  - **Market Run** — sun-baked and dusty, with crates and fences.
+  - **The Long Orchard** — lush farmland with ponds.
+  - **Zigzag Grove** — dark, dense forest.
+  - Props are laid out once per run by rejection sampling, kept clear of the
+    track, sorted back to front, and placed by their drawn extent so ponds
+    can't hang off the window edge and tree canopies can't reach into the HUD.
+  - Layout is seeded from the route index so a route always looks the same. It
+    uses a local xorshift generator rather than macroquad's global RNG —
+    reseeding that to make scenery repeatable would also have made the fruit
+    order repeatable.
+  - Scenery never blocks tower placement and draws under the track, so it can
+    never obscure the route.
+  - Route selection cards preview each route in its own palette.
+
 ### Changed
 
 - Reworked all the artwork. macroquad has no gradient primitive or clipping, so
