@@ -18,8 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split ladder: popping a fruit bursts it into two of the next tier down.
   Watermelon → Orange → Lime → Strawberry → Blueberry, which does not split.
   Smaller tiers move faster, so an unhandled watermelon becomes a fast swarm.
-- Three towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
-  splash), and Freezer ($140, no damage, chills fruit in range to 45% speed).
+- Four towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
+  splash), Knife Thrower ($130, knives pierce 3 fruit), and Freezer ($140, no
+  damage, chills fruit in range to 45% speed).
+- Pierce as a mechanic: a projectile carries a pierce budget and survives each
+  hit until it runs out, instead of being consumed by the first fruit it
+  touches. Only the Knife Thrower exceeds 1. Splash hits a blob of fruit around
+  a point; pierce hits a line of them along the shot's path, which makes the
+  Knife Thrower strongest on the switchback routes.
+- Knife Thrower upgrades ($110, $220): pierce 3 → 4 → 6, with a faster throw at
+  Lv2. Its knives tumble end over end in flight and it has its own metallic
+  whoosh, gated separately from the seed thwip so a field of Seed Shooters can't
+  silence it.
 - "First" targeting: towers engage the fruit furthest along the track.
 - Free-form tower placement on open ground, with a live range preview that turns
   red when the spot is unaffordable, off-field, too close to the track, or
@@ -32,11 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 34 unit tests covering path maths (corner traversal, end clamping,
+- 41 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
-  sell values, and validation that every authored route enters and exits
-  off-screen and leaves room for towers beside it.
+  sell values, validation that every authored route enters and exits off-screen
+  and leaves room for towers beside it, and UI layout assertions that the four
+  shop buttons and the hint column fit the window without overlapping.
 - Procedurally generated audio — 14 sound effects and 2 music loops, produced by
   pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
   the binary stays standalone.

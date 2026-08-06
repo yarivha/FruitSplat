@@ -17,7 +17,7 @@ cargo run --release
 | Input | Action |
 |---|---|
 | `1`–`4` on the route screen | Pick a route |
-| `1` `2` `3` in play | Arm a tower type |
+| `1`–`4` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
 | Left click a placed tower | Open its stats panel (nothing armed) |
@@ -48,7 +48,13 @@ lanes at once.
 |---|---|---|---|---|
 | Seed Shooter | $90 | 135 px | 0.45s | Single target, cheap sustained damage |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
+| Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
+
+The Blender and the Knife Thrower both beat crowds, but differently: splash hits
+a **blob** of fruit around one point, while pierce hits a **line** of them along
+the shot's path. That makes the Knife Thrower strongest on the switchback
+routes, where fruit queue up single file down a lane.
 
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
 along the track. Shots travel in a straight line and do not home, so fast fruit
@@ -64,6 +70,7 @@ what that specific tower has actually done:
 |---|---|
 | Seed Shooter | Range, rate, shots fired, kills |
 | Blender | Range, splash, shots fired, kills |
+| Knife Thrower | Range, pierce, knives thrown, kills |
 | Freezer | Range, chill strength, pulses, fruit chilled |
 
 Kills are credited to the tower whose shot landed, so a Blender's splash banks
@@ -77,6 +84,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 |---|---|---|
 | Seed Shooter | $70 — faster, longer reach | $150 — twin shot, fires at the two lead fruit |
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
+| Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
 | Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
 
 Overlapping Freezers stack by keeping the strongest chill and the longest

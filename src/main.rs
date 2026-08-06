@@ -220,7 +220,7 @@ impl Game {
     // Hotkeys, tower selection, placement, and sending the next wave.
     // ─────────────────────────────────────────────────────────────────────────
     fn handle_input(&mut self) {
-        for (i, key) in [KeyCode::Key1, KeyCode::Key2, KeyCode::Key3]
+        for (i, key) in [KeyCode::Key1, KeyCode::Key2, KeyCode::Key3, KeyCode::Key4]
             .iter()
             .enumerate()
         {
@@ -487,12 +487,13 @@ impl Game {
             // Furthest along the track first.
             in_range.sort_by(|a, b| b.0.total_cmp(&a.0));
 
-            let projectile_kind = if t.kind == TowerKind::Blender {
-                ProjectileKind::Pulp
-            } else {
-                ProjectileKind::Seed
+            let projectile_kind = match t.kind {
+                TowerKind::Blender => ProjectileKind::Pulp,
+                TowerKind::KnifeThrower => ProjectileKind::Knife,
+                _ => ProjectileKind::Seed,
             };
             let splash = t.splash_radius();
+            let pierce = t.pierce();
 
             // A Lv3 Seed Shooter engages the two lead fruit; everything else
             // fires a single shot.
@@ -502,6 +503,7 @@ impl Game {
                     *target,
                     projectile_kind,
                     splash,
+                    pierce,
                     t.id,
                 ));
                 t.shots_fired += 1;
@@ -510,7 +512,11 @@ impl Game {
             let lead = in_range[0].1 - t.pos;
             t.angle = lead.y.atan2(lead.x);
             t.cooldown = t.fire_cooldown();
-            self.audio.play_shoot();
+            if t.kind == TowerKind::KnifeThrower {
+                self.audio.play_knife();
+            } else {
+                self.audio.play_shoot();
+            }
         }
     }
 
@@ -526,6 +532,8 @@ impl Game {
         // (fruit index, id of the tower that gets the credit)
         let mut pops: Vec<(usize, u32)> = Vec::new();
         let mut spent: Vec<usize> = Vec::new();
+        // Projectiles that connected this frame and owe a point of pierce.
+        let mut connected: Vec<usize> = Vec::new();
 
         for (pi, p) in self.projectiles.iter().enumerate() {
             if p.expired() || off_field(p.pos) {
@@ -539,7 +547,10 @@ impl Game {
                 .position(|f| f.pos.distance(p.pos) <= f.radius() + p.kind.radius());
 
             let Some(fi) = hit else { continue };
-            spent.push(pi);
+
+            // A piercing knife survives the hit and keeps flying; whether this
+            // one is used up is settled after the loop.
+            connected.push(pi);
 
             let splash = p.splash;
             if splash > 0.0 {
@@ -553,6 +564,15 @@ impl Game {
                 self.audio.play_splash();
             } else {
                 pops.push((fi, p.owner));
+            }
+        }
+
+        // Charge each connecting shot one point of pierce, and retire the ones
+        // that ran out. Done here rather than in the loop above so the
+        // projectile list isn't borrowed mutably while it's being scanned.
+        for &pi in &connected {
+            if self.projectiles[pi].consume_pierce() {
+                spent.push(pi);
             }
         }
 

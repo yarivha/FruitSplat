@@ -10,7 +10,7 @@ use macroquad::prelude::*;
 
 use crate::fruit::{Fruit, FruitKind, Splat};
 use crate::path::Path;
-use crate::projectile::Projectile;
+use crate::projectile::{Projectile, ProjectileKind};
 use crate::tower::{Pulse, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
 use crate::PLAYFIELD_H;
@@ -25,11 +25,12 @@ const FIELD_BANDS: i32 = 40;
 const TRACK_OUTER: f32 = 44.0;
 const TRACK_INNER: f32 = 34.0;
 
-/// Shop bar layout.
-const BTN_W: f32 = 210.0;
+/// Shop bar layout. Sized so all four tower buttons plus the hint column fit
+/// across the window without wrapping.
+const BTN_W: f32 = 178.0;
 const BTN_H: f32 = 62.0;
-const BTN_GAP: f32 = 16.0;
-const BTN_X0: f32 = 24.0;
+const BTN_GAP: f32 = 12.0;
+const BTN_X0: f32 = 16.0;
 
 /// Floating tower-panel size.
 const PANEL_W: f32 = 250.0;
@@ -250,6 +251,31 @@ pub fn draw_tower(t: &Tower) {
             }
             draw_circle(x, y, TOWER_RADIUS * 0.28, Color::new(0.85, 0.95, 1.0, 1.0));
         }
+        TowerKind::KnifeThrower => {
+            // A blade cocked in the direction of the last target.
+            let dir = vec2(t.angle.cos(), t.angle.sin());
+            let perp = vec2(-dir.y, dir.x);
+            let tip = t.pos + dir * (TOWER_RADIUS + 11.0);
+            let base = t.pos + dir * 3.0;
+
+            draw_triangle(
+                tip,
+                base + perp * 5.5,
+                base - perp * 5.5,
+                Color::new(0.90, 0.92, 0.96, 1.0),
+            );
+            // Crossguard, so it reads as a knife rather than an arrow.
+            let guard = t.pos + dir * 6.0;
+            draw_line(
+                guard.x - perp.x * 9.0,
+                guard.y - perp.y * 9.0,
+                guard.x + perp.x * 9.0,
+                guard.y + perp.y * 9.0,
+                3.0,
+                Color::new(0.30, 0.33, 0.40, 1.0),
+            );
+            draw_circle(x, y, TOWER_RADIUS * 0.32, Color::new(0.26, 0.29, 0.36, 1.0));
+        }
     }
 
     draw_level_pips(t);
@@ -339,11 +365,34 @@ pub fn draw_pulse(p: &Pulse) {
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_projectile(p: &Projectile) {
     let c = p.kind.color();
-    draw_circle(p.pos.x, p.pos.y, p.kind.radius(), c);
+    let r = p.kind.radius();
+
+    // A knife tumbles end over end; the others are just round.
+    if p.kind == ProjectileKind::Knife {
+        let a = p.spin.to_radians();
+        let dir = vec2(a.cos(), a.sin());
+        let perp = vec2(-dir.y, dir.x);
+
+        draw_triangle(
+            p.pos + dir * r * 1.9,
+            p.pos + perp * r * 0.6,
+            p.pos - perp * r * 0.6,
+            c,
+        );
+        draw_triangle(
+            p.pos - dir * r * 1.9,
+            p.pos + perp * r * 0.6,
+            p.pos - perp * r * 0.6,
+            Color::new(0.42, 0.46, 0.56, 1.0),
+        );
+        return;
+    }
+
+    draw_circle(p.pos.x, p.pos.y, r, c);
     draw_circle(
-        p.pos.x - p.kind.radius() * 0.3,
-        p.pos.y - p.kind.radius() * 0.3,
-        p.kind.radius() * 0.35,
+        p.pos.x - r * 0.3,
+        p.pos.y - r * 0.3,
+        r * 0.35,
         Color::new(1.0, 1.0, 1.0, 0.35),
     );
 }
@@ -451,30 +500,30 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
         // Colour swatch identifying the tower.
         let c = kind.color();
         let swatch = Color::new(c.r, c.g, c.b, if affordable { 1.0 } else { 0.4 });
-        draw_circle(r.x + 26.0, r.y + r.h * 0.5, 15.0, swatch);
+        draw_circle(r.x + 20.0, r.y + r.h * 0.5, 12.0, swatch);
 
         let text_alpha = if affordable { 1.0 } else { 0.45 };
         draw_text(
             format!("{}. {}", i + 1, kind.name()),
-            r.x + 50.0,
-            r.y + 26.0,
-            21.0,
+            r.x + 38.0,
+            r.y + 25.0,
+            17.0,
             Color::new(1.0, 1.0, 1.0, text_alpha),
         );
         draw_text(
             format!("${}  {}", kind.cost(), kind.blurb()),
-            r.x + 50.0,
-            r.y + 48.0,
-            17.0,
+            r.x + 38.0,
+            r.y + 46.0,
+            14.0,
             Color::new(0.85, 0.85, 0.9, text_alpha),
         );
     }
 
     let dim = Color::new(0.70, 0.70, 0.78, 1.0);
-    let hint_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
-    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 18.0, dim);
-    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 18.0, dim);
-    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 18.0, dim);
+    let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
+    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 16.0, dim);
+    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 16.0, dim);
+    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 16.0, dim);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,6 +609,12 @@ fn draw_tower_stats(t: &Tower, panel: Rect) {
             ("Range", format!("{:.0}", t.range())),
             ("Splash", format!("{:.0}", t.splash_radius())),
             ("Shots", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
+        TowerKind::KnifeThrower => [
+            ("Range", format!("{:.0}", t.range())),
+            ("Pierce", t.pierce().to_string()),
+            ("Knives", t.shots_fired.to_string()),
             ("Kills", t.kills.to_string()),
         ],
         TowerKind::SeedShooter => [
@@ -885,4 +940,69 @@ pub fn draw_game_over(wave: u32) {
 fn text_center(text: &str, y: f32, size: f32, color: Color) {
     let dims = measure_text(text, None, size as u16, 1.0);
     draw_text(text, (screen_width() - dims.width) * 0.5, y, size, color);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The fixed window width the layout constants are tuned against.
+    const WINDOW_W: f32 = 1000.0;
+
+    #[test]
+    fn every_shop_button_fits_inside_the_window() {
+        for i in 0..TowerKind::ALL.len() {
+            let r = shop_button_rect(i);
+            assert!(
+                r.x >= 0.0 && r.x + r.w <= WINDOW_W,
+                "shop button {i} runs off the window"
+            );
+        }
+    }
+
+    #[test]
+    fn shop_buttons_do_not_overlap() {
+        for i in 1..TowerKind::ALL.len() {
+            let prev = shop_button_rect(i - 1);
+            let cur = shop_button_rect(i);
+            assert!(
+                cur.x >= prev.x + prev.w,
+                "shop buttons {} and {i} overlap",
+                i - 1
+            );
+        }
+    }
+
+    #[test]
+    fn the_hint_column_clears_the_last_shop_button() {
+        let last = shop_button_rect(TowerKind::ALL.len() - 1);
+        let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
+
+        assert!(
+            hint_x >= last.x + last.w,
+            "hint text overlaps the last shop button"
+        );
+        // Leave enough width for the longest hint string.
+        assert!(
+            hint_x <= WINDOW_W - 190.0,
+            "no room left for the hint column"
+        );
+    }
+
+    #[test]
+    fn panel_buttons_stay_inside_the_panel() {
+        let panel = Rect::new(0.0, 0.0, PANEL_W, PANEL_H);
+        for b in [panel_upgrade_button(panel), panel_sell_button(panel)] {
+            assert!(b.x >= panel.x && b.x + b.w <= panel.x + panel.w);
+            assert!(b.y >= panel.y && b.y + b.h <= panel.y + panel.h);
+        }
+    }
+
+    #[test]
+    fn the_sell_button_sits_below_the_upgrade_button() {
+        let panel = Rect::new(0.0, 0.0, PANEL_W, PANEL_H);
+        let upgrade = panel_upgrade_button(panel);
+        let sell = panel_sell_button(panel);
+        assert!(sell.y >= upgrade.y + upgrade.h, "panel buttons overlap");
+    }
 }

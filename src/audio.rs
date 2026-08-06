@@ -16,6 +16,7 @@ use macroquad::audio::{load_sound_from_bytes, play_sound, stop_sound, PlaySoundP
 const MUSIC_VOLUME: f32 = 0.35;
 const POP_VOLUME: f32 = 0.55;
 const SHOOT_VOLUME: f32 = 0.22;
+const KNIFE_VOLUME: f32 = 0.26;
 const SPLASH_VOLUME: f32 = 0.50;
 const FREEZE_VOLUME: f32 = 0.35;
 const PLACE_VOLUME: f32 = 0.50;
@@ -47,6 +48,7 @@ pub struct Audio {
     /// Pop clips indexed by fruit tier: 0 = blueberry (highest) … 4 = watermelon.
     pops: Vec<Sound>,
     shoot: Sound,
+    knife: Sound,
     splash: Sound,
     freeze: Sound,
     place: Sound,
@@ -64,6 +66,7 @@ pub struct Audio {
     muted: bool,
     pops_this_frame: u32,
     shoot_cooldown: f32,
+    knife_cooldown: f32,
 }
 
 impl Audio {
@@ -85,6 +88,7 @@ impl Audio {
         Audio {
             pops,
             shoot: decode(include_bytes!("../assets/shoot.wav")).await,
+            knife: decode(include_bytes!("../assets/knife.wav")).await,
             splash: decode(include_bytes!("../assets/splash.wav")).await,
             freeze: decode(include_bytes!("../assets/freeze.wav")).await,
             place: decode(include_bytes!("../assets/place.wav")).await,
@@ -102,6 +106,7 @@ impl Audio {
             muted: false,
             pops_this_frame: 0,
             shoot_cooldown: 0.0,
+            knife_cooldown: 0.0,
         }
     }
 
@@ -112,6 +117,9 @@ impl Audio {
         self.pops_this_frame = 0;
         if self.shoot_cooldown > 0.0 {
             self.shoot_cooldown -= dt;
+        }
+        if self.knife_cooldown > 0.0 {
+            self.knife_cooldown -= dt;
         }
     }
 
@@ -140,6 +148,18 @@ impl Audio {
         }
         self.shoot_cooldown = SHOOT_MIN_GAP;
         self.sfx(&self.shoot, SHOOT_VOLUME);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // A knife being thrown. Gated separately from the seed thwip so a field
+    // full of Seed Shooters can't silence every Knife Thrower.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn play_knife(&mut self) {
+        if self.knife_cooldown > 0.0 {
+            return;
+        }
+        self.knife_cooldown = SHOOT_MIN_GAP;
+        self.sfx(&self.knife, KNIFE_VOLUME);
     }
 
     pub fn play_splash(&self) {

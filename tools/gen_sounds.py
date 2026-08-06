@@ -163,6 +163,21 @@ def make_shoot():
     return normalize(out, 0.45)
 
 
+def make_knife():
+    """A thin metallic whoosh — brighter and sharper than the seed thwip."""
+    n = int(0.13 * SR)
+    out = [0.0] * n
+
+    air = highpass(noise(n), 3200.0)
+    for i in range(n):
+        out[i] += air[i] * math.exp(-(i / SR) * 40.0) * 0.6
+
+    # A brief ring on top so it reads as a blade rather than just moving air.
+    tone(out, 2200.0, 0.10, vol=0.22, kind="tri", decay=45.0, sweep=0.6)
+    tone(out, 3300.0, 0.08, vol=0.12, kind="sine", decay=55.0, sweep=0.6)
+    return normalize(out, 0.50)
+
+
 def make_splash():
     """The Blender's pulp impact: wetter and longer than a single pop."""
     n = int(0.4 * SR)
@@ -279,6 +294,7 @@ def main():
         write_wav("pop_{}.wav".format(tier), make_pop(tier))
 
     write_wav("shoot.wav", make_shoot())
+    write_wav("knife.wav", make_knife())
     write_wav("splash.wav", make_splash())
     write_wav("freeze.wav", make_freeze())
     write_wav("place.wav", make_place())

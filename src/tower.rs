@@ -24,20 +24,22 @@ pub const MAX_LEVEL: u8 = 3;
 /// Fraction of everything invested that selling a tower gives back.
 const SELL_REFUND: f32 = 0.6;
 
-/// The three tower types available in the shop.
+/// The four tower types available in the shop.
 #[derive(Clone, Copy, PartialEq)]
 pub enum TowerKind {
     SeedShooter,
     Blender,
     Freezer,
+    KnifeThrower,
 }
 
 impl TowerKind {
-    /// Shop order, also the order of the 1/2/3 hotkeys.
-    pub const ALL: [TowerKind; 3] = [
+    /// Shop order, also the order of the 1/2/3/4 hotkeys.
+    pub const ALL: [TowerKind; 4] = [
         TowerKind::SeedShooter,
         TowerKind::Blender,
         TowerKind::Freezer,
+        TowerKind::KnifeThrower,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -45,6 +47,7 @@ impl TowerKind {
             TowerKind::SeedShooter => "Seed Shooter",
             TowerKind::Blender => "Blender",
             TowerKind::Freezer => "Freezer",
+            TowerKind::KnifeThrower => "Knife Thrower",
         }
     }
 
@@ -54,6 +57,7 @@ impl TowerKind {
             TowerKind::SeedShooter => 90,
             TowerKind::Blender => 170,
             TowerKind::Freezer => 140,
+            TowerKind::KnifeThrower => 130,
         }
     }
 
@@ -65,6 +69,7 @@ impl TowerKind {
             TowerKind::SeedShooter => [70, 150],
             TowerKind::Blender => [120, 240],
             TowerKind::Freezer => [100, 200],
+            TowerKind::KnifeThrower => [110, 220],
         };
         match level {
             1 => Some(costs[0]),
@@ -84,6 +89,8 @@ impl TowerKind {
             (TowerKind::Blender, 2) => "widest splash, faster",
             (TowerKind::Freezer, 1) => "deeper chill",
             (TowerKind::Freezer, 2) => "deepest chill, longer",
+            (TowerKind::KnifeThrower, 1) => "more pierce, faster",
+            (TowerKind::KnifeThrower, 2) => "deepest pierce",
             _ => "fully upgraded",
         }
     }
@@ -94,6 +101,7 @@ impl TowerKind {
             TowerKind::SeedShooter => [135.0, 158.0, 180.0],
             TowerKind::Blender => [110.0, 128.0, 148.0],
             TowerKind::Freezer => [120.0, 142.0, 165.0],
+            TowerKind::KnifeThrower => [145.0, 165.0, 185.0],
         };
         table[level_index(level)]
     }
@@ -104,8 +112,22 @@ impl TowerKind {
             TowerKind::SeedShooter => [0.45, 0.33, 0.24],
             TowerKind::Blender => [1.10, 0.88, 0.70],
             TowerKind::Freezer => [1.40, 1.15, 0.95],
+            TowerKind::KnifeThrower => [0.75, 0.60, 0.46],
         };
         table[level_index(level)]
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How many fruit one shot can pop before it is used up. Only the Knife
+    // Thrower exceeds 1 — its knives pass straight through and keep travelling,
+    // which is what makes it worth building on the tight zigzag routes where
+    // fruit line up single file.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn pierce(&self, level: u8) -> u32 {
+        match self {
+            TowerKind::KnifeThrower => [3, 4, 6][level_index(level)],
+            _ => 1,
+        }
     }
 
     /// Splash radius of this tower's shots. Zero means single-target.
@@ -147,15 +169,17 @@ impl TowerKind {
             TowerKind::SeedShooter => Color::new(0.58, 0.42, 0.26, 1.0),
             TowerKind::Blender => Color::new(0.62, 0.66, 0.72, 1.0),
             TowerKind::Freezer => Color::new(0.55, 0.80, 0.90, 1.0),
+            TowerKind::KnifeThrower => Color::new(0.42, 0.47, 0.60, 1.0),
         }
     }
 
-    /// One-line role summary, shown on the shop button.
+    /// Very short role summary for the shop button, which is narrow.
     pub fn blurb(&self) -> &'static str {
         match self {
-            TowerKind::SeedShooter => "fast single shot",
-            TowerKind::Blender => "splash damage",
-            TowerKind::Freezer => "slows, no damage",
+            TowerKind::SeedShooter => "single target",
+            TowerKind::Blender => "splash",
+            TowerKind::Freezer => "slows",
+            TowerKind::KnifeThrower => "pierces",
         }
     }
 }
@@ -221,6 +245,10 @@ impl Tower {
 
     pub fn shots(&self) -> usize {
         self.kind.shots(self.level)
+    }
+
+    pub fn pierce(&self) -> u32 {
+        self.kind.pierce(self.level)
     }
 
     pub fn slow_factor(&self) -> f32 {
@@ -325,6 +353,33 @@ mod tests {
                 // Lower slow_factor is a stronger slow, so it must not rise.
                 assert!(kind.slow_factor(hi) <= kind.slow_factor(lo));
                 assert!(kind.freeze_duration(hi) >= kind.freeze_duration(lo));
+                assert!(kind.pierce(hi) >= kind.pierce(lo), "pierce regressed");
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_knife_thrower_pierces() {
+        for level in 1..=MAX_LEVEL {
+            assert!(TowerKind::KnifeThrower.pierce(level) > 1);
+            for kind in [TowerKind::SeedShooter, TowerKind::Blender, TowerKind::Freezer] {
+                assert_eq!(kind.pierce(level), 1, "{} should not pierce", kind.name());
+            }
+        }
+    }
+
+    #[test]
+    fn every_tower_kind_has_a_distinct_name_and_colour() {
+        for (i, a) in TowerKind::ALL.iter().enumerate() {
+            for b in TowerKind::ALL.iter().skip(i + 1) {
+                assert_ne!(a.name(), b.name());
+                let (ca, cb) = (a.color(), b.color());
+                assert!(
+                    (ca.r - cb.r).abs() + (ca.g - cb.g).abs() + (ca.b - cb.b).abs() > 0.05,
+                    "{} and {} look too alike",
+                    a.name(),
+                    b.name()
+                );
             }
         }
     }
