@@ -42,12 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 41 unit tests covering path maths (corner traversal, end clamping,
+- 51 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
   sell values, validation that every authored route enters and exits off-screen
-  and leaves room for towers beside it, and UI layout assertions that the four
-  shop buttons and the hint column fit the window without overlapping.
+  and leaves room for towers beside it, UI layout assertions that the four shop
+  buttons and the hint column fit the window without overlapping, and scenery
+  checks covering prop placement, determinism and the local RNG's range.
 - Procedurally generated audio — 14 sound effects and 2 music loops, produced by
   pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
   the binary stays standalone.
