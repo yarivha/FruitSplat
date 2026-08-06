@@ -357,6 +357,76 @@ pub fn draw_fruit(f: &Fruit) {
     soft_shadow(vec2(c.x + r * 0.14, c.y + r * 0.34), r * 0.82, r * 0.40);
 
     match f.kind {
+        FruitKind::Durian => {
+            // A heavy, matte, spiked husk. The spikes carry the whole
+            // silhouette — at boss size a plain ball would just read as an
+            // oversized watermelon, and the two must never be confused at
+            // speed. They are deliberately sparse and narrow: packed tighter
+            // than this they overlap into a solid ring, and the fruit goes
+            // straight back to reading as a plain disc with a fringe.
+            let husk = shade(body, 0.80);
+            let dark = shade(body, 0.40);
+            let lit = shade(body, 0.60);
+
+            // Spikes go down first, so the husk covers their roots and they
+            // read as growing out of it rather than pinned onto it.
+            for i in 0..9 {
+                let a = rot + i as f32 * tau / 9.0;
+                let dir = vec2(a.cos(), a.sin());
+                let perp = vec2(-dir.y, dir.x);
+                let base = c + dir * r * 0.62;
+                let tip = base + dir * r * 0.48;
+                // Split down the spine into a lit face and a shadowed one, so
+                // each spike reads as a cone rather than a flat triangle.
+                draw_triangle(tip, base + perp * r * 0.13, base, lit);
+                draw_triangle(tip, base - perp * r * 0.13, base, dark);
+            }
+
+            // Husk, built by hand rather than with shaded_ball: that helper
+            // lifts the centre toward white, which on this khaki washes the
+            // whole fruit out to a pale grey.
+            draw_circle(c.x, c.y, r * 0.70, shade(husk, 0.60));
+            draw_circle(c.x, c.y, r * 0.65, husk);
+            draw_circle(c.x - r * 0.08, c.y - r * 0.10, r * 0.46, tint(husk, 0.08));
+
+            // Seams between the husk's lobes.
+            for i in 0..5 {
+                let a = rot * 0.4 + i as f32 * tau / 5.0;
+                draw_line(
+                    c.x,
+                    c.y,
+                    c.x + a.cos() * r * 0.68,
+                    c.y + a.sin() * r * 0.68,
+                    r * 0.035,
+                    shade(body, 0.44),
+                );
+            }
+
+            // Studs across the near face, so the husk reads as a studded
+            // sphere rather than a flat disc behind a fringe.
+            for i in 0..8 {
+                let a = -rot * 0.7 + i as f32 * tau / 8.0;
+                let dir = vec2(a.cos(), a.sin());
+                let perp = vec2(-dir.y, dir.x);
+                let base = c + dir * r * 0.34;
+                draw_triangle(
+                    base + dir * r * 0.24,
+                    base + perp * r * 0.075,
+                    base - perp * r * 0.075,
+                    lit,
+                );
+            }
+
+            draw_ellipse(
+                c.x + r * 0.06,
+                c.y - r * 0.84,
+                r * 0.08,
+                r * 0.18,
+                14.0,
+                Color::new(0.34, 0.26, 0.13, 1.0),
+            );
+        }
+
         FruitKind::Watermelon => {
             // Drawn as a cut cross-section: dark rind, pale pith, red flesh.
             shaded_ball(c, r, body);
@@ -514,7 +584,12 @@ pub fn draw_fruit(f: &Fruit) {
         }
     }
 
-    specular(c, r);
+    // Every fruit but the durian is glossy. A durian husk is dry and matte, and
+    // a highlight on it only made it read as one more shiny ball — the opposite
+    // of what has to happen when a boss comes on screen.
+    if f.kind != FruitKind::Durian {
+        specular(c, r);
+    }
 
     if f.chilled() {
         // A light frost wash with a brighter rim. Kept subtle — a heavier wash
@@ -522,6 +597,45 @@ pub fn draw_fruit(f: &Fruit) {
         draw_circle(c.x, c.y, r, Color::new(0.55, 0.80, 1.0, 0.17));
         draw_circle_lines(c.x, c.y, r * 0.97, 2.0, Color::new(0.82, 0.95, 1.0, 0.60));
     }
+
+    // Armour readout, bosses only and only once one has actually been hit. An
+    // untouched boss shows nothing, so the bar appearing is itself the signal
+    // that the fight has started.
+    if f.kind.is_boss() && f.hp < f.kind.armour() {
+        draw_armour_bar(c, r, f.health_fraction());
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The armour bar carried above a boss. It runs green through amber to red as
+// the husk comes apart, so colour alone says how the fight is going without the
+// player having to judge the length of a bar across a busy field.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_armour_bar(center: Vec2, r: f32, fraction: f32) {
+    const BAR_W: f32 = 64.0;
+    const BAR_H: f32 = 7.0;
+
+    let left = fraction.clamp(0.0, 1.0);
+    let x = center.x - BAR_W * 0.5;
+    let y = center.y - r - 16.0;
+
+    draw_rectangle(
+        x - 1.5,
+        y - 1.5,
+        BAR_W + 3.0,
+        BAR_H + 3.0,
+        Color::new(0.0, 0.0, 0.0, 0.55),
+    );
+    draw_rectangle(x, y, BAR_W, BAR_H, Color::new(0.22, 0.08, 0.08, 0.92));
+
+    let fill = if left > 0.5 {
+        Color::new(0.46, 0.86, 0.36, 1.0)
+    } else if left > 0.25 {
+        Color::new(0.98, 0.78, 0.28, 1.0)
+    } else {
+        Color::new(1.0, 0.36, 0.30, 1.0)
+    };
+    draw_rectangle(x, y, BAR_W * left, BAR_H, fill);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

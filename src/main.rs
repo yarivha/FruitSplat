@@ -449,7 +449,7 @@ impl Game {
     }
 
     fn start_wave(&mut self) {
-        self.queue = wave::build_wave(self.wave);
+        self.queue = wave::build_wave(self.wave, self.total_waves());
         self.spawn_timer = 0.0;
         self.wave_active = true;
         self.audio.play_wave_start();
@@ -626,7 +626,7 @@ impl Game {
         }
 
         // (fruit index, id of the tower that gets the credit)
-        let mut pops: Vec<(usize, u32)> = Vec::new();
+        let mut hits: Vec<(usize, u32)> = Vec::new();
         let mut spent: Vec<usize> = Vec::new();
         // Projectiles that connected this frame and owe a point of pierce.
         let mut connected: Vec<usize> = Vec::new();
@@ -654,12 +654,12 @@ impl Game {
                 let center = self.fruits[fi].pos;
                 for (i, f) in self.fruits.iter().enumerate() {
                     if f.pos.distance(center) <= splash {
-                        pops.push((i, p.owner));
+                        hits.push((i, p.owner));
                     }
                 }
                 self.audio.play_splash();
             } else {
-                pops.push((fi, p.owner));
+                hits.push((fi, p.owner));
             }
         }
 
@@ -678,36 +678,41 @@ impl Game {
             self.projectiles.remove(i);
         }
 
-        self.apply_pops(pops);
+        self.apply_hits(hits);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Pop the listed fruit, pay out, and add their children to the track.
-    // Indices are deduped because two shots can land on one fruit in a frame.
+    // Land a batch of hits, one point of damage each, and burst whatever runs
+    // out of armour. `hits` is (fruit index, id of the tower to credit).
+    //
+    // Every ordinary fruit has a single point of armour, so for them a hit is
+    // still a pop and a second one landing in the same frame is simply wasted.
+    // The boss is why the distinction exists at all: it soaks dozens of hits,
+    // and each one has to count, including several arriving in one frame from
+    // splash, pierce and separate towers.
     // ─────────────────────────────────────────────────────────────────────────
-    fn apply_pops(&mut self, mut pops: Vec<(usize, u32)>) {
-        if pops.is_empty() {
+    fn apply_hits(&mut self, hits: Vec<(usize, u32)>) {
+        if hits.is_empty() {
             return;
         }
-        // Two shots can land on the same fruit in one frame; the first one to
-        // be recorded takes the credit.
-        pops.sort_unstable_by_key(|&(i, _)| i);
-        pops.dedup_by_key(|&mut (i, _)| i);
+
+        let burst = land_hits(&mut self.fruits, hits);
 
         // Remove highest index first so the earlier indices stay valid.
         let mut children = Vec::new();
-        for &(i, owner) in pops.iter().rev() {
+        for &(i, owner) in burst.iter().rev() {
             let f = self.fruits.remove(i);
             // Only the bottom of the ladder pays out; see CASH_PER_FRUIT_CLEARED.
             if f.kind.child().is_none() {
                 self.cash += CASH_PER_FRUIT_CLEARED;
             }
             self.splats.push(Splat::burst(f.pos, f.kind));
-            self.audio.play_pop(f.kind.tier());
+            self.audio.play_pop(f.kind.tier(), f.kind.is_boss());
             children.extend(f.split(&self.path));
 
             // The firing tower may already have been sold, in which case the
-            // credit is simply dropped.
+            // credit is simply dropped. Only the killing blow scores, so a boss
+            // is one kill for whoever finally broke it, not sixty.
             if let Some(t) = self.towers.iter_mut().find(|t| t.id == owner) {
                 t.kills += 1;
             }
@@ -724,17 +729,23 @@ impl Game {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Run fruit over any spike piles they're standing on. A pile pops one fruit
-    // per charge and vanishes once it's used up.
+    // Run fruit over any spike piles they're standing on. A pile spends one
+    // spike per hit it lands and vanishes once it's used up.
     //
-    // Children of a popped fruit spawn at the same point on the track, so they
+    // Children of a burst fruit spawn at the same point on the track, so they
     // land on the same pile and get chewed through too — bounded by charges,
     // which is what makes a Spike Layer good against splits.
+    //
+    // Against the armoured boss that same rule makes a pile a burst of damage
+    // rather than a wall: it lands one hit per frame the boss stands on it, so
+    // the pile is stripped in a fraction of a second. A Spike Layer stays an
+    // anti-swarm tower — which is exactly what the boss leaves behind when it
+    // finally comes apart.
     // ─────────────────────────────────────────────────────────────────────────
     fn update_spikes(&mut self) {
-        let pops = run_over_spikes(&mut self.spikes, &self.fruits);
+        let hits = run_over_spikes(&mut self.spikes, &self.fruits);
         self.spikes.retain(|p| !p.spent());
-        self.apply_pops(pops);
+        self.apply_hits(hits);
     }
 
     fn update_effects(&mut self, dt: f32) {
@@ -855,33 +866,63 @@ impl Game {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Walk the fruit over the spike piles, spending one spike per fruit popped.
-// Returns (fruit index, owning tower id) for every fruit a pile got.
+// Land a batch of hits on the fruit list, one point of damage each, and report
+// which fruit that burst as (index, id of the tower that landed the blow).
+//
+// Damage is dealt in place, so every index stays valid across the whole batch —
+// nothing leaves the list here. `take_hit` reports a burst only once, so a fruit
+// struck three more times after it broke still comes back exactly once. That is
+// what keeps the caller's removal pass from taking out a bystander: it removes
+// by index, and a repeated index would mean removing a fruit that was never hit.
+//
+// Indices come back in ascending order, ready to be removed from the back. They
+// are unique, so the unstable sort has no ties to reorder.
+// ─────────────────────────────────────────────────────────────────────────────
+fn land_hits(fruits: &mut [Fruit], hits: Vec<(usize, u32)>) -> Vec<(usize, u32)> {
+    let mut burst: Vec<(usize, u32)> = Vec::new();
+
+    for (i, owner) in hits {
+        // A stale index simply misses. Nothing produces one today, but the
+        // alternative is a panic in the middle of a wave.
+        if let Some(f) = fruits.get_mut(i) {
+            if f.take_hit() {
+                burst.push((i, owner));
+            }
+        }
+    }
+
+    burst.sort_unstable_by_key(|&(i, _)| i);
+    burst
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Walk the fruit over the spike piles, spending one spike per hit landed.
+// Returns (fruit index, owning tower id) for every hit, for apply_hits.
 //
 // A fruit costs exactly one spike however many piles it is standing on. Piles
 // are dropped SPIKE_SPACING apart and each reaches radius + SPIKE_RADIUS along
 // the track, so overlap is the norm rather than the exception — a watermelon is
 // wide enough to sit on three at once. Charging every pile that covered it spent
-// three spikes to pop a single fruit, which quietly broke the rule the tower is
-// sold on: a pile pops one fruit per spike.
+// three spikes on a single fruit, which quietly broke the rule the tower is sold
+// on: a pile is worth one hit per spike.
 // ─────────────────────────────────────────────────────────────────────────────
 fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32)> {
-    let mut pops = Vec::new();
+    let mut hits = Vec::new();
 
     for (i, f) in fruits.iter().enumerate() {
         // Which of the covering piles pays is arbitrary — every spike is worth
         // the same — so it is simply the first one with any left.
-        let hit = piles
+        let pile = piles
             .iter_mut()
             .find(|p| !p.spent() && p.covers(f.dist, f.radius()));
 
-        if let Some(pile) = hit {
+        if let Some(pile) = pile {
             pile.charges -= 1;
-            pops.push((i, pile.owner));
+            hits.push((i, pile.owner));
         }
     }
 
-    pops
+    hits
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -971,14 +1012,30 @@ impl Game {
             self.towers.push(t);
         }
 
-        // One fruit of every tier, spaced out along the route.
+        // One fruit of every ordinary tier, spaced out along the route.
         for tier in 0..5u8 {
-            let dist = 380.0 + tier as f32 * 270.0;
+            let dist = 340.0 + tier as f32 * 300.0;
             self.fruits
                 .push(Fruit::new(FruitKind::from_tier(tier), dist, &self.path, 1.0));
         }
         // Chill one so the frost treatment shows up too.
         self.fruits[2].chill(0.35, 5.0);
+
+        // The boss is staged near the end of the route rather than next in the
+        // spacing, to keep it out of the staged Freezer's reach. Screenshot mode
+        // runs the real game loop for a dozen frames before it captures, so a
+        // boss parked inside that range arrives frosted over and its artwork
+        // can't be judged.
+        let mut boss = Fruit::new(
+            FruitKind::Durian,
+            self.path.total() - 240.0,
+            &self.path,
+            1.0,
+        );
+        // Rough it up so the armour bar is on screen; an untouched boss
+        // deliberately shows nothing.
+        boss.hp = boss.kind.armour() * 2 / 5;
+        self.fruits.push(boss);
 
         // Spike piles at varying wear, since a tower would only have managed
         // one drop in the handful of frames before the capture.
@@ -1170,6 +1227,84 @@ mod tests {
         // Coverage runs to the far edge of range, then works backwards as spots
         // fill, so a tower spreads its piles over its whole stretch.
         assert!(dist > tower.x, "should favour the far end of the coverage");
+    }
+
+    #[test]
+    fn one_hit_bursts_an_ordinary_fruit_and_the_shooter_is_credited() {
+        let path = straight_path();
+        let mut fruits = vec![
+            fruit_at(FruitKind::Lime, 100.0, &path),
+            fruit_at(FruitKind::Orange, 200.0, &path),
+        ];
+
+        assert_eq!(land_hits(&mut fruits, vec![(1, 42)]), vec![(1, 42)]);
+    }
+
+    #[test]
+    fn a_boss_only_bursts_once_however_many_hits_land_together() {
+        // The dangerous case: splash, pierce and several towers can all connect
+        // with one boss in a single frame. Reporting the burst twice would have
+        // the caller remove a second fruit that was never hit.
+        let path = straight_path();
+        let mut fruits = vec![fruit_at(FruitKind::Durian, 100.0, &path)];
+
+        let armour = FruitKind::Durian.armour() as usize;
+        let overkill: Vec<(usize, u32)> = (0..armour + 20).map(|_| (0, 7)).collect();
+
+        assert_eq!(land_hits(&mut fruits, overkill), vec![(0, 7)]);
+        assert_eq!(fruits[0].hp, 0);
+    }
+
+    #[test]
+    fn a_boss_survives_a_batch_that_falls_short_of_its_armour() {
+        let path = straight_path();
+        let mut fruits = vec![fruit_at(FruitKind::Durian, 100.0, &path)];
+
+        let armour = FruitKind::Durian.armour();
+        let batch: Vec<(usize, u32)> = (0..armour - 1).map(|_| (0, 7)).collect();
+
+        assert!(land_hits(&mut fruits, batch).is_empty(), "burst too early");
+        assert_eq!(fruits[0].hp, 1, "one point of armour should be left");
+    }
+
+    #[test]
+    fn burst_indices_come_back_ascending_and_unique() {
+        // The caller removes from the back, which only works on sorted indices,
+        // and would remove a bystander on a repeated one.
+        let path = straight_path();
+        let mut fruits: Vec<Fruit> = (0..5)
+            .map(|i| fruit_at(FruitKind::Lime, 100.0 + i as f32 * 50.0, &path))
+            .collect();
+
+        // Out of order, with a fruit struck twice and one index past the end.
+        let burst = land_hits(&mut fruits, vec![(3, 1), (0, 2), (3, 3), (9, 4), (1, 5)]);
+
+        let indices: Vec<usize> = burst.iter().map(|&(i, _)| i).collect();
+        assert_eq!(indices, vec![0, 1, 3], "a stale index must simply miss");
+        assert!(indices.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    #[test]
+    fn a_pile_lands_one_hit_per_frame_on_a_boss_standing_over_it() {
+        // Against an ordinary fruit a pile is a wall: the fruit is popped and
+        // gone. Against armour it is a burst of damage instead — the boss keeps
+        // standing there, so the pile strips itself in a handful of frames.
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 4, 7)];
+        let mut fruits = vec![fruit_at(FruitKind::Durian, 500.0, &path)];
+
+        for frame in 1..=4 {
+            let hits = run_over_spikes(&mut piles, &fruits);
+            assert_eq!(hits.len(), 1, "frame {frame} landed no hit");
+            fruits[0].take_hit();
+        }
+
+        assert!(piles[0].spent(), "four spikes should be gone in four frames");
+        assert!(
+            run_over_spikes(&mut piles, &fruits).is_empty(),
+            "a spent pile kept hitting"
+        );
+        assert!(fruits[0].hp > 0, "four spikes must not break the boss outright");
     }
 
     #[test]

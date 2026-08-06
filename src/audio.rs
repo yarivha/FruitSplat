@@ -47,7 +47,8 @@ pub enum Track {
 
 /// All loaded clips plus the throttling state.
 pub struct Audio {
-    /// Pop clips indexed by fruit tier: 0 = blueberry (highest) … 4 = watermelon.
+    /// Pop clips indexed by fruit tier: 0 = blueberry (highest) … 4 = watermelon,
+    /// 5 = the boss's husk splitting open.
     pops: Vec<Sound>,
     shoot: Sound,
     knife: Sound,
@@ -78,13 +79,17 @@ impl Audio {
     // Decode every embedded clip. Called once, before the game loop starts.
     // ─────────────────────────────────────────────────────────────────────────
     pub async fn load() -> Self {
-        let mut pops = Vec::with_capacity(5);
+        let mut pops = Vec::with_capacity(6);
         for bytes in [
             include_bytes!("../assets/pop_0.wav").as_slice(),
             include_bytes!("../assets/pop_1.wav").as_slice(),
             include_bytes!("../assets/pop_2.wav").as_slice(),
             include_bytes!("../assets/pop_3.wav").as_slice(),
             include_bytes!("../assets/pop_4.wav").as_slice(),
+            // Tier 5 is the boss bursting — a splintering crack rather than
+            // another pop. Indexed by tier like the rest, so play_pop needs no
+            // special case for it.
+            include_bytes!("../assets/pop_5.wav").as_slice(),
         ] {
             pops.push(decode(bytes).await);
         }
@@ -132,8 +137,20 @@ impl Audio {
     // ─────────────────────────────────────────────────────────────────────────
     // A fruit burst. `tier` picks the pitch — smaller fruit pop higher.
     // Silently dropped once the per-frame budget is spent.
+    //
+    // A boss bursting is exempt from that budget, and from the ducking. It is
+    // the payoff for a fight that ran most of a route, and it lands in exactly
+    // the crowded frame the cap exists to thin out — so the cap would swallow
+    // the one pop the player is waiting to hear.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn play_pop(&mut self, tier: u8) {
+    pub fn play_pop(&mut self, tier: u8, is_boss: bool) {
+        let index = (tier as usize).min(self.pops.len() - 1);
+
+        if is_boss {
+            self.sfx(&self.pops[index], POP_VOLUME);
+            return;
+        }
+
         if self.pops_this_frame >= MAX_POPS_PER_FRAME {
             return;
         }
@@ -141,7 +158,6 @@ impl Audio {
 
         // Duck each successive pop so simultaneous bursts don't spike the mix.
         let duck = 1.0 - POP_DUCK_PER_EXTRA * (self.pops_this_frame - 1) as f32;
-        let index = (tier as usize).min(self.pops.len() - 1);
         self.sfx(&self.pops[index], POP_VOLUME * duck.max(0.25));
     }
 

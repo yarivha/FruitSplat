@@ -72,10 +72,15 @@ the shot's path. That makes the Knife Thrower strongest on the switchback
 routes, where fruit queue up single file down a lane.
 
 The Spike Layer is the odd one out — it doesn't shoot. It drops piles of spikes
-directly onto the track, and each pile pops one fruit per spike before it wears
-away. Spikes never miss, so the limits are the pile size and how many piles a
-tower may have out at once (3 at Lv1). It's especially good against splits:
-children spawn where their parent died, right on top of the same pile.
+directly onto the track, and each pile is worth **one hit per spike** before it
+wears away. Against everything except the boss a hit is a pop, so that reads as
+one fruit per spike. Spikes never miss, so the limits are the pile size and how
+many piles a tower may have out at once (3 at Lv1). It's especially good against
+splits: children spawn where their parent died, right on top of the same pile.
+
+A fruit costs exactly one spike however many piles it happens to be standing on.
+Piles sit 34px apart and each reaches `radius + 14px` along the track, so overlap
+is the norm — a watermelon is wide enough to sit on three at once.
 
 A pile is tested against fruit by **distance along the route**, not by how close
 it is in pixels. On the switchback routes two stretches of track run within a
@@ -124,13 +129,44 @@ remaining duration.
 Popping a fruit splits it into **two** of the next tier down. Clearing a single
 watermelon therefore takes 31 pops in total.
 
-| Tier | Fruit | Radius | Speed | Splits into | Lives lost if leaked |
-|---|---|---|---|---|---|
-| 4 | Watermelon | 30 px | ×0.72 | 2 × Orange | 5 |
-| 3 | Orange | 24 px | ×0.88 | 2 × Lime | 4 |
-| 2 | Lime | 19 px | ×1.00 | 2 × Strawberry | 3 |
-| 1 | Strawberry | 15 px | ×1.12 | 2 × Blueberry | 2 |
-| 0 | Blueberry | 11 px | ×1.38 | — | 1 |
+| Tier | Fruit | Radius | Speed | Armour | Splits into | Lives lost if leaked |
+|---|---|---|---|---|---|---|
+| 5 | **Durian** | 42 px | ×0.55 | **60** | 4 × Watermelon | 6 |
+| 4 | Watermelon | 30 px | ×0.72 | 1 | 2 × Orange | 5 |
+| 3 | Orange | 24 px | ×0.88 | 1 | 2 × Lime | 4 |
+| 2 | Lime | 19 px | ×1.00 | 1 | 2 × Strawberry | 3 |
+| 1 | Strawberry | 15 px | ×1.12 | 1 | 2 × Blueberry | 2 |
+| 0 | Blueberry | 11 px | ×1.38 | 1 | — | 1 |
+
+### The Durian
+
+The boss, and the only fruit you shoot *at* rather than *through*.
+
+Everything below it expresses toughness through the size of the subtree it is
+hiding — a watermelon is hard because it is 31 pops, not because it is durable,
+and it dies to the first seed that touches it like everything else. The Durian
+breaks both rules at once. It carries **60 points of armour**, so it has to be
+worn down before it will give anything up, and it is packed with **four whole
+watermelons** rather than a pair of the tier below. Clearing one outright costs
+60 hits plus 124 more for the payload.
+
+It also lumbers, at ×0.55 — slower than anything else on the track. That is most
+of what makes it readable: the swarm it arrives with overtakes it, so you get a
+long look at what is coming before it reaches your guns. An armour bar appears
+above it the moment it takes its first hit, running green through amber to red.
+
+Because it is armoured, the towers sort themselves into roles against it:
+
+- **Knife Throwers** are the answer. A knife spends one point of pierce per
+  frame it spends inside the husk, so a single Lv3 throw is worth six hits.
+- **Blenders** hit it and the swarm around it with one shot, but only for one
+  point each.
+- **Spike Layers** are not boss weapons. A pile lands one hit per frame the
+  Durian stands on it, so it strips itself in a fraction of a second — they stay
+  an anti-swarm tower, which is exactly what the boss leaves behind when it
+  finally comes apart.
+- **Freezers** still work on it, and buying the field a few extra seconds of
+  fire is worth more here than anywhere else in the game.
 
 ## Waves
 
@@ -138,6 +174,23 @@ A new tier unlocks every third wave, so watermelons first appear on wave 13 —
 every route runs long enough to see them. Spawn intervals tighten from 0.85s
 toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9×.
 You start with 15 lives and $180.
+
+### Boss waves
+
+Durians are not part of that unlock ladder — a boss is placed, never drifted
+into. They arrive on **wave 15 and every fifth wave after it**, and on a route's
+**final wave** whatever its number, so no run can end without the fight it has
+been building toward. Every route is at least 15 waves long, so every route
+meets one.
+
+They escalate by **count, not by stats**, the same way everything else in this
+game escalates: wave 15 sends one Durian, wave 20 sends two, wave 25 sends three.
+A tougher boss would need a second set of numbers to tune; a second boss needs
+none, and the speed ramp already makes a later one harder to break.
+
+Each one is slotted into the last third of the spawn order, so it lumbers in
+once most of the wave is already walking rather than arriving alone at either
+end.
 
 Clearing the route's last wave wins the run. Losing all your lives ends it, and
 either way you return to the route picker.
@@ -159,16 +212,30 @@ than the threat for difficulty to hold steady.
 cargo test balance_report -- --ignored --nocapture
 ```
 
-Prints the difficulty and economy curves per wave: fruit sent, pops required,
-income, the speed ramp, the pops per second needed to keep up, and how much
-firepower the cumulative income could buy. The last column is the ratio — 1.0
-means you can afford exactly enough, below 1.0 means the wave outpaces you.
+Prints the difficulty and economy curves per wave: fruit sent, bosses among
+them, hits required, income, the speed ramp, the hits per second needed to keep
+up, and how much firepower the cumulative income could buy. The last column is
+the ratio — 1.0 means you can afford exactly enough, below 1.0 means the wave
+outpaces you.
 
 The curve is deliberately generous early (about 4× at wave 1) and tightest at
-wave 13, where watermelons first arrive, drifting back to roughly 1.7× by wave
-25. It's a model, not a simulation: it ignores upgrades, splash and pierce
+wave 13, where watermelons first arrive, drifting back toward 1.8× by wave 24.
+**Boss waves cut across that drift**, which is the point of them:
+
+| Wave | 13 | 14 | 15 | 19 | 20 | 24 | 25 |
+|---|---|---|---|---|---|---|---|
+| Durians | — | — | 1 | — | 2 | — | 3 |
+| Ratio | 0.9 | 1.0 | **0.9** | 1.5 | **1.1** | 1.8 | **1.2** |
+
+Each boss wave demands 28% to 67% more work per second than the wave before it,
+the gap widening as the count climbs, so waves 20 and 25 stay the two spikes of
+a run rather than flattening out against a field that has had ten more waves to
+grow. The Durian's armour was picked against this table, not guessed.
+
+It's a model, not a simulation: it ignores upgrades, splash and pierce
 multi-kills, and spikes, all of which make the real game more forgiving than the
-numbers suggest.
+numbers suggest — and it charges a knife one hit per point of pierce spent on a
+boss, where the real thing lands all six.
 
 ## Audio
 
@@ -178,7 +245,7 @@ are embedded into the binary with `include_bytes!`, so the executable is
 standalone.
 
 ```sh
-python3 tools/gen_sounds.py   # 19 effects → assets/
+python3 tools/gen_sounds.py   # 20 effects → assets/
 python3 tools/gen_music.py    # 2 music loops → assets/
 ```
 
@@ -192,10 +259,16 @@ nothing reads them at runtime.
 > and silently rewrites unrelated `.wav` files.
 
 Fruit pop at five different pitches, highest for blueberries down to lowest for
-watermelons. To keep a busy field readable, pops are capped at 3 per frame with
-each successive one 22% quieter, and the firing sounds are rate-limited — seeds
-and knives on separate gates, so a row of Seed Shooters can't silence every
-Knife Thrower.
+watermelons, and the Durian gets a sixth clip of its own — a splintering crack
+over a long low body rather than another pop. To keep a busy field readable,
+pops are capped at 3 per frame with each successive one 22% quieter, and the
+firing sounds are rate-limited — seeds and knives on separate gates, so a row of
+Seed Shooters can't silence every Knife Thrower.
+
+The boss burst is exempt from that cap and from the ducking. It is the payoff
+for a fight that ran most of a route, and it lands in exactly the crowded frame
+the cap exists to thin out — so the cap would swallow the one pop the player is
+waiting to hear.
 
 ## Layout
 
@@ -233,7 +306,8 @@ FRUITSPLAT_SCREENSHOT=/tmp/shot.png cargo run --release
 `select` the route picker, `menu` the title screen, `victory` and `over` the two
 end screens. `FRUITSPLAT_TRACK` picks which route's backdrop to stage. The
 default stages a board with all five towers at different levels, one fruit of
-every tier including a chilled one, and spike piles at varying wear.
+every tier including a chilled one, a half-broken Durian showing its armour bar,
+and spike piles at varying wear.
 
 ## License
 

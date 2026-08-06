@@ -313,6 +313,32 @@ def make_game_over():
     return normalize(out, 0.8)
 
 
+def make_boss_burst():
+    """
+    A durian's armoured husk finally giving way. Deliberately not just a lower
+    pop: a splintering crack up top over a long low body, so breaking the boss
+    reads as an event even with a swarm popping around it.
+    """
+    n = int(0.85 * SR)
+    out = [0.0] * n
+
+    # The crack: bright, fast, gone.
+    crack = highpass(noise(int(0.14 * SR)), 1800.0)
+    for i, s in enumerate(crack):
+        out[i] += s * math.exp(-(i / SR) * 30.0) * 0.55
+
+    # The body: a low sweep down, doubled an octave below for weight.
+    tone(out, 190.0, 0.65, vol=0.42, kind="tri", decay=5.5, sweep=0.42)
+    tone(out, 95.0, 0.75, vol=0.30, kind="sine", decay=4.0, sweep=0.5)
+
+    # Wet pulp spilling out, low-passed and slower to decay than a normal pop.
+    wet = lowpass(noise(n), 1500.0)
+    for i in range(n):
+        out[i] += wet[i] * math.exp(-(i / SR) * 7.0) * 0.34
+
+    return normalize(out, 0.88)
+
+
 # -----------------------------------------------------------------------------
 # Entry point
 # -----------------------------------------------------------------------------
@@ -343,6 +369,10 @@ def main():
     # numbers every later sound gets and silently rewrites unrelated .wav files.
     write_wav("spikes.wav", make_spikes())
     write_wav("victory.wav", make_victory())
+    # The boss's burst is tier 5's pop, so audio.rs can keep indexing the pop
+    # clips straight by tier with no special case. Only the call order matters
+    # to the seeded stream, not the file name, so it belongs down here.
+    write_wav("pop_5.wav", make_boss_burst())
     print("Done.")
 
 

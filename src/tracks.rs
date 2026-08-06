@@ -240,6 +240,25 @@ mod tests {
     }
 
     #[test]
+    fn every_route_runs_long_enough_to_meet_the_boss() {
+        // The Durian's whole design assumes the player will actually face it. A
+        // route ending before the first boss wave would never show them one.
+        for t in &TRACKS {
+            assert!(
+                t.waves >= crate::wave::FIRST_BOSS_WAVE,
+                "{} ends at wave {}, before the first boss wave",
+                t.name,
+                t.waves
+            );
+            assert!(
+                crate::wave::boss_count(t.waves, t.waves) >= 1,
+                "{} does not end on a boss wave",
+                t.name
+            );
+        }
+    }
+
+    #[test]
     fn harder_routes_are_shorter_runs() {
         let hard = TRACKS.iter().find(|t| t.difficulty == "Hard").unwrap();
         let gentle = TRACKS.iter().find(|t| t.difficulty == "Gentle").unwrap();

@@ -19,10 +19,28 @@ pub const FRUIT_BASE_SPEED: f32 = 105.0;
 /// How far behind its sibling the second child spawns, so splits fan out.
 const SPLIT_TRAIL: f32 = 18.0;
 
-/// The five fruit tiers, ordered by the split ladder.
-/// Tier 0 is Blueberry (weakest, fastest); tier 4 is Watermelon (toughest).
+/// Watermelons packed inside one Durian. Four is 124 pops of payload, which is
+/// roughly a quarter of everything a late wave sends — enough that letting one
+/// through decides the wave, without it being the whole wave on its own.
+const DURIAN_PAYLOAD: usize = 4;
+/// Hits a Durian takes before it bursts.
+///
+/// Tuned against `balance_report`, not guessed. At 60 it lands wave 15 — the
+/// first boss wave — on the same 0.9 affordability ratio as wave 13, which was
+/// the hardest point in a run before the boss existed. Each boss wave demands
+/// 28% to 67% more work per second than the wave before it, the gap widening as
+/// the count climbs, so waves 20 and 25 stay the two spikes of a run rather than
+/// flattening out against a field that has had ten more waves to grow.
+///
+/// Lower and the boss dissolves in the crossfire meant for the swarm around it;
+/// much higher and it simply walks a route the player is otherwise holding.
+const DURIAN_ARMOUR: u32 = 60;
+
+/// The six fruit tiers, ordered by the split ladder.
+/// Tier 0 is Blueberry (weakest, fastest); tier 5 is the Durian, the boss.
 #[derive(Clone, Copy, PartialEq)]
 pub enum FruitKind {
+    Durian,
     Watermelon,
     Orange,
     Lime,
@@ -32,7 +50,7 @@ pub enum FruitKind {
 
 impl FruitKind {
     // ─────────────────────────────────────────────────────────────────────────
-    // Tier index: 0 = Blueberry … 4 = Watermelon.
+    // Tier index: 0 = Blueberry … 5 = Durian.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn tier(&self) -> u8 {
         match self {
@@ -41,11 +59,12 @@ impl FruitKind {
             FruitKind::Lime => 2,
             FruitKind::Orange => 3,
             FruitKind::Watermelon => 4,
+            FruitKind::Durian => 5,
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Build a kind from its tier index. Anything above 4 clamps to Watermelon.
+    // Build a kind from its tier index. Anything above 5 clamps to the Durian.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn from_tier(tier: u8) -> Self {
         match tier {
@@ -53,7 +72,8 @@ impl FruitKind {
             1 => FruitKind::Strawberry,
             2 => FruitKind::Lime,
             3 => FruitKind::Orange,
-            _ => FruitKind::Watermelon,
+            4 => FruitKind::Watermelon,
+            _ => FruitKind::Durian,
         }
     }
 
@@ -62,6 +82,7 @@ impl FruitKind {
     // ─────────────────────────────────────────────────────────────────────────
     pub fn child(&self) -> Option<FruitKind> {
         match self {
+            FruitKind::Durian => Some(FruitKind::Watermelon),
             FruitKind::Watermelon => Some(FruitKind::Orange),
             FruitKind::Orange => Some(FruitKind::Lime),
             FruitKind::Lime => Some(FruitKind::Strawberry),
@@ -70,15 +91,67 @@ impl FruitKind {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // How many children this fruit bursts into.
+    //
+    // The ladder is binary all the way up, which is what makes a watermelon
+    // worth 31 pops. The Durian is the exception it exists for: it carries a
+    // whole cluster of watermelons rather than a pair, so clearing one is worth
+    // four times what the tier below it costs.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn split_count(&self) -> usize {
+        match self {
+            FruitKind::Durian => DURIAN_PAYLOAD,
+            _ => 2,
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Hits this fruit takes before it bursts.
+    //
+    // Every ordinary fruit is 1: the game expresses toughness through the size
+    // of the subtree a fruit is hiding, not through durability, which is why a
+    // watermelon is "hard" at 31 pops without ever surviving a seed. The Durian
+    // is armoured on top of that, so it has to be worn down before it will give
+    // up its payload — the one fruit you shoot at rather than through.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn armour(&self) -> u32 {
+        match self {
+            FruitKind::Durian => DURIAN_ARMOUR,
+            _ => 1,
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How far apart along the track this fruit's children are laid out.
+    //
+    // A pair can overlap and still read as one burst, but the Durian's cluster
+    // has to fan out or four 30px watermelons land as a single unreadable blob.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn split_spread(&self) -> f32 {
+        match self {
+            FruitKind::Durian => 34.0,
+            _ => SPLIT_TRAIL,
+        }
+    }
+
     /// Collision and drawing radius, in pixels.
     pub fn radius(&self) -> f32 {
         match self {
+            FruitKind::Durian => 42.0,
             FruitKind::Watermelon => 30.0,
             FruitKind::Orange => 24.0,
             FruitKind::Lime => 19.0,
             FruitKind::Strawberry => 15.0,
             FruitKind::Blueberry => 11.0,
         }
+    }
+
+    /// True for fruit that need a health bar and announce themselves. Reading
+    /// "is this armoured" rather than "is this a Durian" keeps the rendering and
+    /// wave code from caring which kind happens to be the boss.
+    pub fn is_boss(&self) -> bool {
+        self.armour() > 1
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -92,6 +165,10 @@ impl FruitKind {
     /// Per-tier multiplier on the base speed. Small fruit move quicker.
     pub fn speed_scale(&self) -> f32 {
         match self {
+            // The Durian lumbers. Being slow is most of what makes it readable
+            // as a boss: the swarm it arrives with overtakes it, so the player
+            // gets a good look at what is coming before it is on top of them.
+            FruitKind::Durian => 0.55,
             FruitKind::Watermelon => 0.72,
             FruitKind::Orange => 0.88,
             FruitKind::Lime => 1.0,
@@ -103,6 +180,9 @@ impl FruitKind {
     /// Main body colour.
     pub fn body(&self) -> Color {
         match self {
+            // Khaki husk — deliberately unlike the watermelon's clean green, so
+            // the two never get confused at speed.
+            FruitKind::Durian => Color::new(0.52, 0.47, 0.20, 1.0),
             FruitKind::Watermelon => Color::new(0.22, 0.55, 0.24, 1.0),
             FruitKind::Orange => Color::new(0.97, 0.58, 0.11, 1.0),
             FruitKind::Lime => Color::new(0.55, 0.80, 0.20, 1.0),
@@ -114,6 +194,7 @@ impl FruitKind {
     /// Inner flesh colour — what the splat particles are mostly made of.
     pub fn flesh(&self) -> Color {
         match self {
+            FruitKind::Durian => Color::new(0.95, 0.84, 0.42, 1.0),
             FruitKind::Watermelon => Color::new(0.93, 0.27, 0.34, 1.0),
             FruitKind::Orange => Color::new(1.0, 0.76, 0.36, 1.0),
             FruitKind::Lime => Color::new(0.80, 0.93, 0.48, 1.0),
@@ -139,6 +220,10 @@ pub struct Fruit {
     pub speed_mult: f32,
     pub rot: f32,
     pub spin: f32,
+    /// Hits left before this fruit bursts. Every ordinary fruit starts at 1 and
+    /// so dies to the first thing that touches it; only the armoured boss ever
+    /// sits above that.
+    pub hp: u32,
 }
 
 impl Fruit {
@@ -155,7 +240,30 @@ impl Fruit {
             speed_mult,
             rot: gen_range(0.0, 360.0),
             spin: gen_range(-50.0, 50.0),
+            hp: kind.armour(),
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Take one hit. Returns true only for the hit that actually burst it, so a
+    // fruit can never be reported as bursting twice — several shots can land on
+    // one boss in a single frame, and the caller turns each `true` into a
+    // removal from the fruit list.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn take_hit(&mut self) -> bool {
+        if self.hp == 0 {
+            return false;
+        }
+        self.hp -= 1;
+        self.hp == 0
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Armour left, as 1.0 down to 0.0, for the health bar. Ordinary fruit sit at
+    // 1.0 for their whole life, which is why the bar is only drawn for bosses.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn health_fraction(&self) -> f32 {
+        self.hp as f32 / self.kind.armour().max(1) as f32
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -221,23 +329,23 @@ impl Fruit {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // The two children this fruit bursts into, if any. The second trails behind
-    // so a split visibly fans out along the track instead of overlapping.
+    // The children this fruit bursts into, if any. Each one trails a little
+    // further back down the track, so a split visibly fans out rather than
+    // stacking every child on the same spot.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn split(&self, path: &Path) -> Vec<Fruit> {
-        match self.kind.child() {
-            None => Vec::new(),
-            // Children inherit the wave's speed ramp from their parent.
-            Some(child) => vec![
-                Fruit::new(child, self.dist, path, self.speed_mult),
-                Fruit::new(
-                    child,
-                    (self.dist - SPLIT_TRAIL).max(0.0),
-                    path,
-                    self.speed_mult,
-                ),
-            ],
-        }
+        let Some(child) = self.kind.child() else {
+            return Vec::new();
+        };
+
+        let spread = self.kind.split_spread();
+        (0..self.kind.split_count())
+            .map(|i| {
+                let dist = (self.dist - i as f32 * spread).max(0.0);
+                // Children inherit the wave's speed ramp from their parent.
+                Fruit::new(child, dist, path, self.speed_mult)
+            })
+            .collect()
     }
 }
 
@@ -308,16 +416,25 @@ impl Splat {
 mod tests {
     use super::*;
 
+    /// Hits needed to clear one fruit and everything below it in the ladder,
+    /// armour included.
+    fn subtree_hits(kind: FruitKind) -> u32 {
+        match kind.child() {
+            None => kind.armour(),
+            Some(c) => kind.armour() + kind.split_count() as u32 * subtree_hits(c),
+        }
+    }
+
     #[test]
     fn tier_round_trips_through_from_tier() {
-        for t in 0..=4u8 {
+        for t in 0..=5u8 {
             assert_eq!(FruitKind::from_tier(t).tier(), t);
         }
     }
 
     #[test]
     fn the_split_ladder_descends_one_tier_and_terminates() {
-        let mut kind = FruitKind::Watermelon;
+        let mut kind = FruitKind::Durian;
         let mut steps = 0;
         while let Some(child) = kind.child() {
             assert_eq!(child.tier(), kind.tier() - 1);
@@ -325,24 +442,26 @@ mod tests {
             steps += 1;
         }
         assert!(kind == FruitKind::Blueberry);
-        assert_eq!(steps, 4);
+        assert_eq!(steps, 5);
     }
 
     #[test]
     fn clearing_one_watermelon_takes_31_pops() {
         // 1 + 2 + 4 + 8 + 16 — the whole subtree has to be popped.
-        fn pops(kind: FruitKind) -> u32 {
-            match kind.child() {
-                None => 1,
-                Some(c) => 1 + 2 * pops(c),
-            }
-        }
-        assert_eq!(pops(FruitKind::Watermelon), 31);
+        assert_eq!(subtree_hits(FruitKind::Watermelon), 31);
+    }
+
+    #[test]
+    fn clearing_one_durian_takes_its_armour_plus_four_watermelons() {
+        assert_eq!(
+            subtree_hits(FruitKind::Durian),
+            DURIAN_ARMOUR + DURIAN_PAYLOAD as u32 * 31
+        );
     }
 
     #[test]
     fn smaller_tiers_move_faster() {
-        for t in 1..=4u8 {
+        for t in 1..=5u8 {
             let bigger = FruitKind::from_tier(t);
             let smaller = FruitKind::from_tier(t - 1);
             assert!(smaller.speed_scale() > bigger.speed_scale());
@@ -350,9 +469,92 @@ mod tests {
     }
 
     #[test]
+    fn bigger_tiers_are_bigger() {
+        for t in 1..=5u8 {
+            let bigger = FruitKind::from_tier(t);
+            let smaller = FruitKind::from_tier(t - 1);
+            assert!(bigger.radius() > smaller.radius());
+        }
+    }
+
+    #[test]
     fn leak_cost_climbs_with_tier() {
         assert_eq!(FruitKind::Blueberry.leak_cost(), 1);
         assert_eq!(FruitKind::Watermelon.leak_cost(), 5);
+        assert_eq!(FruitKind::Durian.leak_cost(), 6);
+    }
+
+    #[test]
+    fn only_the_boss_is_armoured() {
+        for t in 0..=4u8 {
+            let kind = FruitKind::from_tier(t);
+            assert_eq!(kind.armour(), 1, "an ordinary fruit must die to one hit");
+            assert!(!kind.is_boss());
+            assert_eq!(kind.split_count(), 2, "the ladder below the boss is binary");
+        }
+        assert!(FruitKind::Durian.armour() > 1);
+        assert!(FruitKind::Durian.is_boss());
+    }
+
+    #[test]
+    fn an_ordinary_fruit_bursts_on_its_first_hit() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Watermelon, 100.0, &path, 1.0);
+        assert!(f.take_hit(), "a watermelon should not survive a hit");
+    }
+
+    #[test]
+    fn a_durian_soaks_its_whole_armour_before_bursting() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Durian, 100.0, &path, 1.0);
+
+        for hit in 1..DURIAN_ARMOUR {
+            assert!(!f.take_hit(), "burst early, on hit {hit}");
+        }
+        assert!(f.take_hit(), "the last point of armour did not burst it");
+
+        // Overkill lands on an already-burst fruit when several shots connect
+        // in one frame. It must not report a second burst, or the fruit would
+        // be removed from the field twice.
+        assert!(!f.take_hit(), "reported bursting twice");
+        assert_eq!(f.hp, 0);
+    }
+
+    #[test]
+    fn the_health_bar_tracks_the_armour_down() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Durian, 0.0, &path, 1.0);
+        assert_eq!(f.health_fraction(), 1.0);
+
+        for _ in 0..DURIAN_ARMOUR / 2 {
+            f.take_hit();
+        }
+        assert!((f.health_fraction() - 0.5).abs() < 0.01);
+
+        // An unarmoured fruit is always full, which is why it gets no bar.
+        let g = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        assert_eq!(g.health_fraction(), 1.0);
+    }
+
+    #[test]
+    fn a_durian_bursts_into_a_fanned_out_cluster_of_watermelons() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(2000.0, 0.0)]);
+        let f = Fruit::new(FruitKind::Durian, 900.0, &path, 1.0);
+        let kids = f.split(&path);
+
+        assert_eq!(kids.len(), DURIAN_PAYLOAD);
+        assert!(kids.iter().all(|k| k.kind == FruitKind::Watermelon));
+
+        // Each child trails the one before it, far enough apart that four 30px
+        // watermelons don't land as a single blob.
+        for pair in kids.windows(2) {
+            let gap = pair[0].dist - pair[1].dist;
+            assert!(gap > 0.0, "children stacked on the same spot");
+            assert!(
+                gap >= FruitKind::Watermelon.radius(),
+                "cluster is too tightly packed to read: {gap}px"
+            );
+        }
     }
 
     #[test]

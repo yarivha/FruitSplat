@@ -18,12 +18,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split ladder: popping a fruit bursts it into two of the next tier down.
   Watermelon → Orange → Lime → Strawberry → Blueberry, which does not split.
   Smaller tiers move faster, so an unhandled watermelon becomes a fast swarm.
+- **The Durian**, a boss fruit that is the only thing in the game you shoot *at*
+  rather than *through*. It breaks both of the ladder's rules at once: it
+  carries **60 points of armour**, where every other fruit dies to the first
+  thing that touches it, and it bursts into **four whole watermelons** rather
+  than a pair of the tier below. Clearing one costs 60 hits plus 124 for the
+  payload. At ×0.55 it is the slowest thing on the track, so the swarm it
+  arrives with overtakes it and the player gets a long look at what is coming.
+  - Hit points are new to the game, so pop resolution became damage
+    resolution: hits accumulate on a fruit and only burst it at zero, several
+    hits landing in one frame all count, and the killing blow takes the credit.
+    Ordinary fruit have one point of armour, so nothing about them changed.
+  - An armour bar appears above a boss the moment it takes its first hit,
+    running green through amber to red. An untouched boss shows nothing, so the
+    bar appearing is itself the signal that the fight has started.
+  - Towers sort into roles against it. A knife spends one point of pierce per
+    frame inside the husk, so a Lv3 throw is worth six hits — the Knife Thrower
+    is the answer. A Spike Layer is not: a pile lands one hit per frame the
+    boss stands on it and strips itself in a fraction of a second, leaving it an
+    anti-swarm tower, which is what the boss leaves behind when it breaks.
+- **Boss waves.** Durians are never produced by the tier unlock ladder — a boss
+  is placed, not drifted into. They arrive on wave 15 and every fifth wave
+  after, and on a route's final wave whatever its number, so no run can end
+  without the fight it has been building toward. Every route runs at least 15
+  waves, which a test enforces, so every route meets one.
+  - They escalate by **count, not by stats**: one at wave 15, two at 20, three
+    at 25. A tougher boss would need a second set of numbers to tune; a second
+    boss needs none, and the speed ramp already makes a later one harder.
+  - Each is slotted into the last third of the spawn order, so it lumbers in
+    once most of the wave is walking rather than arriving alone at either end.
+  - The armour number was picked against `balance_report`, not guessed. It puts
+    wave 15 on the same 0.9 affordability ratio as wave 13 — the hardest point
+    in a run before the boss existed — and leaves waves 20 and 25 at 1.1 and
+    1.2 against 1.5 and 1.8 for their neighbours, so each boss wave is a real
+    dip and the finale is the hardest thing in a run.
 - Five towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
   splash), Knife Thrower ($130, knives pierce 3 fruit), Spike Layer ($150,
   spikes on the track), and Freezer ($140, no damage, chills fruit in range to
   45% speed).
 - **Spike Layer** ($150), a fifth tower that doesn't shoot. It drops piles of
-  spikes onto the track itself; each pile pops one fruit per spike, then wears
+  spikes onto the track itself; each pile is worth one hit per spike, then wears
   away. Spikes never miss, so the limits are pile size and how many piles a
   tower may keep on the track at once (3 at Lv1). Strong against splits, since
   children spawn where their parent died — on top of the same pile.
@@ -61,19 +95,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 66 unit tests covering path maths (corner traversal, end clamping,
-  perpendicular distance, zero-length segments), the split ladder, the slow
-  effect and Freezer stacking, wave composition, tower upgrade monotonicity and
-  sell values, spike-pile charge accounting and where a Spike Layer drops its
-  next pile, validation that every authored route enters and exits off-screen
-  and leaves room for towers beside it, UI layout assertions that the four shop
-  buttons and the hint column fit the window without overlapping, and scenery
-  checks covering prop placement, determinism and the local RNG's range.
+- 87 unit tests covering path maths (corner traversal, end clamping,
+  perpendicular distance, zero-length segments), the split ladder, boss armour
+  and the N-ary burst, the slow effect and Freezer stacking, wave composition
+  and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
+  charge accounting and where a Spike Layer drops its next pile, validation that
+  every authored route enters and exits off-screen, leaves room for towers
+  beside it and runs long enough to meet the boss, UI layout assertions that the
+  four shop buttons and the hint column fit the window without overlapping, and
+  scenery checks covering prop placement, determinism and the local RNG's range.
 - Procedurally generated audio — 14 sound effects and 2 music loops, produced by
   pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
   the binary stays standalone.
   - Per-tier pop sounds: five pitches, highest for blueberries down to lowest
-    for watermelons.
+    for watermelons, plus a sixth for the Durian — a splintering crack over a
+    long low body rather than another pop. It is exempt from the per-frame pop
+    cap and the ducking, because it lands in exactly the crowded frame the cap
+    exists to thin out, and it is the one pop the player is waiting to hear.
   - Effects for tower fire, Blender splash, Freezer pulse, tower placement,
     rejected placement, fruit leaking, wave start, wave cleared, and game over.
   - `music_game.wav` — 16 bars at 132 BPM, drums, bass, arpeggio and a lead that

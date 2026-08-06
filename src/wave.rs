@@ -13,13 +13,24 @@ use crate::fruit::FruitKind;
 
 /// A new fruit tier unlocks every this many waves.
 const WAVES_PER_TIER: i32 = 3;
-/// Highest tier index that exists (Watermelon).
+/// Highest tier the unlock ladder ever reaches (Watermelon).
+///
+/// The Durian sits a tier above this and is deliberately out of reach: a boss
+/// is not something the ladder drifts into, it is placed by `boss_count`.
 const MAX_TIER: i32 = 4;
 
+/// The earliest wave a Durian can arrive on. Late enough that the player has a
+/// real field of towers to meet it with, and no route is shorter than this, so
+/// every run meets the boss at least once.
+pub const FIRST_BOSS_WAVE: u32 = 15;
+/// Boss waves land on this interval once they have started.
+const BOSS_EVERY: u32 = 5;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Build the spawn queue for `wave`, shuffled so tiers arrive interleaved.
+// Build the spawn queue for `wave` on a route of `total_waves`, shuffled so
+// tiers arrive interleaved.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn build_wave(wave: u32) -> Vec<FruitKind> {
+pub fn build_wave(wave: u32, total_waves: u32) -> Vec<FruitKind> {
     let w = wave as i32;
     let top = ((w - 1) / WAVES_PER_TIER).clamp(0, MAX_TIER);
 
@@ -43,7 +54,68 @@ pub fn build_wave(wave: u32) -> Vec<FruitKind> {
         queue.swap(i, j);
     }
 
+    // Bosses go in after the shuffle, because where they land in the order is a
+    // decision rather than something to leave to chance.
+    add_bosses(&mut queue, boss_count(wave, total_waves));
+
     queue
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// How many Durians `wave` sends on a route that runs `total_waves` long.
+//
+// Bosses escalate by count rather than by stats, the same way everything else
+// in this game escalates. A tougher Durian would need a second set of numbers
+// to tune; a second Durian needs none, and the speed ramp already makes a later
+// one harder to break before it arrives.
+//
+// A route's final wave is always a boss wave whatever its number, so no run can
+// end without the fight it has spent twenty waves building toward.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn boss_count(wave: u32, total_waves: u32) -> u32 {
+    if wave < FIRST_BOSS_WAVE {
+        return 0;
+    }
+    let milestone = wave.is_multiple_of(BOSS_EVERY);
+    let finale = wave == total_waves;
+    if !(milestone || finale) {
+        return 0;
+    }
+
+    // One more for every boss wave already survived.
+    1 + (wave - FIRST_BOSS_WAVE) / BOSS_EVERY
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slot `count` Durians into an already-shuffled queue.
+//
+// The queue is drained from the back, so a *low* index spawns *late*. Bosses go
+// into the first third of the vector, which puts them in the last third of the
+// spawn order: they lumber in once most of the wave is already on the track,
+// rather than walking in alone ahead of everything or arriving after the field
+// has been swept clear.
+//
+// Positions are worked out against the length the queue will *finish* at, and
+// inserted from the last one backwards with each offset by the inserts that
+// will later land below it. Aiming at the current length instead lets every
+// boss drift a slot or two to the right as the vector grows under it, which is
+// enough to push the last one out of the third it was aimed at.
+// ─────────────────────────────────────────────────────────────────────────────
+fn add_bosses(queue: &mut Vec<FruitKind>, count: u32) {
+    if count == 0 {
+        return;
+    }
+
+    let count = count as usize;
+    let final_len = queue.len() + count;
+
+    for k in (0..count).rev() {
+        let target = final_len * (k + 1) / (count * 3);
+        queue.insert(
+            target.saturating_sub(k).min(queue.len()),
+            FruitKind::Durian,
+        );
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,20 +152,35 @@ pub fn speed_multiplier(wave: u32) -> f32 {
 mod tests {
     use super::*;
 
-    fn top_tier(wave: u32) -> u8 {
-        build_wave(wave).iter().map(|f| f.tier()).max().unwrap()
+    /// A route long enough that no wave under test is accidentally its finale.
+    const LONG_ROUTE: u32 = 1000;
+
+    fn top_tier(wave: u32, total_waves: u32) -> u8 {
+        build_wave(wave, total_waves)
+            .iter()
+            .map(|f| f.tier())
+            .max()
+            .unwrap()
     }
 
-    /// Total pops needed to fully clear one fruit and everything it splits
-    /// into: 1, 3, 7, 15, 31 by tier.
-    fn subtree_pops(kind: FruitKind) -> u32 {
-        (1u32 << (kind.tier() + 1)) - 1
+    /// Total hits needed to fully clear one fruit and everything it splits
+    /// into: 1, 3, 7, 15, 31 by tier, and the Durian's armour on top of four
+    /// whole watermelons. Derived from the ladder rather than a closed form,
+    /// because the Durian is neither binary nor unarmoured.
+    fn subtree_hits(kind: FruitKind) -> u32 {
+        match kind.child() {
+            None => kind.armour(),
+            Some(c) => kind.armour() + kind.split_count() as u32 * subtree_hits(c),
+        }
     }
 
     /// Fruit at the bottom of the ladder in one fruit's subtree — the only ones
-    /// that pay out: 1, 2, 4, 8, 16 by tier.
+    /// that pay out: 1, 2, 4, 8, 16 by tier, and 64 for a Durian.
     fn subtree_payout(kind: FruitKind) -> u32 {
-        1u32 << kind.tier()
+        match kind.child() {
+            None => 1,
+            Some(c) => kind.split_count() as u32 * subtree_payout(c),
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -113,29 +200,35 @@ mod tests {
         const SEED_SHOOTER_COST: f32 = 90.0;
         const SEED_SHOOTER_DPS: f32 = 1.0 / 0.45;
 
+        // Modelled on the longest route, which is the one that sees every boss
+        // wave the schedule produces.
+        const TOTAL: u32 = 25;
+
         let mut cash = 180.0_f32; // starting cash
         println!(
-            "\n{:>4} {:>6} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
-            "wave", "fruit", "pops", "wave $", "cum $", "speed", "need/s", "afford", "ratio"
+            "\n{:>4} {:>6} {:>5} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
+            "wave", "fruit", "boss", "hits", "wave $", "cum $", "speed", "need/s", "afford",
+            "ratio"
         );
 
-        for wave in 1..=25u32 {
-            let queue = build_wave(wave);
-            let pops: u32 = queue.iter().copied().map(subtree_pops).sum();
+        for wave in 1..=TOTAL {
+            let queue = build_wave(wave, TOTAL);
+            let hits: u32 = queue.iter().copied().map(subtree_hits).sum();
             let payout: u32 = queue.iter().copied().map(subtree_payout).sum();
             let seconds = queue.len() as f32 * spawn_interval(wave);
             let speed = speed_multiplier(wave);
+            let bosses = boss_count(wave, TOTAL);
 
             let income = payout as f32 + clear_bonus(wave) as f32;
             cash += income;
 
-            let need = pops as f32 / seconds;
+            let need = hits as f32 / seconds;
             // Faster fruit spend proportionally less time inside a tower's
             // range, so the same cash buys proportionally less effective DPS.
             let afford = cash / SEED_SHOOTER_COST * SEED_SHOOTER_DPS / speed;
 
             println!(
-                "{wave:>4} {:>6} {pops:>6} {:>7.0} {cash:>8.0} {speed:>6.2} {need:>7.2} {afford:>7.1} {:>7.1}",
+                "{wave:>4} {:>6} {bosses:>5} {hits:>6} {:>7.0} {cash:>8.0} {speed:>6.2} {need:>7.2} {afford:>7.1} {:>7.1}",
                 queue.len(),
                 income,
                 afford / need,
@@ -147,29 +240,138 @@ mod tests {
     #[test]
     fn the_opening_waves_are_bottom_tier_only() {
         for w in 1..=3 {
-            assert_eq!(top_tier(w), 0, "wave {w} should be blueberries only");
+            assert_eq!(
+                top_tier(w, LONG_ROUTE),
+                0,
+                "wave {w} should be blueberries only"
+            );
         }
     }
 
     #[test]
     fn a_new_tier_unlocks_every_third_wave() {
-        assert_eq!(top_tier(4), 1);
-        assert_eq!(top_tier(7), 2);
-        assert_eq!(top_tier(10), 3);
-        assert_eq!(top_tier(13), 4);
+        assert_eq!(top_tier(4, LONG_ROUTE), 1);
+        assert_eq!(top_tier(7, LONG_ROUTE), 2);
+        assert_eq!(top_tier(10, LONG_ROUTE), 3);
+        assert_eq!(top_tier(13, LONG_ROUTE), 4);
     }
 
     #[test]
-    fn nothing_ever_outranks_a_watermelon() {
-        assert_eq!(top_tier(60), 4);
-        assert_eq!(top_tier(500), 4);
+    fn the_tier_ladder_tops_out_at_the_watermelon() {
+        // The Durian is a tier above the watermelon but the ladder must never
+        // reach it — bosses are placed by boss_count, never drifted into. Both
+        // waves here are deliberately not boss waves.
+        for w in [59u32, 501] {
+            assert_eq!(boss_count(w, LONG_ROUTE), 0, "picked a boss wave by accident");
+            assert_eq!(top_tier(w, LONG_ROUTE), 4);
+        }
+    }
+
+    #[test]
+    fn the_only_fruit_above_a_watermelon_are_the_bosses_the_wave_sends() {
+        for w in 1..=40u32 {
+            let queue = build_wave(w, 40);
+            let durians = queue.iter().filter(|f| f.is_boss()).count() as u32;
+
+            assert_eq!(durians, boss_count(w, 40), "wave {w} sent the wrong count");
+            assert!(
+                queue.iter().all(|f| f.tier() <= 4 || f.is_boss()),
+                "wave {w} sent something above a watermelon that is not a boss"
+            );
+        }
     }
 
     #[test]
     fn every_wave_sends_something() {
         for w in 1..=40 {
-            assert!(!build_wave(w).is_empty(), "wave {w} was empty");
+            assert!(!build_wave(w, 40).is_empty(), "wave {w} was empty");
         }
+    }
+
+    #[test]
+    fn no_boss_arrives_before_the_first_boss_wave() {
+        for w in 1..FIRST_BOSS_WAVE {
+            assert_eq!(boss_count(w, LONG_ROUTE), 0, "wave {w} sent a boss early");
+            // Not even as a finale: a route that short has not earned one.
+            assert_eq!(boss_count(w, w), 0, "a short route's finale sent a boss");
+        }
+    }
+
+    #[test]
+    fn the_final_wave_of_a_route_is_always_a_boss_wave() {
+        // Whatever its number, so a run can't end without the fight.
+        for total in FIRST_BOSS_WAVE..=40 {
+            assert!(
+                boss_count(total, total) >= 1,
+                "a {total}-wave route ends without a boss"
+            );
+        }
+    }
+
+    #[test]
+    fn bosses_escalate_by_count() {
+        // One at the first boss wave, one more at every milestone after it.
+        assert_eq!(boss_count(15, 25), 1);
+        assert_eq!(boss_count(20, 25), 2);
+        assert_eq!(boss_count(25, 25), 3);
+
+        // And the count only ever climbs.
+        let mut prev = 0;
+        for w in FIRST_BOSS_WAVE..=60 {
+            let n = boss_count(w, 60);
+            if n > 0 {
+                assert!(n >= prev, "boss count went backwards at wave {w}");
+                prev = n;
+            }
+        }
+    }
+
+    #[test]
+    fn the_waves_between_milestones_send_no_boss() {
+        for w in [16u32, 17, 18, 19, 21, 22, 23, 24] {
+            assert_eq!(boss_count(w, LONG_ROUTE), 0, "wave {w} should be quiet");
+        }
+    }
+
+    #[test]
+    fn a_boss_arrives_once_the_wave_is_already_under_way() {
+        // The queue drains from the back, so a boss must sit in the front third
+        // of the vector to spawn in the last third of the order. Walking in
+        // alone at the head of the wave would waste what makes it frightening.
+        let queue = build_wave(25, 25);
+        let len = queue.len();
+
+        for (i, f) in queue.iter().enumerate() {
+            if f.is_boss() {
+                assert!(
+                    i * 3 <= len,
+                    "boss at index {i} of {len} spawns too early in the order"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_boss_wave_is_a_real_step_up_in_work() {
+        // The point of the boss is that it is felt. Wave 15 must cost markedly
+        // more to clear than wave 14, which sends more fruit but no Durian.
+        let quiet: u32 = build_wave(14, 25).iter().copied().map(subtree_hits).sum();
+        let boss: u32 = build_wave(15, 25).iter().copied().map(subtree_hits).sum();
+
+        assert!(
+            boss as f32 > quiet as f32 * 1.25,
+            "a boss wave should cost at least a quarter more: {quiet} -> {boss}"
+        );
+    }
+
+    #[test]
+    fn a_durian_is_worth_four_watermelons_at_the_till() {
+        // Income is paid per fruit destroyed outright, so the payout follows the
+        // payload rather than the armour.
+        assert_eq!(
+            subtree_payout(FruitKind::Durian),
+            4 * subtree_payout(FruitKind::Watermelon)
+        );
     }
 
     #[test]
