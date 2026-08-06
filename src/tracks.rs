@@ -103,7 +103,7 @@ pub const TRACKS: [TrackDef; 4] = [
     },
     TrackDef {
         name: "Zigzag Grove",
-        blurb: "tight lanes, one tower covers two",
+        blurb: "tight lanes, wide cover",
         difficulty: "Medium",
         points: &[
             (-40.0, 180.0),
@@ -130,6 +130,22 @@ mod tests {
 
     /// The coordinate space the routes are authored in.
     const AUTHOR_W: f32 = 1000.0;
+
+    /// Longest blurb that fits inside a selection card at its font size.
+    /// Measured against the card, not guessed — 33 characters overflowed.
+    const MAX_BLURB_CHARS: usize = 26;
+
+    #[test]
+    fn blurbs_fit_inside_a_selection_card() {
+        for t in &TRACKS {
+            assert!(
+                t.blurb.len() <= MAX_BLURB_CHARS,
+                "{} blurb is {} chars, over the {MAX_BLURB_CHARS} that fit",
+                t.name,
+                t.blurb.len()
+            );
+        }
+    }
 
     #[test]
     fn every_track_has_a_usable_polyline() {

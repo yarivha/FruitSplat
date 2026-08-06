@@ -39,7 +39,7 @@ lanes at once.
 |---|---|---|---|
 | Market Run | Hard | 1500 px | Short and direct |
 | Orchard Snake | Medium | 2370 px | A steady weave |
-| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two |
+| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two at once |
 | The Long Orchard | Gentle | 2870 px | Plenty of time to shoot |
 
 ## Towers
@@ -151,6 +151,20 @@ across every tower.
 ```sh
 cargo test
 ```
+
+## Screenshots
+
+Setting `FRUITSPLAT_SCREENSHOT` stages a scene, renders a few frames, writes a
+PNG and exits. Handy for reviewing artwork without playing to the right moment.
+
+```sh
+FRUITSPLAT_SCREENSHOT=/tmp/shot.png cargo run --release
+```
+
+`FRUITSPLAT_SCREEN` picks what to capture — `panel` opens a tower's stats panel,
+`select` shows the route picker, `menu` the title screen. The default stages a
+board with all four towers at different levels and one fruit of every tier,
+including a chilled one.
 
 ## License
 

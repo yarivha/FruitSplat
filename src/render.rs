@@ -34,7 +34,7 @@ const BTN_X0: f32 = 16.0;
 
 /// Floating tower-panel size.
 const PANEL_W: f32 = 250.0;
-const PANEL_H: f32 = 206.0;
+const PANEL_H: f32 = 228.0;
 
 /// Route-selection card layout.
 const CARD_W: f32 = 220.0;
@@ -44,6 +44,89 @@ const CARD_Y: f32 = 296.0;
 /// The coordinate space routes are authored in, used to scale the previews.
 const AUTHOR_W: f32 = 1000.0;
 const AUTHOR_H: f32 = 650.0;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shading helpers
+//
+// macroquad has no gradient primitive and no clipping, so every bit of shading
+// here is faked by stacking shapes: a dark base, a mid body, then progressively
+// smaller layers offset toward the light. Light is treated as coming from the
+// upper left throughout, so shadows and highlights stay consistent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Multiply a colour toward black. `k` of 0.6 keeps 60% of the brightness.
+fn shade(c: Color, k: f32) -> Color {
+    Color::new(c.r * k, c.g * k, c.b * k, c.a)
+}
+
+/// Lerp a colour toward white by `t`.
+fn tint(c: Color, t: f32) -> Color {
+    Color::new(
+        c.r + (1.0 - c.r) * t,
+        c.g + (1.0 - c.g) * t,
+        c.b + (1.0 - c.b) * t,
+        c.a,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A soft contact shadow. Stacked ellipses of decreasing alpha fake the blur
+// that a single hard-edged ellipse would miss.
+// ─────────────────────────────────────────────────────────────────────────────
+fn soft_shadow(center: Vec2, rx: f32, ry: f32) {
+    for i in 0..3 {
+        let spread = 1.0 + i as f32 * 0.20;
+        let alpha = 0.17 - i as f32 * 0.05;
+        draw_ellipse(
+            center.x,
+            center.y,
+            rx * spread,
+            ry * spread,
+            0.0,
+            Color::new(0.0, 0.0, 0.0, alpha),
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A sphere lit from the upper left: dark rim, body, then two lit layers pulled
+// toward the light. This is what gives fruit and tower bases their volume.
+// ─────────────────────────────────────────────────────────────────────────────
+fn shaded_ball(center: Vec2, r: f32, base: Color) {
+    draw_circle(center.x, center.y, r, shade(base, 0.55));
+    draw_circle(center.x, center.y, r * 0.93, base);
+    draw_circle(
+        center.x - r * 0.09,
+        center.y - r * 0.11,
+        r * 0.76,
+        tint(base, 0.10),
+    );
+    draw_circle(
+        center.x - r * 0.15,
+        center.y - r * 0.19,
+        r * 0.52,
+        tint(base, 0.22),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Two-stage specular: a soft bloom with a tight hot spot inside it, which reads
+// as gloss far better than the single flat blob this replaced.
+// ─────────────────────────────────────────────────────────────────────────────
+fn specular(center: Vec2, r: f32) {
+    draw_circle(
+        center.x - r * 0.33,
+        center.y - r * 0.37,
+        r * 0.22,
+        Color::new(1.0, 1.0, 1.0, 0.28),
+    );
+    draw_circle(
+        center.x - r * 0.36,
+        center.y - r * 0.40,
+        r * 0.10,
+        Color::new(1.0, 1.0, 1.0, 0.70),
+    );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paint the grass gradient behind the whole playfield.
@@ -94,191 +177,329 @@ pub fn draw_path(path: &Path) {
 // Chilled fruit get a pale blue wash so the Freezer's effect is visible.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_fruit(f: &Fruit) {
-    let (x, y) = (f.pos.x, f.pos.y);
+    let c = f.pos;
     let r = f.radius();
     let rot = f.rot.to_radians();
     let body = f.kind.body();
+    let flesh = f.kind.flesh();
+    let tau = std::f32::consts::TAU;
 
-    // Body, with a darkened rim to lift it off the background.
-    draw_circle(x, y, r, body);
-    draw_circle_lines(
-        x,
-        y,
-        r,
-        2.5,
-        Color::new(body.r * 0.6, body.g * 0.6, body.b * 0.6, 1.0),
-    );
+    // Contact shadow on the track, cast away from the upper-left light.
+    soft_shadow(vec2(c.x + r * 0.14, c.y + r * 0.34), r * 0.82, r * 0.40);
 
     match f.kind {
         FruitKind::Watermelon => {
-            // Green rind with a red core and a ring of seeds.
-            draw_circle(x, y, r * 0.68, f.kind.flesh());
-            for i in 0..5 {
-                let a = rot + i as f32 * std::f32::consts::TAU / 5.0;
-                draw_circle(
-                    x + a.cos() * r * 0.42,
-                    y + a.sin() * r * 0.42,
-                    r * 0.075,
-                    Color::new(0.15, 0.11, 0.10, 1.0),
-                );
-            }
-        }
-        FruitKind::Orange => {
-            draw_circle_lines(x, y, r * 0.62, 2.0, Color::new(1.0, 0.78, 0.42, 0.55));
-            draw_leaf(x, y - r * 0.9, r * 0.42, rot);
-        }
-        FruitKind::Lime => {
-            // Cut-face wedge lines radiating from the centre.
+            // Drawn as a cut cross-section: dark rind, pale pith, red flesh.
+            shaded_ball(c, r, body);
+            draw_circle(c.x, c.y, r * 0.84, tint(body, 0.50));
+            draw_circle(c.x, c.y, r * 0.75, shade(flesh, 0.82));
+            draw_circle(c.x - r * 0.04, c.y - r * 0.05, r * 0.70, flesh);
+            draw_circle(c.x - r * 0.13, c.y - r * 0.16, r * 0.44, tint(flesh, 0.13));
+
+            // Seeds sit in the flesh, each turned to face the centre.
             for i in 0..6 {
-                let a = rot + i as f32 * std::f32::consts::TAU / 6.0;
-                draw_line(
-                    x,
-                    y,
-                    x + a.cos() * r * 0.74,
-                    y + a.sin() * r * 0.74,
-                    2.0,
-                    Color::new(0.85, 0.96, 0.55, 0.7),
+                let a = rot + i as f32 * tau / 6.0;
+                let d = r * 0.45;
+                draw_ellipse(
+                    c.x + a.cos() * d,
+                    c.y + a.sin() * d,
+                    r * 0.11,
+                    r * 0.065,
+                    a.to_degrees(),
+                    Color::new(0.13, 0.09, 0.08, 1.0),
                 );
             }
         }
-        FruitKind::Strawberry => {
-            for i in 0..9 {
-                let a = rot + i as f32 * std::f32::consts::TAU / 9.0;
-                let d = if i % 2 == 0 { 0.68 } else { 0.40 };
+
+        FruitKind::Orange => {
+            shaded_ball(c, r, body);
+
+            // Peel pores, scattered at two radii so it doesn't look like a ring.
+            for i in 0..12 {
+                let a = rot * 0.3 + i as f32 * tau / 12.0;
+                let d = r * if i % 2 == 0 { 0.38 } else { 0.66 };
                 draw_circle(
-                    x + a.cos() * r * d,
-                    y + a.sin() * r * d,
-                    r * 0.08,
-                    Color::new(1.0, 0.92, 0.55, 0.9),
+                    c.x + a.cos() * d,
+                    c.y + a.sin() * d,
+                    r * 0.045,
+                    shade(body, 0.84),
                 );
             }
-            draw_leaf(x, y - r * 0.85, r * 0.5, rot);
+
+            draw_circle(c.x, c.y - r * 0.84, r * 0.13, Color::new(0.40, 0.28, 0.15, 1.0));
+            draw_leaf(vec2(c.x + r * 0.30, c.y - r * 0.86), r * 0.52, rot);
         }
-        FruitKind::Blueberry => {
-            // The little five-pointed calyx on top of a real blueberry.
-            draw_poly(
-                x,
-                y - r * 0.45,
-                5,
-                r * 0.34,
-                f.rot,
-                Color::new(0.18, 0.19, 0.42, 1.0),
+
+        FruitKind::Lime => {
+            // A cut lime: dark rind, thin pale pith, then wedges split by
+            // membranes. The rind is deliberately darker than the flesh —
+            // without that contrast the whole fruit reads as one pale disc.
+            shaded_ball(c, r, shade(body, 0.72));
+            draw_circle(c.x, c.y, r * 0.82, tint(body, 0.70));
+            draw_circle(c.x, c.y, r * 0.74, shade(flesh, 0.88));
+            draw_circle(c.x - r * 0.05, c.y - r * 0.07, r * 0.68, flesh);
+
+            let membrane = tint(flesh, 0.55);
+            for i in 0..8 {
+                let a = rot + i as f32 * tau / 8.0;
+                draw_line(
+                    c.x,
+                    c.y,
+                    c.x + a.cos() * r * 0.74,
+                    c.y + a.sin() * r * 0.74,
+                    r * 0.05,
+                    membrane,
+                );
+            }
+            draw_circle(c.x, c.y, r * 0.08, membrane);
+        }
+
+        FruitKind::Strawberry => {
+            // Strawberries are conical, so this is shoulders plus a tip rather
+            // than the plain circle the other fruit use.
+            let dark = shade(body, 0.58);
+            draw_triangle(
+                vec2(c.x - r * 0.86, c.y + r * 0.02),
+                vec2(c.x + r * 0.86, c.y + r * 0.02),
+                vec2(c.x, c.y + r * 1.04),
+                dark,
             );
+            draw_ellipse(c.x, c.y - r * 0.06, r * 0.90, r * 0.80, 0.0, dark);
+
+            draw_triangle(
+                vec2(c.x - r * 0.76, c.y - r * 0.02),
+                vec2(c.x + r * 0.76, c.y - r * 0.02),
+                vec2(c.x, c.y + r * 0.94),
+                body,
+            );
+            draw_ellipse(c.x, c.y - r * 0.10, r * 0.80, r * 0.72, 0.0, body);
+            draw_ellipse(
+                c.x - r * 0.12,
+                c.y - r * 0.22,
+                r * 0.52,
+                r * 0.44,
+                0.0,
+                tint(body, 0.16),
+            );
+
+            // Seeds in offset rows, following the taper toward the tip.
+            let seed = Color::new(1.0, 0.94, 0.62, 0.95);
+            for row in 0..4 {
+                let ry = c.y - r * 0.42 + row as f32 * r * 0.38;
+                let spread = r * (0.62 - row as f32 * 0.13);
+                let count = 4 - row.min(2);
+                for i in 0..count {
+                    let t = if count == 1 {
+                        0.5
+                    } else {
+                        i as f32 / (count - 1) as f32
+                    };
+                    let sx = c.x - spread + t * spread * 2.0;
+                    draw_ellipse(sx, ry, r * 0.075, r * 0.05, 20.0, seed);
+                }
+            }
+
+            // Calyx: five pointed leaves fanned across the top.
+            let green = Color::new(0.30, 0.63, 0.28, 1.0);
+            let base = vec2(c.x, c.y - r * 0.66);
+            for i in 0..5 {
+                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 - 2.0) * 0.55;
+                let dir = vec2(a.cos(), a.sin());
+                let perp = vec2(-dir.y, dir.x);
+                draw_triangle(
+                    base + dir * r * 0.80,
+                    base + perp * r * 0.17,
+                    base - perp * r * 0.17,
+                    green,
+                );
+            }
+            draw_circle(base.x, base.y, r * 0.15, shade(green, 0.85));
+        }
+
+        FruitKind::Blueberry => {
+            shaded_ball(c, r, body);
+
+            // The dusty bloom on a real blueberry's skin.
+            draw_circle(
+                c.x - r * 0.10,
+                c.y - r * 0.10,
+                r * 0.70,
+                Color::new(0.78, 0.82, 0.96, 0.15),
+            );
+
+            // Crown: a sunken dimple ringed by five little points.
+            let dimple = vec2(c.x - r * 0.05, c.y - r * 0.28);
+            draw_circle(dimple.x, dimple.y, r * 0.27, shade(body, 0.58));
+            for i in 0..5 {
+                let a = rot + i as f32 * tau / 5.0;
+                let dir = vec2(a.cos(), a.sin());
+                let perp = vec2(-dir.y, dir.x);
+                draw_triangle(
+                    dimple + dir * r * 0.36,
+                    dimple + perp * r * 0.10,
+                    dimple - perp * r * 0.10,
+                    shade(body, 0.48),
+                );
+            }
+            draw_circle(dimple.x, dimple.y, r * 0.10, shade(body, 0.40));
         }
     }
 
-    // Specular highlight, drawn over the garnish.
-    draw_circle(
-        x - r * 0.32,
-        y - r * 0.36,
-        r * 0.26,
-        Color::new(1.0, 1.0, 1.0, 0.22),
-    );
+    specular(c, r);
 
     if f.chilled() {
-        draw_circle(x, y, r, Color::new(0.55, 0.80, 1.0, 0.35));
+        // A light frost wash with a brighter rim. Kept subtle — a heavier wash
+        // washed pale fruit like the lime out into an unreadable blob.
+        draw_circle(c.x, c.y, r, Color::new(0.55, 0.80, 1.0, 0.17));
+        draw_circle_lines(c.x, c.y, r * 0.97, 2.0, Color::new(0.82, 0.95, 1.0, 0.60));
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A small two-lobed leaf, used as the garnish on oranges and strawberries.
+// A small leaf with a centre vein, used as the garnish on oranges.
+// `rot` gives it a slight living wobble rather than a fixed pose.
 // ─────────────────────────────────────────────────────────────────────────────
-fn draw_leaf(x: f32, y: f32, size: f32, rot: f32) {
-    let green = Color::new(0.29, 0.62, 0.28, 1.0);
-    let (c, s) = (rot.cos() * 0.35, rot.sin() * 0.35);
+fn draw_leaf(at: Vec2, size: f32, rot: f32) {
+    let green = Color::new(0.30, 0.63, 0.28, 1.0);
+    let sway = rot.sin() * 0.18;
 
-    draw_triangle(
-        vec2(x, y + size * 0.4),
-        vec2(x - size + c * size, y - size * 0.3),
-        vec2(x - size * 0.15, y - size * 0.55 + s * size),
-        green,
-    );
-    draw_triangle(
-        vec2(x, y + size * 0.4),
-        vec2(x + size + c * size, y - size * 0.3),
-        vec2(x + size * 0.15, y - size * 0.55 + s * size),
-        green,
-    );
+    let dir = vec2(0.82 + sway, -0.57);
+    let perp = vec2(-dir.y, dir.x);
+    let tip = at + dir * size * 1.5;
+
+    draw_triangle(at, tip, at + perp * size * 0.46, green);
+    draw_triangle(at, tip, at - perp * size * 0.46, shade(green, 0.82));
+    draw_line(at.x, at.y, tip.x, tip.y, size * 0.10, shade(green, 0.68));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Draw a placed tower: base, rim, then the kind-specific head.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_tower(t: &Tower) {
-    let (x, y) = (t.pos.x, t.pos.y);
-    let c = t.kind.color();
-
-    // Ground shadow, so towers read as sitting on the grass.
-    draw_circle(x + 2.0, y + 3.0, TOWER_RADIUS, Color::new(0.0, 0.0, 0.0, 0.22));
-    draw_circle(x, y, TOWER_RADIUS, c);
-    draw_circle_lines(
-        x,
-        y,
-        TOWER_RADIUS,
-        2.5,
-        Color::new(c.r * 0.55, c.g * 0.55, c.b * 0.55, 1.0),
+    soft_shadow(
+        vec2(t.pos.x + TOWER_RADIUS * 0.16, t.pos.y + TOWER_RADIUS * 0.52),
+        TOWER_RADIUS * 0.95,
+        TOWER_RADIUS * 0.44,
     );
+    draw_tower_body(t.kind, t.pos, t.angle, TOWER_RADIUS);
+    draw_level_pips(t);
+}
 
-    match t.kind {
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw a tower at an arbitrary size, so the shop buttons can show the real
+// artwork as their icon instead of a flat colour swatch. Everything is
+// expressed as a fraction of `r`, which is what makes it scale down cleanly.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_tower_body(kind: TowerKind, pos: Vec2, angle: f32, r: f32) {
+    let c = kind.color();
+    let (x, y) = (pos.x, pos.y);
+
+    // Stone footing, so a tower reads as standing on the ground.
+    draw_ellipse(x, y + r * 0.44, r * 1.04, r * 0.48, 0.0, Color::new(0.26, 0.25, 0.23, 1.0));
+    draw_ellipse(x, y + r * 0.36, r * 1.00, r * 0.46, 0.0, Color::new(0.47, 0.45, 0.42, 1.0));
+    draw_ellipse(x, y + r * 0.30, r * 0.92, r * 0.40, 0.0, Color::new(0.58, 0.56, 0.52, 1.0));
+
+    shaded_ball(pos, r, c);
+
+    let dir = vec2(angle.cos(), angle.sin());
+    let perp = vec2(-dir.y, dir.x);
+
+    match kind {
         TowerKind::SeedShooter => {
-            // A barrel pointing at whatever it last fired on.
-            let dir = vec2(t.angle.cos(), t.angle.sin());
-            let tip = t.pos + dir * (TOWER_RADIUS + 9.0);
-            draw_line(x, y, tip.x, tip.y, 8.0, Color::new(0.35, 0.25, 0.15, 1.0));
-            draw_circle(x, y, TOWER_RADIUS * 0.45, Color::new(0.78, 0.62, 0.40, 1.0));
+            // A wooden barrel aimed at whatever it last fired on.
+            let wood = Color::new(0.36, 0.25, 0.15, 1.0);
+            let tip = pos + dir * (r + r * 0.50);
+            draw_line(x, y, tip.x, tip.y, r * 0.44, wood);
+            // A lit strip along the top edge of the barrel.
+            let lit = pos - perp * r * 0.10;
+            draw_line(
+                lit.x,
+                lit.y,
+                tip.x - perp.x * r * 0.10,
+                tip.y - perp.y * r * 0.10,
+                r * 0.14,
+                tint(wood, 0.25),
+            );
+            draw_circle(tip.x, tip.y, r * 0.16, shade(wood, 0.6));
+            draw_circle(x, y, r * 0.40, tint(c, 0.30));
+            draw_circle(x, y, r * 0.22, shade(c, 0.70));
         }
+
         TowerKind::Blender => {
-            // Spinning blades, angled off the tower's facing.
+            let steel = Color::new(0.92, 0.94, 0.97, 1.0);
             for i in 0..3 {
-                let a = t.angle + i as f32 * std::f32::consts::TAU / 3.0;
-                draw_line(
-                    x,
-                    y,
-                    x + a.cos() * TOWER_RADIUS * 0.85,
-                    y + a.sin() * TOWER_RADIUS * 0.85,
-                    5.0,
-                    Color::new(0.90, 0.93, 0.96, 1.0),
+                let a = angle + i as f32 * std::f32::consts::TAU / 3.0;
+                let d = vec2(a.cos(), a.sin());
+                let p = vec2(-d.y, d.x);
+                // Tapered blades rather than plain lines.
+                draw_triangle(
+                    pos + d * r * 0.92,
+                    pos + p * r * 0.20,
+                    pos - p * r * 0.20,
+                    steel,
+                );
+                draw_triangle(
+                    pos + d * r * 0.92,
+                    pos + p * r * 0.20,
+                    pos,
+                    shade(steel, 0.80),
                 );
             }
-            draw_circle(x, y, TOWER_RADIUS * 0.3, Color::new(0.45, 0.49, 0.55, 1.0));
+            draw_circle(x, y, r * 0.30, Color::new(0.40, 0.44, 0.50, 1.0));
+            draw_circle(x - r * 0.07, y - r * 0.07, r * 0.14, tint(steel, 0.4));
         }
+
         TowerKind::Freezer => {
-            // A six-armed snowflake.
+            // A six-armed snowflake with barbed tips.
+            let ice = Color::new(0.96, 0.99, 1.0, 1.0);
             for i in 0..3 {
                 let a = i as f32 * std::f32::consts::PI / 3.0;
-                let d = vec2(a.cos(), a.sin()) * TOWER_RADIUS * 0.8;
-                draw_line(x - d.x, y - d.y, x + d.x, y + d.y, 3.5, WHITE);
+                let d = vec2(a.cos(), a.sin()) * r * 0.82;
+                draw_line(x - d.x, y - d.y, x + d.x, y + d.y, r * 0.16, ice);
             }
-            draw_circle(x, y, TOWER_RADIUS * 0.28, Color::new(0.85, 0.95, 1.0, 1.0));
+            for i in 0..6 {
+                let a = i as f32 * std::f32::consts::PI / 3.0;
+                let arm = pos + vec2(a.cos(), a.sin()) * r * 0.82;
+                draw_circle(arm.x, arm.y, r * 0.11, ice);
+            }
+            draw_circle(x, y, r * 0.30, Color::new(0.72, 0.90, 1.0, 1.0));
+            draw_circle(x - r * 0.08, y - r * 0.08, r * 0.13, WHITE);
         }
+
         TowerKind::KnifeThrower => {
             // A blade cocked in the direction of the last target.
-            let dir = vec2(t.angle.cos(), t.angle.sin());
-            let perp = vec2(-dir.y, dir.x);
-            let tip = t.pos + dir * (TOWER_RADIUS + 11.0);
-            let base = t.pos + dir * 3.0;
+            let steel = Color::new(0.90, 0.92, 0.96, 1.0);
+            let tip = pos + dir * (r + r * 0.58);
+            let base = pos + dir * r * 0.15;
 
-            draw_triangle(
-                tip,
-                base + perp * 5.5,
-                base - perp * 5.5,
-                Color::new(0.90, 0.92, 0.96, 1.0),
-            );
-            // Crossguard, so it reads as a knife rather than an arrow.
-            let guard = t.pos + dir * 6.0;
+            draw_triangle(tip, base + perp * r * 0.28, base - perp * r * 0.28, steel);
+            // Darker lower facet, so the blade has an edge rather than reading flat.
+            draw_triangle(tip, base - perp * r * 0.28, base, shade(steel, 0.72));
+
+            // Crossguard, so it reads as a knife and not an arrow.
+            let guard = pos + dir * r * 0.34;
             draw_line(
-                guard.x - perp.x * 9.0,
-                guard.y - perp.y * 9.0,
-                guard.x + perp.x * 9.0,
-                guard.y + perp.y * 9.0,
-                3.0,
-                Color::new(0.30, 0.33, 0.40, 1.0),
+                guard.x - perp.x * r * 0.46,
+                guard.y - perp.y * r * 0.46,
+                guard.x + perp.x * r * 0.46,
+                guard.y + perp.y * r * 0.46,
+                r * 0.16,
+                Color::new(0.28, 0.31, 0.38, 1.0),
             );
-            draw_circle(x, y, TOWER_RADIUS * 0.32, Color::new(0.26, 0.29, 0.36, 1.0));
+            draw_circle(x, y, r * 0.32, Color::new(0.24, 0.27, 0.34, 1.0));
+            draw_circle(x - r * 0.08, y - r * 0.08, r * 0.13, tint(c, 0.45));
         }
     }
 
-    draw_level_pips(t);
+    specular(pos, r * 0.9);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The shop-button icon: the same artwork as a placed tower, drawn small and at
+// a fixed jaunty angle so every icon poses the same way.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_tower_icon(kind: TowerKind, center: Vec2, r: f32) {
+    draw_tower_body(kind, center, -0.62, r);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -445,7 +666,9 @@ pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool, muted: bool
 
     if !wave_active {
         text_center(
-            &format!("SPACE — send wave {wave}"),
+            // Plain ASCII only: the default font has no glyph for an em dash
+            // and renders it as a tofu box.
+            &format!("SPACE  -  send wave {wave}"),
             PLAYFIELD_H - 22.0,
             30.0,
             Color::new(1.0, 0.9, 0.5, 1.0),
@@ -498,21 +721,28 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
         }
 
         // Colour swatch identifying the tower.
-        let c = kind.color();
-        let swatch = Color::new(c.r, c.g, c.b, if affordable { 1.0 } else { 0.4 });
-        draw_circle(r.x + 20.0, r.y + r.h * 0.5, 12.0, swatch);
+        // The real tower artwork, drawn small, rather than a flat colour dot.
+        // Barrels and blades reach about 1.6x the radius, so the text column
+        // starts clear of that rather than being overlapped by it.
+        let icon = vec2(r.x + 20.0, r.y + r.h * 0.5 - 1.0);
+        draw_tower_icon(*kind, icon, 12.0);
+        if !affordable {
+            // Fade the icon toward the button background instead of redrawing
+            // every layer of it at a lower alpha.
+            draw_circle(icon.x, icon.y, 19.0, Color::new(bg.r, bg.g, bg.b, 0.62));
+        }
 
         let text_alpha = if affordable { 1.0 } else { 0.45 };
         draw_text(
             format!("{}. {}", i + 1, kind.name()),
-            r.x + 38.0,
+            r.x + 44.0,
             r.y + 25.0,
-            17.0,
+            16.0,
             Color::new(1.0, 1.0, 1.0, text_alpha),
         );
         draw_text(
             format!("${}  {}", kind.cost(), kind.blurb()),
-            r.x + 38.0,
+            r.x + 44.0,
             r.y + 46.0,
             14.0,
             Color::new(0.85, 0.85, 0.9, text_alpha),
@@ -551,14 +781,14 @@ pub fn tower_panel_rect(tower_pos: Vec2) -> Rect {
 // The upgrade button inside a panel.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn panel_upgrade_button(panel: Rect) -> Rect {
-    Rect::new(panel.x + 12.0, panel.y + 130.0, panel.w - 24.0, 32.0)
+    Rect::new(panel.x + 12.0, panel.y + 150.0, panel.w - 24.0, 32.0)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The sell button inside a panel.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn panel_sell_button(panel: Rect) -> Rect {
-    Rect::new(panel.x + 12.0, panel.y + 168.0, panel.w - 24.0, 28.0)
+    Rect::new(panel.x + 12.0, panel.y + 190.0, panel.w - 24.0, 28.0)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -654,6 +884,16 @@ fn draw_upgrade_button(t: &Tower, panel: Rect, cash: u32, mouse: Vec2) {
         return;
     };
 
+    // What the money buys, on its own line above the button. Sharing the
+    // button's line meant the two strings collided on longer labels.
+    draw_text(
+        t.upgrade_label(),
+        b.x + 2.0,
+        b.y - 10.0,
+        15.0,
+        Color::new(0.78, 0.78, 0.84, 1.0),
+    );
+
     let affordable = cash >= cost;
     let hovered = b.contains(mouse) && affordable;
 
@@ -674,17 +914,6 @@ fn draw_upgrade_button(t: &Tower, panel: Rect, cash: u32, mouse: Vec2) {
     draw_rectangle_lines(b.x, b.y, b.w, b.h, 2.0, accent);
 
     draw_text(format!("Upgrade ${cost}"), b.x + 10.0, b.y + 21.0, 18.0, accent);
-
-    // The label for what the money buys, right-aligned against the button edge.
-    let label = t.upgrade_label();
-    let dims = measure_text(label, None, 14, 1.0);
-    draw_text(
-        label,
-        b.x + b.w - dims.width - 10.0,
-        b.y + 21.0,
-        14.0,
-        Color::new(0.78, 0.78, 0.84, 1.0),
-    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

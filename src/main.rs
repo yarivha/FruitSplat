@@ -729,6 +729,51 @@ fn off_field(p: Vec2) -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Development helper: stage a board showing every tower and every fruit tier at
+// once, so the artwork can be reviewed in a single screenshot. Only reachable
+// via the FRUITSPLAT_SCREENSHOT environment variable.
+// ─────────────────────────────────────────────────────────────────────────────
+impl Game {
+    fn stage_art_demo(&mut self) {
+        self.start_run(0);
+        self.cash = 500;
+
+        let spots = [
+            vec2(185.0, 245.0),
+            vec2(395.0, 415.0),
+            vec2(640.0, 375.0),
+            vec2(880.0, 430.0),
+        ];
+        for (i, kind) in TowerKind::ALL.iter().enumerate() {
+            let mut t = Tower::new(*kind, spots[i], self.next_tower_id);
+            // Spread the levels so the pips and upgraded stats are visible.
+            t.level = (i as u8 % 3) + 1;
+            t.angle = -0.62;
+            t.shots_fired = 120 + i as u32 * 37;
+            t.kills = 45 + i as u32 * 11;
+            t.chills = 88;
+            self.next_tower_id += 1;
+            self.towers.push(t);
+        }
+
+        // One fruit of every tier, spaced out along the route.
+        for tier in 0..5u8 {
+            let dist = 380.0 + tier as f32 * 270.0;
+            self.fruits
+                .push(Fruit::new(FruitKind::from_tier(tier), dist, &self.path));
+        }
+        // Chill one so the frost treatment shows up too.
+        self.fruits[2].chill(0.35, 5.0);
+
+        // The panel covers part of the board, so only open it when it's the
+        // thing being reviewed.
+        if std::env::var("FRUITSPLAT_SCREEN").as_deref() == Ok("panel") {
+            self.selected_tower = Some(0);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point: seed the RNG, then pump update/draw until the window closes.
 // ─────────────────────────────────────────────────────────────────────────────
 #[macroquad::main(window_conf)]
@@ -739,10 +784,32 @@ async fn main() {
     let mut game = Game::new(Audio::load().await);
     game.audio.play_music(Track::Menu);
 
+    // Screenshot mode: stage a scene, let it settle, write a PNG and exit.
+    let shot_path = std::env::var("FRUITSPLAT_SCREENSHOT").ok();
+    if shot_path.is_some() {
+        game.audio.toggle_mute();
+        match std::env::var("FRUITSPLAT_SCREEN").as_deref() {
+            Ok("select") => game.state = State::TrackSelect,
+            Ok("menu") => game.state = State::Menu,
+            _ => game.stage_art_demo(),
+        }
+    }
+    let mut frames = 0u32;
+
     loop {
         let dt = get_frame_time().min(0.05); // clamp so a stutter can't teleport fruit
         game.update(dt);
         game.draw();
+
+        if let Some(path) = &shot_path {
+            frames += 1;
+            // Give the window a few frames to settle before capturing.
+            if frames >= 12 {
+                get_screen_data().export_png(path);
+                return;
+            }
+        }
+
         next_frame().await;
     }
 }

@@ -90,9 +90,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Being overrun now returns to route selection rather than restarting the same
   track, so a different route can be picked after a loss.
 
+- Screenshot mode (`FRUITSPLAT_SCREENSHOT`, `FRUITSPLAT_SCREEN`): stages a
+  scene, renders a few frames, writes a PNG and exits. Added to make the
+  artwork reviewable without playing to the right moment.
+
 ### Changed
 
+- Reworked all the artwork. macroquad has no gradient primitive or clipping, so
+  shading is faked by stacking shapes: a dark base, a mid body, then smaller
+  layers offset toward a light treated as coming from the upper left.
+  - Fruit and towers gained soft contact shadows, two-stage speculars (a soft
+    bloom with a tight hot spot) and volume shading, replacing flat discs with a
+    single highlight blob.
+  - Strawberries are drawn conical — shoulders plus a tip with a fanned calyx —
+    rather than as a circle. Watermelons read as a cut cross-section with pith
+    and oriented seeds, oranges gained peel pores and a veined leaf, limes got a
+    darker rind for contrast against the flesh, blueberries a dusty bloom and a
+    sunken crown.
+  - Towers stand on a stone footing instead of floating on the grass.
+  - Shop buttons show the real tower artwork scaled down, instead of a flat
+    colour swatch.
 - Replaced the initial click-to-pop prototype. The first pass read "balloon-pop"
   as popping balloons by hand; the intent was Bloons TD, so fruit now follow a
   track and towers do the popping. The fruit rendering and splat particles from
   that pass were kept.
+
+### Fixed
+
+- The send-wave prompt drew an em dash, which the default font has no glyph for
+  and rendered as a tofu box.
+- The upgrade button's cost and effect labels overlapped on longer labels; the
+  effect now sits on its own line above the button.
+- Shop button icons overlapped the button text.
+- The frost overlay on chilled fruit was heavy enough to wash pale fruit like
+  the lime into an unreadable blob.
+- "Zigzag Grove"'s blurb overflowed its selection card, now guarded by a test.
