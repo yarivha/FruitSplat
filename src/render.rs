@@ -375,8 +375,8 @@ pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool, muted: bool
     } else {
         WHITE
     };
-    draw_text(&format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
-    draw_text(&format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
+    draw_text(format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
+    draw_text(format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
 
     // Mute state doubles as the hint for the key that toggles it.
     let (mute_label, mute_color) = if muted {
@@ -451,14 +451,14 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32, inspected: Option<&Towe
 
         let text_alpha = if affordable { 1.0 } else { 0.45 };
         draw_text(
-            &format!("{}. {}", i + 1, kind.name()),
+            format!("{}. {}", i + 1, kind.name()),
             r.x + 50.0,
             r.y + 26.0,
             21.0,
             Color::new(1.0, 1.0, 1.0, text_alpha),
         );
         draw_text(
-            &format!("${}  {}", kind.cost(), kind.blurb()),
+            format!("${}  {}", kind.cost(), kind.blurb()),
             r.x + 50.0,
             r.y + 48.0,
             17.0,
@@ -491,7 +491,7 @@ fn draw_shop_hints(x: f32) {
 // ─────────────────────────────────────────────────────────────────────────────
 fn draw_tower_panel(t: &Tower, x: f32, cash: u32) {
     draw_text(
-        &format!("{}  Lv{}", t.kind.name(), t.level),
+        format!("{}  Lv{}", t.kind.name(), t.level),
         x,
         PLAYFIELD_H + 30.0,
         20.0,
@@ -506,7 +506,7 @@ fn draw_tower_panel(t: &Tower, x: f32, cash: u32) {
                 Color::new(1.0, 0.55, 0.50, 1.0)
             };
             draw_text(
-                &format!("U  upgrade ${cost}"),
+                format!("U  upgrade ${cost}"),
                 x,
                 PLAYFIELD_H + 52.0,
                 18.0,
@@ -532,7 +532,7 @@ fn draw_tower_panel(t: &Tower, x: f32, cash: u32) {
     }
 
     draw_text(
-        &format!("S  sell ${}", t.sell_value()),
+        format!("S  sell ${}", t.sell_value()),
         x,
         PLAYFIELD_H + 74.0,
         18.0,
@@ -636,7 +636,7 @@ pub fn draw_track_select() {
         );
 
         draw_text(
-            &format!("{}. {}", i + 1, track.name),
+            format!("{}. {}", i + 1, track.name),
             r.x + 12.0,
             r.y + 26.0,
             21.0,
