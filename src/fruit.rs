@@ -134,6 +134,9 @@ pub struct Fruit {
     /// Speed multiplier while chilled; 1.0 means unaffected. Set by whichever
     /// Freezer hit this fruit, so upgraded Freezers bite harder.
     pub slow_factor: f32,
+    /// Wave speed ramp this fruit was spawned under. Children inherit it, so a
+    /// late-wave watermelon's whole subtree stays fast.
+    pub speed_mult: f32,
     pub rot: f32,
     pub spin: f32,
 }
@@ -142,13 +145,14 @@ impl Fruit {
     // ─────────────────────────────────────────────────────────────────────────
     // Spawn a fruit at `dist` along the track.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn new(kind: FruitKind, dist: f32, path: &Path) -> Self {
+    pub fn new(kind: FruitKind, dist: f32, path: &Path, speed_mult: f32) -> Self {
         Fruit {
             kind,
             dist,
             pos: path.point_at(dist),
             slow_timer: 0.0,
             slow_factor: 1.0,
+            speed_mult,
             rot: gen_range(0.0, 360.0),
             spin: gen_range(-50.0, 50.0),
         }
@@ -158,15 +162,7 @@ impl Fruit {
     // Advance along the track, honouring any active slow.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn update(&mut self, dt: f32, path: &Path) {
-        let speed = FRUIT_BASE_SPEED
-            * self.kind.speed_scale()
-            * if self.slow_timer > 0.0 {
-                self.slow_factor
-            } else {
-                1.0
-            };
-
-        self.dist += speed * dt;
+        self.dist += self.current_speed() * dt;
         self.pos = path.point_at(self.dist);
 
         if self.slow_timer > 0.0 {
@@ -178,6 +174,21 @@ impl Fruit {
             }
         }
         self.rot += self.spin * dt;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How fast this fruit is travelling along the track right now, in pixels
+    // per second. Towers use it to lead their shots.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn current_speed(&self) -> f32 {
+        FRUIT_BASE_SPEED
+            * self.kind.speed_scale()
+            * self.speed_mult
+            * if self.slow_timer > 0.0 {
+                self.slow_factor
+            } else {
+                1.0
+            }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -216,9 +227,15 @@ impl Fruit {
     pub fn split(&self, path: &Path) -> Vec<Fruit> {
         match self.kind.child() {
             None => Vec::new(),
+            // Children inherit the wave's speed ramp from their parent.
             Some(child) => vec![
-                Fruit::new(child, self.dist, path),
-                Fruit::new(child, (self.dist - SPLIT_TRAIL).max(0.0), path),
+                Fruit::new(child, self.dist, path, self.speed_mult),
+                Fruit::new(
+                    child,
+                    (self.dist - SPLIT_TRAIL).max(0.0),
+                    path,
+                    self.speed_mult,
+                ),
             ],
         }
     }
@@ -341,7 +358,7 @@ mod tests {
     #[test]
     fn a_split_yields_two_children_one_trailing() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Watermelon, 200.0, &path);
+        let f = Fruit::new(FruitKind::Watermelon, 200.0, &path, 1.0);
         let kids = f.split(&path);
 
         assert_eq!(kids.len(), 2);
@@ -353,14 +370,14 @@ mod tests {
     #[test]
     fn a_blueberry_split_yields_nothing() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Blueberry, 10.0, &path);
+        let f = Fruit::new(FruitKind::Blueberry, 10.0, &path, 1.0);
         assert!(f.split(&path).is_empty());
     }
 
     #[test]
     fn splitting_at_the_start_does_not_produce_negative_distance() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Watermelon, 0.0, &path);
+        let f = Fruit::new(FruitKind::Watermelon, 0.0, &path, 1.0);
         assert!(f.split(&path).iter().all(|k| k.dist >= 0.0));
     }
 
@@ -368,8 +385,8 @@ mod tests {
     fn a_chilled_fruit_travels_slower() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
 
-        let mut normal = Fruit::new(FruitKind::Lime, 0.0, &path);
-        let mut chilled = Fruit::new(FruitKind::Lime, 0.0, &path);
+        let mut normal = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        let mut chilled = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
         chilled.chill(0.45, 1.0);
 
         normal.update(0.5, &path);
@@ -382,7 +399,7 @@ mod tests {
     #[test]
     fn overlapping_freezers_keep_the_strongest_chill() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path);
+        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
 
         f.chill(0.45, 1.6);
         f.chill(0.25, 1.0);
@@ -399,7 +416,7 @@ mod tests {
     #[test]
     fn a_chill_wearing_off_restores_full_speed() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(9000.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path);
+        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
         f.chill(0.25, 0.1);
 
         f.update(0.2, &path);

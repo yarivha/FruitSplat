@@ -38,10 +38,17 @@ pub const PLAYFIELD_W: f32 = 1000.0;
 
 const WINDOW_W: i32 = PLAYFIELD_W as i32;
 const WINDOW_H: i32 = 740;
-const START_LIVES: u32 = 20;
-const START_CASH: u32 = 250;
-/// Cash earned per fruit popped, regardless of tier.
-const CASH_PER_POP: u32 = 1;
+const START_LIVES: u32 = 15;
+const START_CASH: u32 = 180;
+/// Cash earned for each fruit destroyed outright — that is, one that had no
+/// children left to split into.
+///
+/// Paying per *pop* meant a watermelon was worth $31, so income scaled with the
+/// threat while towers stayed a one-time cost, and the surplus compounded until
+/// the player could afford six times the firepower a wave needed. Paying only
+/// for the bottom of the split ladder roughly halves late-game income while
+/// still rewarding bigger fruit, which are worth 16 blueberries apiece.
+const CASH_PER_FRUIT_CLEARED: u32 = 1;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Window configuration, consumed by the macroquad::main attribute.
@@ -444,7 +451,14 @@ impl Game {
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
             if let Some(kind) = self.queue.pop() {
-                self.fruits.push(Fruit::new(kind, 0.0, &self.path));
+                // Fruit carry the wave's speed ramp, and pass it to their
+                // children when they split.
+                self.fruits.push(Fruit::new(
+                    kind,
+                    0.0,
+                    &self.path,
+                    wave::speed_multiplier(self.wave),
+                ));
             }
             self.spawn_timer = wave::spawn_interval(self.wave);
         }
@@ -534,11 +548,11 @@ impl Game {
 
             // "First" targeting: the fruit closest to the exit is the threat.
             // Collect owned copies so the fruit list isn't borrowed while firing.
-            let mut in_range: Vec<(f32, Vec2)> = self
+            let mut in_range: Vec<(f32, Vec2, f32)> = self
                 .fruits
                 .iter()
                 .filter(|f| f.pos.distance(t.pos) <= range)
-                .map(|f| (f.dist, f.pos))
+                .map(|f| (f.dist, f.pos, f.current_speed()))
                 .collect();
 
             if in_range.is_empty() {
@@ -558,10 +572,16 @@ impl Game {
 
             // A Lv3 Seed Shooter engages the two lead fruit; everything else
             // fires a single shot.
-            for (_, target) in in_range.iter().take(t.shots()) {
+            for (dist, pos, speed) in in_range.iter().take(t.shots()) {
+                // Aim where the fruit will be, not where it is. Shots don't
+                // home, so without leading, the late-wave speed ramp would make
+                // towers miss almost everything through no fault of the player.
+                let travel = pos.distance(t.pos) / projectile_kind.speed();
+                let aim = self.path.point_at(dist + speed * travel);
+
                 self.projectiles.push(Projectile::new(
                     t.pos,
-                    *target,
+                    aim,
                     projectile_kind,
                     splash,
                     pierce,
@@ -663,7 +683,10 @@ impl Game {
         let mut children = Vec::new();
         for &(i, owner) in pops.iter().rev() {
             let f = self.fruits.remove(i);
-            self.cash += CASH_PER_POP;
+            // Only the bottom of the ladder pays out; see CASH_PER_FRUIT_CLEARED.
+            if f.kind.child().is_none() {
+                self.cash += CASH_PER_FRUIT_CLEARED;
+            }
             self.splats.push(Splat::burst(f.pos, f.kind));
             self.audio.play_pop(f.kind.tier());
             children.extend(f.split(&self.path));
@@ -920,7 +943,7 @@ impl Game {
         for tier in 0..5u8 {
             let dist = 380.0 + tier as f32 * 270.0;
             self.fruits
-                .push(Fruit::new(FruitKind::from_tier(tier), dist, &self.path));
+                .push(Fruit::new(FruitKind::from_tier(tier), dist, &self.path, 1.0));
         }
         // Chill one so the frost treatment shows up too.
         self.fruits[2].chill(0.35, 5.0);

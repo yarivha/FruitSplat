@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 56 unit tests covering path maths (corner traversal, end clamping,
+- 59 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
   sell values, validation that every authored route enters and exits off-screen
@@ -145,6 +145,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Difficulty pass — the game was far too easy.** A balance report over the
+  real wave tables showed the player could afford roughly six times the
+  firepower a wave needed, and that the gap *widened* after wave 13: the game
+  got easier the longer it ran. Two causes, both now addressed.
+  - Income was proportional to pops, so a watermelon paid $31. Towers are a
+    one-time cost, so the surplus compounded. Cash is now earned only for fruit
+    **destroyed outright** — the bottom of the split ladder — which roughly
+    halves late income while still paying more for bigger fruit. The wave clear
+    bonus drops from `25 + wave*4` to `15 + wave*2`.
+  - Past wave 13 the only escalation was sending *more* fruit; the fruit
+    themselves never got harder. Fruit now gain 3.5% speed per wave, capped at
+    1.9×, and children inherit their parent's ramp. Since a tower's output is
+    bounded by how long a fruit stays in range, this is the escalation that
+    count alone couldn't provide.
+  - Starting lives 20 → 15 and starting cash $250 → $180.
+  - Affordable-versus-needed firepower now runs about 4× at wave 1, dips to
+    0.9× at wave 13 where watermelons arrive, and drifts to 1.7× by wave 25 —
+    a real wall instead of a slide into surplus.
+- Towers now **lead their shots**, aiming where a fruit will be when the shot
+  lands rather than where it is. Without this the speed ramp would have made
+  towers miss constantly through no fault of the player.
+- `balance_report` — an ignored test that prints the difficulty and economy
+  curves, so tuning is done against numbers instead of guesswork. Run with
+  `cargo test balance_report -- --ignored --nocapture`.
 - Reworked all the artwork. macroquad has no gradient primitive or clipping, so
   shading is faked by stacking shapes: a dark base, a mid body, then smaller
   layers offset toward a light treated as coming from the upper left.

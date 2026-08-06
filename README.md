@@ -83,8 +83,9 @@ few dozen pixels of each other, and a pile on one lane must not pop fruit
 walking the other.
 
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
-along the track. Shots travel in a straight line and do not home, so fast fruit
-can be missed.
+along the track. Shots don't home, but towers **lead** their targets: they aim
+at where the fruit will be once the shot arrives, which is what keeps them
+useful against the late-wave speed ramp.
 
 ### Stats and upgrades
 
@@ -135,11 +136,39 @@ watermelon therefore takes 31 pops in total.
 
 A new tier unlocks every third wave, so watermelons first appear on wave 13 —
 every route runs long enough to see them. Spawn intervals tighten from 0.85s
-toward a 0.30s floor, and clearing a wave pays a bonus on top of the $1 earned
-per pop. You start with 20 lives and $250.
+toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9×.
+You start with 15 lives and $180.
 
 Clearing the route's last wave wins the run. Losing all your lives ends it, and
 either way you return to the route picker.
+
+### Economy
+
+Cash is earned for each fruit **destroyed outright** — one with no children left
+to split into — plus a bonus for clearing a wave. Paying per *pop* instead meant
+a watermelon was worth $31, so income scaled with the threat while towers stayed
+a one-time cost. The surplus compounded until you could afford six times the
+firepower a wave actually needed.
+
+Because towers accumulate and income doesn't have to, income must grow *slower*
+than the threat for difficulty to hold steady.
+
+### Checking the balance
+
+```sh
+cargo test balance_report -- --ignored --nocapture
+```
+
+Prints the difficulty and economy curves per wave: fruit sent, pops required,
+income, the speed ramp, the pops per second needed to keep up, and how much
+firepower the cumulative income could buy. The last column is the ratio — 1.0
+means you can afford exactly enough, below 1.0 means the wave outpaces you.
+
+The curve is deliberately generous early (about 4× at wave 1) and tightest at
+wave 13, where watermelons first arrive, drifting back to roughly 1.7× by wave
+25. It's a model, not a simulation: it ignores upgrades, splash and pierce
+multi-kills, and spikes, all of which make the real game more forgiving than the
+numbers suggest.
 
 ## Audio
 
