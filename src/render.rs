@@ -1,34 +1,48 @@
 // =============================================================================
 // render.rs — all drawing for Fruit Splat
 //
-// Every visual here is generated procedurally from macroquad primitives, so the
-// game ships with no image assets at all. Keeps drawing separate from the
-// simulation in `fruit`/`spawn` — nothing in this file mutates game state.
+// Every visual is generated procedurally from macroquad primitives, so the game
+// ships with no image assets. Drawing is kept strictly separate from simulation:
+// nothing in this file mutates game state.
 // =============================================================================
 
 use macroquad::prelude::*;
 
 use crate::fruit::{Fruit, FruitKind, Splat};
+use crate::path::Path;
+use crate::projectile::Projectile;
+use crate::tower::{Pulse, Tower, TowerKind, TOWER_RADIUS};
+use crate::PLAYFIELD_H;
 
-/// Sky colours for the vertical gradient, top and bottom.
-const SKY_TOP: Color = Color::new(0.16, 0.20, 0.35, 1.0);
-const SKY_BOTTOM: Color = Color::new(0.42, 0.30, 0.44, 1.0);
+/// Grass colours for the vertical gradient behind the track.
+const FIELD_TOP: Color = Color::new(0.36, 0.51, 0.31, 1.0);
+const FIELD_BOTTOM: Color = Color::new(0.24, 0.38, 0.24, 1.0);
 /// Number of bands used to fake the gradient.
-const SKY_BANDS: i32 = 48;
+const FIELD_BANDS: i32 = 40;
+
+/// Track widths — the outer band is the dirt border, the inner the worn middle.
+const TRACK_OUTER: f32 = 44.0;
+const TRACK_INNER: f32 = 34.0;
+
+/// Shop bar layout.
+const BTN_W: f32 = 210.0;
+const BTN_H: f32 = 62.0;
+const BTN_GAP: f32 = 16.0;
+const BTN_X0: f32 = 24.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Paint the dusk-sky gradient behind everything else.
+// Paint the grass gradient behind the whole playfield.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_background() {
-    let (w, h) = (screen_width(), screen_height());
-    let band_h = h / SKY_BANDS as f32;
+    let w = screen_width();
+    let band_h = PLAYFIELD_H / FIELD_BANDS as f32;
 
-    for i in 0..SKY_BANDS {
-        let t = i as f32 / (SKY_BANDS - 1) as f32;
+    for i in 0..FIELD_BANDS {
+        let t = i as f32 / (FIELD_BANDS - 1) as f32;
         let c = Color::new(
-            SKY_TOP.r + (SKY_BOTTOM.r - SKY_TOP.r) * t,
-            SKY_TOP.g + (SKY_BOTTOM.g - SKY_TOP.g) * t,
-            SKY_TOP.b + (SKY_BOTTOM.b - SKY_TOP.b) * t,
+            FIELD_TOP.r + (FIELD_BOTTOM.r - FIELD_TOP.r) * t,
+            FIELD_TOP.g + (FIELD_BOTTOM.g - FIELD_TOP.g) * t,
+            FIELD_TOP.b + (FIELD_BOTTOM.b - FIELD_TOP.b) * t,
             1.0,
         );
         // Overdraw each band by a pixel so seams never show at odd heights.
@@ -37,7 +51,32 @@ pub fn draw_background() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Draw the track as a thick dirt polyline. Circles at the joints round off the
+// corners, which macroquad's square line caps would otherwise leave notched.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_path(path: &Path) {
+    let border = Color::new(0.38, 0.28, 0.18, 1.0);
+    let dirt = Color::new(0.55, 0.43, 0.29, 1.0);
+
+    for (width, color) in [(TRACK_OUTER, border), (TRACK_INNER, dirt)] {
+        for w in path.points().windows(2) {
+            draw_line(w[0].x, w[0].y, w[1].x, w[1].y, width, color);
+        }
+        for p in path.points() {
+            draw_circle(p.x, p.y, width * 0.5, color);
+        }
+    }
+
+    // Exit marker — the thing the player is defending.
+    if let Some(end) = path.points().last() {
+        draw_circle(end.x, end.y, 26.0, Color::new(0.85, 0.25, 0.25, 0.55));
+        draw_circle_lines(end.x, end.y, 26.0, 3.0, Color::new(1.0, 0.85, 0.85, 0.9));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Draw one fruit: shared body + highlight, then per-kind garnish.
+// Chilled fruit get a pale blue wash so the Freezer's effect is visible.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_fruit(f: &Fruit) {
     let (x, y) = (f.pos.x, f.pos.y);
@@ -70,7 +109,6 @@ pub fn draw_fruit(f: &Fruit) {
             }
         }
         FruitKind::Orange => {
-            // Dimpled peel suggested by a lighter inner ring, plus a leaf.
             draw_circle_lines(x, y, r * 0.62, 2.0, Color::new(1.0, 0.78, 0.42, 0.55));
             draw_leaf(x, y - r * 0.9, r * 0.42, rot);
         }
@@ -83,20 +121,19 @@ pub fn draw_fruit(f: &Fruit) {
                     y,
                     x + a.cos() * r * 0.74,
                     y + a.sin() * r * 0.74,
-                    2.5,
+                    2.0,
                     Color::new(0.85, 0.96, 0.55, 0.7),
                 );
             }
         }
         FruitKind::Strawberry => {
-            // Pale seed speckle, then a leafy crown.
             for i in 0..9 {
                 let a = rot + i as f32 * std::f32::consts::TAU / 9.0;
                 let d = if i % 2 == 0 { 0.68 } else { 0.40 };
                 draw_circle(
                     x + a.cos() * r * d,
                     y + a.sin() * r * d,
-                    r * 0.06,
+                    r * 0.08,
                     Color::new(1.0, 0.92, 0.55, 0.9),
                 );
             }
@@ -115,13 +152,17 @@ pub fn draw_fruit(f: &Fruit) {
         }
     }
 
-    // Specular highlight, drawn last so it sits over the garnish.
+    // Specular highlight, drawn over the garnish.
     draw_circle(
         x - r * 0.32,
         y - r * 0.36,
         r * 0.26,
         Color::new(1.0, 1.0, 1.0, 0.22),
     );
+
+    if f.chilled() {
+        draw_circle(x, y, r, Color::new(0.55, 0.80, 1.0, 0.35));
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +187,112 @@ fn draw_leaf(x: f32, y: f32, size: f32, rot: f32) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Draw a placed tower: base, rim, then the kind-specific head.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_tower(t: &Tower) {
+    let (x, y) = (t.pos.x, t.pos.y);
+    let c = t.kind.color();
+
+    // Ground shadow, so towers read as sitting on the grass.
+    draw_circle(x + 2.0, y + 3.0, TOWER_RADIUS, Color::new(0.0, 0.0, 0.0, 0.22));
+    draw_circle(x, y, TOWER_RADIUS, c);
+    draw_circle_lines(
+        x,
+        y,
+        TOWER_RADIUS,
+        2.5,
+        Color::new(c.r * 0.55, c.g * 0.55, c.b * 0.55, 1.0),
+    );
+
+    match t.kind {
+        TowerKind::SeedShooter => {
+            // A barrel pointing at whatever it last fired on.
+            let dir = vec2(t.angle.cos(), t.angle.sin());
+            let tip = t.pos + dir * (TOWER_RADIUS + 9.0);
+            draw_line(x, y, tip.x, tip.y, 8.0, Color::new(0.35, 0.25, 0.15, 1.0));
+            draw_circle(x, y, TOWER_RADIUS * 0.45, Color::new(0.78, 0.62, 0.40, 1.0));
+        }
+        TowerKind::Blender => {
+            // Spinning blades, angled off the tower's facing.
+            for i in 0..3 {
+                let a = t.angle + i as f32 * std::f32::consts::TAU / 3.0;
+                draw_line(
+                    x,
+                    y,
+                    x + a.cos() * TOWER_RADIUS * 0.85,
+                    y + a.sin() * TOWER_RADIUS * 0.85,
+                    5.0,
+                    Color::new(0.90, 0.93, 0.96, 1.0),
+                );
+            }
+            draw_circle(x, y, TOWER_RADIUS * 0.3, Color::new(0.45, 0.49, 0.55, 1.0));
+        }
+        TowerKind::Freezer => {
+            // A six-armed snowflake.
+            for i in 0..3 {
+                let a = i as f32 * std::f32::consts::PI / 3.0;
+                let d = vec2(a.cos(), a.sin()) * TOWER_RADIUS * 0.8;
+                draw_line(x - d.x, y - d.y, x + d.x, y + d.y, 3.5, WHITE);
+            }
+            draw_circle(x, y, TOWER_RADIUS * 0.28, Color::new(0.85, 0.95, 1.0, 1.0));
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw the placement preview under the cursor, tinted by whether it's legal.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_ghost(pos: Vec2, kind: TowerKind, valid: bool) {
+    let tint = if valid {
+        Color::new(0.4, 1.0, 0.5, 0.9)
+    } else {
+        Color::new(1.0, 0.35, 0.35, 0.9)
+    };
+
+    // Range footprint, so the player can judge coverage before committing.
+    draw_circle(
+        pos.x,
+        pos.y,
+        kind.range(),
+        Color::new(tint.r, tint.g, tint.b, 0.10),
+    );
+    draw_circle_lines(pos.x, pos.y, kind.range(), 2.0, tint);
+
+    let c = kind.color();
+    draw_circle(pos.x, pos.y, TOWER_RADIUS, Color::new(c.r, c.g, c.b, 0.55));
+    draw_circle_lines(pos.x, pos.y, TOWER_RADIUS, 2.0, tint);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw a Freezer pulse as an expanding, fading ring.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_pulse(p: &Pulse) {
+    let t = p.progress();
+    let alpha = (1.0 - t) * 0.55;
+    draw_circle_lines(
+        p.pos.x,
+        p.pos.y,
+        p.max_radius * t,
+        3.0,
+        Color::new(0.75, 0.92, 1.0, alpha),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw a shot in flight.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_projectile(p: &Projectile) {
+    let c = p.kind.color();
+    draw_circle(p.pos.x, p.pos.y, p.kind.radius(), c);
+    draw_circle(
+        p.pos.x - p.kind.radius() * 0.3,
+        p.pos.y - p.kind.radius() * 0.3,
+        p.kind.radius() * 0.35,
+        Color::new(1.0, 1.0, 1.0, 0.35),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Draw a splat burst, fading each particle out over its remaining life.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_splat(s: &Splat) {
@@ -158,81 +305,173 @@ pub fn draw_splat(s: &Splat) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// In-round HUD: score and missed count on the left, countdown on the right.
-// The clock turns red for the last ten seconds.
+// Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
+// the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(score: u32, missed: u32, time_left: f32) {
-    draw_text(&format!("SCORE {score}"), 24.0, 46.0, 36.0, WHITE);
-    draw_text(
-        &format!("MISSED {missed}"),
-        24.0,
-        78.0,
-        26.0,
-        Color::new(1.0, 1.0, 1.0, 0.65),
+pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool) {
+    // Dark strip so white text stays readable over the grass.
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        52.0,
+        Color::new(0.0, 0.0, 0.0, 0.35),
     );
 
-    let clock = format!("{:04.1}", time_left.max(0.0));
-    let color = if time_left <= 10.0 {
+    let lives_color = if lives <= 5 {
         Color::new(1.0, 0.42, 0.38, 1.0)
     } else {
         WHITE
     };
-    let dims = measure_text(&clock, None, 36, 1.0);
-    draw_text(&clock, screen_width() - dims.width - 24.0, 46.0, 36.0, color);
+    draw_text(&format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
+    draw_text(&format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
+
+    let wave_txt = format!("WAVE {wave}");
+    let dims = measure_text(&wave_txt, None, 30, 1.0);
+    draw_text(&wave_txt, screen_width() - dims.width - 20.0, 35.0, 30.0, WHITE);
+
+    if !wave_active {
+        text_center(
+            &format!("SPACE — send wave {wave}"),
+            PLAYFIELD_H - 22.0,
+            30.0,
+            Color::new(1.0, 0.9, 0.5, 1.0),
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of shop button `i`, so main.rs can hit-test clicks against the same
+// layout this file draws.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn shop_button_rect(i: usize) -> Rect {
+    Rect::new(
+        BTN_X0 + i as f32 * (BTN_W + BTN_GAP),
+        PLAYFIELD_H + 14.0,
+        BTN_W,
+        BTN_H,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom shop bar: one button per tower, dimmed when it can't be afforded and
+// outlined when it's the current selection.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
+    draw_rectangle(
+        0.0,
+        PLAYFIELD_H,
+        screen_width(),
+        screen_height() - PLAYFIELD_H,
+        Color::new(0.12, 0.12, 0.16, 1.0),
+    );
+
+    for (i, kind) in TowerKind::ALL.iter().enumerate() {
+        let r = shop_button_rect(i);
+        let affordable = cash >= kind.cost();
+        let is_selected = selected == Some(*kind);
+
+        let bg = if is_selected {
+            Color::new(0.26, 0.30, 0.24, 1.0)
+        } else if affordable {
+            Color::new(0.20, 0.21, 0.26, 1.0)
+        } else {
+            Color::new(0.15, 0.15, 0.18, 1.0)
+        };
+        draw_rectangle(r.x, r.y, r.w, r.h, bg);
+
+        if is_selected {
+            draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, Color::new(0.6, 1.0, 0.6, 1.0));
+        }
+
+        // Colour swatch identifying the tower.
+        let c = kind.color();
+        let swatch = Color::new(c.r, c.g, c.b, if affordable { 1.0 } else { 0.4 });
+        draw_circle(r.x + 26.0, r.y + r.h * 0.5, 15.0, swatch);
+
+        let text_alpha = if affordable { 1.0 } else { 0.45 };
+        draw_text(
+            &format!("{}. {}", i + 1, kind.name()),
+            r.x + 50.0,
+            r.y + 26.0,
+            21.0,
+            Color::new(1.0, 1.0, 1.0, text_alpha),
+        );
+        draw_text(
+            &format!("${}  {}", kind.cost(), kind.blurb()),
+            r.x + 50.0,
+            r.y + 48.0,
+            17.0,
+            Color::new(0.85, 0.85, 0.9, text_alpha),
+        );
+    }
+
+    draw_text(
+        "click to place  ·  right-click to cancel",
+        BTN_X0 + 3.0 * (BTN_W + BTN_GAP),
+        PLAYFIELD_H + 44.0,
+        18.0,
+        Color::new(0.7, 0.7, 0.78, 1.0),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Title screen.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_menu() {
-    let cy = screen_height() * 0.5;
+    let cy = screen_height() * 0.42;
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.5),
+    );
+
     text_center("FRUIT SPLAT", cy - 60.0, 78.0, WHITE);
     text_center(
-        "Pop the fruit before it floats away",
-        cy + 4.0,
-        30.0,
-        Color::new(1.0, 1.0, 1.0, 0.8),
+        "Build towers. Splat the fruit before it reaches the end.",
+        cy + 6.0,
+        28.0,
+        Color::new(1.0, 1.0, 1.0, 0.85),
     );
     text_center(
-        "Smaller fruit rise faster and score more",
-        cy + 42.0,
+        "Popped fruit bursts into two smaller, faster ones.",
+        cy + 44.0,
         24.0,
-        Color::new(1.0, 1.0, 1.0, 0.55),
+        Color::new(1.0, 1.0, 1.0, 0.6),
     );
     text_center(
         "Click to start",
-        cy + 110.0,
+        cy + 120.0,
         32.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// End-of-round summary.
+// End screen, shown once the fruit have drained every life.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_game_over(score: u32, missed: u32) {
-    let cy = screen_height() * 0.5;
-
-    // Dim the playfield so the summary text stays readable over stray particles.
+pub fn draw_game_over(wave: u32) {
+    let cy = screen_height() * 0.42;
     draw_rectangle(
         0.0,
         0.0,
         screen_width(),
         screen_height(),
-        Color::new(0.0, 0.0, 0.0, 0.45),
+        Color::new(0.0, 0.0, 0.0, 0.55),
     );
 
-    text_center("TIME'S UP", cy - 70.0, 68.0, WHITE);
-    text_center(&format!("Score {score}"), cy + 6.0, 44.0, WHITE);
+    text_center("OVERRUN", cy - 60.0, 72.0, WHITE);
     text_center(
-        &format!("Missed {missed}"),
-        cy + 50.0,
-        28.0,
-        Color::new(1.0, 1.0, 1.0, 0.7),
+        &format!("You held out to wave {wave}"),
+        cy + 6.0,
+        36.0,
+        WHITE,
     );
     text_center(
-        "Click to play again",
-        cy + 120.0,
+        "Click to try again",
+        cy + 100.0,
         30.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );

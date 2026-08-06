@@ -1,12 +1,12 @@
 # Fruit Splat
 
-A balloon-pop arcade game, reskinned with fruit. Written in Rust with
+A Bloons-style tower defence, reskinned with fruit. Written in Rust with
 [macroquad](https://github.com/not-fl3/macroquad).
 
-Fruit float up from the bottom of the screen on a lazy sideways sway. Click to
-splat them before they drift off the top. Small fruit climb faster and score
-more, so the blueberries are where the points are — and where the misses come
-from.
+Fruit roll along a winding track toward the exit. You don't touch them directly —
+you buy towers and place them along the route. Pop a fruit and it bursts into two
+smaller, faster ones, so a watermelon you failed to handle early arrives as a
+swarm of blueberries later.
 
 ## Play
 
@@ -14,36 +14,63 @@ from.
 cargo run --release
 ```
 
-- **Left click** — splat the fruit under the cursor
-- **Space / click** — start or restart a round
-- **Esc** — quit
+| Input | Action |
+|---|---|
+| `1` `2` `3` | Arm a tower type |
+| Click shop button | Arm a tower type |
+| Left click on field | Place the armed tower |
+| Right click | Cancel placement |
+| `Space` | Send the next wave |
 
-A round lasts 60 seconds. Spawns tighten and fruit speed up as the clock runs
-down.
+Close the window to quit.
 
-## Scoring
+## Towers
 
-| Fruit | Radius | Rise speed | Points |
-|---|---|---|---|
-| Watermelon | 46 px | ×0.72 | 1 |
-| Orange | 34 px | ×0.88 | 2 |
-| Lime | 28 px | ×1.00 | 3 |
-| Strawberry | 26 px | ×1.12 | 4 |
-| Blueberry | 18 px | ×1.38 | 6 |
+| Tower | Cost | Range | Rate | Role |
+|---|---|---|---|---|
+| Seed Shooter | $90 | 135 px | 0.45s | Single target, cheap sustained damage |
+| Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
+| Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
+
+Towers use "first" targeting — they shoot whichever fruit in range is furthest
+along the track. Shots travel in a straight line and do not home, so fast fruit
+can be missed.
+
+## Fruit
+
+Popping a fruit splits it into **two** of the next tier down. Clearing a single
+watermelon therefore takes 31 pops in total.
+
+| Tier | Fruit | Radius | Speed | Splits into | Lives lost if leaked |
+|---|---|---|---|---|---|
+| 4 | Watermelon | 30 px | ×0.72 | 2 × Orange | 5 |
+| 3 | Orange | 24 px | ×0.88 | 2 × Lime | 4 |
+| 2 | Lime | 19 px | ×1.00 | 2 × Strawberry | 3 |
+| 1 | Strawberry | 15 px | ×1.12 | 2 × Blueberry | 2 |
+| 0 | Blueberry | 11 px | ×1.38 | — | 1 |
+
+## Waves
+
+A new tier unlocks every third wave. Spawn intervals tighten from 0.85s toward a
+0.30s floor, and clearing a wave pays a bonus on top of the $1 earned per pop.
+You start with 20 lives and $250.
 
 ## Layout
 
 | File | Purpose |
 |---|---|
-| `src/main.rs` | Window config, game state machine, frame loop |
-| `src/fruit.rs` | Fruit entities and splat particles |
-| `src/spawn.rs` | Spawn pacing and the difficulty ramp |
+| `src/main.rs` | Window config, game state, frame loop, economy |
+| `src/path.rs` | Track polyline, distance lookup, placement clearance |
+| `src/fruit.rs` | Fruit tiers, the split ladder, splat particles |
+| `src/tower.rs` | Tower stats and the Freezer pulse effect |
+| `src/projectile.rs` | Shots in flight and their splash radii |
+| `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |
 
-## Build
+## Test
 
 ```sh
-cargo build --release
+cargo test
 ```
 
 ## License

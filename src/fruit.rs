@@ -1,19 +1,28 @@
 // =============================================================================
-// fruit.rs — the fruit entities and the splat particles they leave behind
+// fruit.rs — the fruit that walk the track, and the splats they leave behind
 //
-// A Fruit rises from below the bottom edge like a balloon, swaying sideways on a
-// sine path until it is clicked (splat) or drifts off the top (escaped).
-// Popping one spawns a Splat: a short-lived burst of gravity-affected particles.
+// Fruit are the "bloons": each one travels along the shared Path and, when
+// popped, bursts into two of the next tier down. Watermelon → Orange → Lime →
+// Strawberry → Blueberry, which is the bottom of the ladder and simply dies.
+// Smaller tiers move faster, so a leaked watermelon becomes a fast swarm.
 // =============================================================================
 
 use macroquad::prelude::*;
 use macroquad::rand::gen_range;
 
+use crate::path::Path;
+
 /// Downward pull applied to splat particles, in pixels per second squared.
 const PARTICLE_GRAVITY: f32 = 620.0;
+/// Base travel speed along the track before the per-tier multiplier.
+pub const FRUIT_BASE_SPEED: f32 = 105.0;
+/// Speed multiplier applied while a fruit is chilled by a Freezer.
+pub const SLOW_FACTOR: f32 = 0.45;
+/// How far behind its sibling the second child spawns, so splits fan out.
+const SPLIT_TRAIL: f32 = 18.0;
 
-/// The five fruit varieties. Smaller fruit rise faster and score more, which is
-/// the whole risk/reward dial for the game — big slow watermelons are freebies.
+/// The five fruit tiers, ordered by the split ladder.
+/// Tier 0 is Blueberry (weakest, fastest); tier 4 is Watermelon (toughest).
 #[derive(Clone, Copy, PartialEq)]
 pub enum FruitKind {
     Watermelon,
@@ -25,48 +34,64 @@ pub enum FruitKind {
 
 impl FruitKind {
     // ─────────────────────────────────────────────────────────────────────────
-    // Pick a weighted-random kind.
-    // Common fruit dominate; blueberries are the rare high-value target.
+    // Tier index: 0 = Blueberry … 4 = Watermelon.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn random() -> Self {
-        match gen_range(0, 100) {
-            0..=27 => FruitKind::Watermelon,
-            28..=54 => FruitKind::Orange,
-            55..=76 => FruitKind::Lime,
-            77..=92 => FruitKind::Strawberry,
-            _ => FruitKind::Blueberry,
+    pub fn tier(&self) -> u8 {
+        match self {
+            FruitKind::Blueberry => 0,
+            FruitKind::Strawberry => 1,
+            FruitKind::Lime => 2,
+            FruitKind::Orange => 3,
+            FruitKind::Watermelon => 4,
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Collision + drawing radius in pixels.
+    // Build a kind from its tier index. Anything above 4 clamps to Watermelon.
     // ─────────────────────────────────────────────────────────────────────────
+    pub fn from_tier(tier: u8) -> Self {
+        match tier {
+            0 => FruitKind::Blueberry,
+            1 => FruitKind::Strawberry,
+            2 => FruitKind::Lime,
+            3 => FruitKind::Orange,
+            _ => FruitKind::Watermelon,
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // What this fruit bursts into. None means it dies outright.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn child(&self) -> Option<FruitKind> {
+        match self {
+            FruitKind::Watermelon => Some(FruitKind::Orange),
+            FruitKind::Orange => Some(FruitKind::Lime),
+            FruitKind::Lime => Some(FruitKind::Strawberry),
+            FruitKind::Strawberry => Some(FruitKind::Blueberry),
+            FruitKind::Blueberry => None,
+        }
+    }
+
+    /// Collision and drawing radius, in pixels.
     pub fn radius(&self) -> f32 {
         match self {
-            FruitKind::Watermelon => 46.0,
-            FruitKind::Orange => 34.0,
-            FruitKind::Lime => 28.0,
-            FruitKind::Strawberry => 26.0,
-            FruitKind::Blueberry => 18.0,
+            FruitKind::Watermelon => 30.0,
+            FruitKind::Orange => 24.0,
+            FruitKind::Lime => 19.0,
+            FruitKind::Strawberry => 15.0,
+            FruitKind::Blueberry => 11.0,
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Score awarded for splatting this kind.
+    // Lives lost if this fruit reaches the exit. Higher tiers hurt more because
+    // they represent a whole subtree of fruit that never got popped.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn points(&self) -> u32 {
-        match self {
-            FruitKind::Watermelon => 1,
-            FruitKind::Orange => 2,
-            FruitKind::Lime => 3,
-            FruitKind::Strawberry => 4,
-            FruitKind::Blueberry => 6,
-        }
+    pub fn leak_cost(&self) -> u32 {
+        self.tier() as u32 + 1
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Per-kind multiplier on the base rise speed. Small fruit climb quicker.
-    // ─────────────────────────────────────────────────────────────────────────
+    /// Per-tier multiplier on the base speed. Small fruit move quicker.
     pub fn speed_scale(&self) -> f32 {
         match self {
             FruitKind::Watermelon => 0.72,
@@ -100,55 +125,47 @@ impl FruitKind {
     }
 }
 
-/// A single rising fruit. `base_x` is the column it was launched in; the sway is
-/// applied as an offset from that column so drift never accumulates.
+/// A fruit walking the track. `dist` is the single source of truth for where it
+/// is; `pos` is just the cached world position for that distance.
 pub struct Fruit {
-    pub pos: Vec2,
     pub kind: FruitKind,
-    pub base_x: f32,
-    pub rise_speed: f32,
-    pub sway_amp: f32,
-    pub sway_freq: f32,
-    pub sway_phase: f32,
-    pub age: f32,
+    pub dist: f32,
+    pub pos: Vec2,
+    /// Seconds of Freezer slow remaining.
+    pub slow_timer: f32,
     pub rot: f32,
     pub spin: f32,
 }
 
 impl Fruit {
     // ─────────────────────────────────────────────────────────────────────────
-    // Create a fruit just below the bottom edge, ready to rise into view.
-    // `base_speed` comes from the spawner and grows as the round progresses.
+    // Spawn a fruit at `dist` along the track.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn new(x: f32, base_speed: f32, kind: FruitKind) -> Self {
-        let r = kind.radius();
+    pub fn new(kind: FruitKind, dist: f32, path: &Path) -> Self {
         Fruit {
-            pos: vec2(x, screen_height() + r),
             kind,
-            base_x: x,
-            rise_speed: base_speed * kind.speed_scale(),
-            sway_amp: gen_range(12.0, 46.0),
-            sway_freq: gen_range(0.9, 2.1),
-            sway_phase: gen_range(0.0, std::f32::consts::TAU),
-            age: 0.0,
+            dist,
+            pos: path.point_at(dist),
+            slow_timer: 0.0,
             rot: gen_range(0.0, 360.0),
-            spin: gen_range(-40.0, 40.0),
+            spin: gen_range(-50.0, 50.0),
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Advance one frame: rise, sway, and slowly spin the garnish.
+    // Advance along the track, honouring any active slow.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn update(&mut self, dt: f32) {
-        self.age += dt;
-        self.pos.y -= self.rise_speed * dt;
+    pub fn update(&mut self, dt: f32, path: &Path) {
+        let speed = FRUIT_BASE_SPEED
+            * self.kind.speed_scale()
+            * if self.slow_timer > 0.0 { SLOW_FACTOR } else { 1.0 };
 
-        // Sway is a pure function of age, so the fruit always returns to base_x
-        // rather than wandering off the side of the screen over time.
-        let sway = (self.age * self.sway_freq + self.sway_phase).sin() * self.sway_amp;
-        let r = self.radius();
-        self.pos.x = (self.base_x + sway).clamp(r, screen_width() - r);
+        self.dist += speed * dt;
+        self.pos = path.point_at(self.dist);
 
+        if self.slow_timer > 0.0 {
+            self.slow_timer -= dt;
+        }
         self.rot += self.spin * dt;
     }
 
@@ -156,18 +173,29 @@ impl Fruit {
         self.kind.radius()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Did a click at `p` land on this fruit?
-    // ─────────────────────────────────────────────────────────────────────────
-    pub fn hit(&self, p: Vec2) -> bool {
-        p.distance(self.pos) <= self.radius()
+    pub fn chilled(&self) -> bool {
+        self.slow_timer > 0.0
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Has this fruit floated fully past the top edge (a miss)?
+    // Has this fruit made it to the exit?
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn escaped(&self) -> bool {
-        self.pos.y + self.radius() < 0.0
+    pub fn reached_end(&self, path: &Path) -> bool {
+        self.dist >= path.total()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // The two children this fruit bursts into, if any. The second trails behind
+    // so a split visibly fans out along the track instead of overlapping.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn split(&self, path: &Path) -> Vec<Fruit> {
+        match self.kind.child() {
+            None => Vec::new(),
+            Some(child) => vec![
+                Fruit::new(child, self.dist, path),
+                Fruit::new(child, (self.dist - SPLIT_TRAIL).max(0.0), path),
+            ],
+        }
     }
 }
 
@@ -192,7 +220,7 @@ impl Splat {
     // Bigger fruit throw more, and slightly heavier, chunks.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn burst(pos: Vec2, kind: FruitKind) -> Self {
-        let count = (kind.radius() * 0.45) as usize + 8;
+        let count = (kind.radius() * 0.5) as usize + 6;
         let mut particles = Vec::with_capacity(count);
 
         for i in 0..count {
@@ -200,13 +228,13 @@ impl Splat {
             // like a mechanical starburst.
             let base_angle = (i as f32 / count as f32) * std::f32::consts::TAU;
             let angle = base_angle + gen_range(-0.28, 0.28);
-            let speed = gen_range(90.0, 300.0);
-            let life = gen_range(0.42, 0.95);
+            let speed = gen_range(70.0, 240.0);
+            let life = gen_range(0.35, 0.8);
 
             particles.push(Particle {
                 pos,
                 vel: vec2(angle.cos() * speed, angle.sin() * speed),
-                radius: gen_range(3.0, 8.0) * (kind.radius() / 34.0).clamp(0.6, 1.5),
+                radius: gen_range(2.5, 6.0) * (kind.radius() / 24.0).clamp(0.6, 1.5),
                 // Mostly flesh, with some rind mixed in for contrast.
                 color: if i % 3 == 0 { kind.body() } else { kind.flesh() },
                 life,
@@ -231,5 +259,98 @@ impl Splat {
 
     pub fn finished(&self) -> bool {
         self.particles.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tier_round_trips_through_from_tier() {
+        for t in 0..=4u8 {
+            assert_eq!(FruitKind::from_tier(t).tier(), t);
+        }
+    }
+
+    #[test]
+    fn the_split_ladder_descends_one_tier_and_terminates() {
+        let mut kind = FruitKind::Watermelon;
+        let mut steps = 0;
+        while let Some(child) = kind.child() {
+            assert_eq!(child.tier(), kind.tier() - 1);
+            kind = child;
+            steps += 1;
+        }
+        assert!(kind == FruitKind::Blueberry);
+        assert_eq!(steps, 4);
+    }
+
+    #[test]
+    fn clearing_one_watermelon_takes_31_pops() {
+        // 1 + 2 + 4 + 8 + 16 — the whole subtree has to be popped.
+        fn pops(kind: FruitKind) -> u32 {
+            match kind.child() {
+                None => 1,
+                Some(c) => 1 + 2 * pops(c),
+            }
+        }
+        assert_eq!(pops(FruitKind::Watermelon), 31);
+    }
+
+    #[test]
+    fn smaller_tiers_move_faster() {
+        for t in 1..=4u8 {
+            let bigger = FruitKind::from_tier(t);
+            let smaller = FruitKind::from_tier(t - 1);
+            assert!(smaller.speed_scale() > bigger.speed_scale());
+        }
+    }
+
+    #[test]
+    fn leak_cost_climbs_with_tier() {
+        assert_eq!(FruitKind::Blueberry.leak_cost(), 1);
+        assert_eq!(FruitKind::Watermelon.leak_cost(), 5);
+    }
+
+    #[test]
+    fn a_split_yields_two_children_one_trailing() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let f = Fruit::new(FruitKind::Watermelon, 200.0, &path);
+        let kids = f.split(&path);
+
+        assert_eq!(kids.len(), 2);
+        assert!(kids.iter().all(|k| k.kind == FruitKind::Orange));
+        assert_eq!(kids[0].dist, 200.0);
+        assert_eq!(kids[1].dist, 200.0 - SPLIT_TRAIL);
+    }
+
+    #[test]
+    fn a_blueberry_split_yields_nothing() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let f = Fruit::new(FruitKind::Blueberry, 10.0, &path);
+        assert!(f.split(&path).is_empty());
+    }
+
+    #[test]
+    fn splitting_at_the_start_does_not_produce_negative_distance() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let f = Fruit::new(FruitKind::Watermelon, 0.0, &path);
+        assert!(f.split(&path).iter().all(|k| k.dist >= 0.0));
+    }
+
+    #[test]
+    fn a_chilled_fruit_travels_slower() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+
+        let mut normal = Fruit::new(FruitKind::Lime, 0.0, &path);
+        let mut chilled = Fruit::new(FruitKind::Lime, 0.0, &path);
+        chilled.slow_timer = 1.0;
+
+        normal.update(0.5, &path);
+        chilled.update(0.5, &path);
+
+        assert!(chilled.dist < normal.dist);
+        assert!((chilled.dist - normal.dist * SLOW_FACTOR).abs() < 0.001);
     }
 }
