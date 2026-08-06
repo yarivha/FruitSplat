@@ -198,3 +198,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The frost overlay on chilled fruit was heavy enough to wash pale fruit like
   the lime into an unreadable blob.
 - "Zigzag Grove"'s blurb overflowed its selection card, now guarded by a test.
+- Losing to the last fruit of a wave credited the wave as cleared on the way to
+  the game over screen. One leak can both drain the last life and empty the
+  field, and completion was tested before death, so the run banked the clear
+  bonus and advanced the wave counter — leaving the game over screen reporting a
+  wave the player never reached. On a route's final wave it was louder still:
+  victory was declared, its jingle and the menu music started, and the game over
+  state overwrote it in the same frame, so both stings played together. Death is
+  now settled first.
+- The window was resizable while the world is a fixed 1000x650. Routes, scenery
+  and the shop bar are authored against that space, but the HUD and hit-testing
+  read the live window size, so dragging the window pulled the two apart —
+  narrowing it left the shop buttons taking clicks from where they were no
+  longer drawn, and shortening it dropped the whole bar off the bottom, since
+  PLAYFIELD_H never yields the strip back. The window is now fixed size.

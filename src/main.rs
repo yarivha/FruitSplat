@@ -59,6 +59,13 @@ fn window_conf() -> Conf {
         window_width: WINDOW_W,
         window_height: WINDOW_H,
         high_dpi: true,
+        // Routes, scenery and the shop bar are authored against a fixed
+        // PLAYFIELD_W x PLAYFIELD_H space, but the HUD and hit-testing read the
+        // live window size. Resizing pulls those two apart: narrow the window
+        // and the shop buttons keep taking clicks from where they are no longer
+        // drawn, shorten it and the whole bar falls off the bottom, since
+        // PLAYFIELD_H never gives the strip back.
+        window_resizable: false,
         ..Default::default()
     }
 }
@@ -237,13 +244,21 @@ impl Game {
         self.update_spikes();
         self.update_effects(dt);
 
-        self.check_wave_complete();
-
+        // Death is settled before wave completion, because one leak can trigger
+        // both: the fruit that drains the last life is often also the last one
+        // on the field. Checked the other way round, the run would bank the
+        // clear bonus and tick the wave counter on its way to the game over
+        // screen, which then reports a wave the player never actually reached —
+        // and on a route's final wave it would fire the victory jingle a frame
+        // before losing.
         if self.lives == 0 {
             self.state = State::GameOver;
             self.audio.play_game_over();
             self.audio.play_music(Track::Menu);
+            return;
         }
+
+        self.check_wave_complete();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
