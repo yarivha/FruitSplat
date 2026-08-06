@@ -35,12 +35,17 @@ dial — a longer route means more seconds under fire before a fruit reaches the
 exit. Turn count matters too: tight switchbacks let one tower cover several
 lanes at once.
 
-| Route | Difficulty | Length | Character | Backdrop |
-|---|---|---|---|---|
-| Market Run | Hard | 1500 px | Short and direct | Dusty market of crates and fences |
-| Orchard Snake | Medium | 2370 px | A steady weave | Temperate orchard |
-| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
-| The Long Orchard | Gentle | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+| Route | Difficulty | Waves | Length | Character | Backdrop |
+|---|---|---|---|---|---|
+| Market Run | Hard | 15 | 1500 px | Short and direct | Dusty market of crates and fences |
+| Orchard Snake | Medium | 20 | 2370 px | A steady weave | Temperate orchard |
+| Zigzag Grove | Medium | 20 | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
+| The Long Orchard | Gentle | 25 | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+
+A run is finite: survive every wave on the route and it's cleared. Harder routes
+run **shorter**, so they're a sharper challenge rather than simply a longer one.
+The HUD shows progress as `WAVE 7/20`, and the counter turns amber on the final
+wave.
 
 Each route has its own palette and a themed scatter of scenery — trees, bushes,
 rocks, flowers, crates, fences, ponds — laid out once when the run starts.
@@ -128,9 +133,13 @@ watermelon therefore takes 31 pops in total.
 
 ## Waves
 
-A new tier unlocks every third wave. Spawn intervals tighten from 0.85s toward a
-0.30s floor, and clearing a wave pays a bonus on top of the $1 earned per pop.
-You start with 20 lives and $250.
+A new tier unlocks every third wave, so watermelons first appear on wave 13 —
+every route runs long enough to see them. Spawn intervals tighten from 0.85s
+toward a 0.30s floor, and clearing a wave pays a bonus on top of the $1 earned
+per pop. You start with 20 lives and $250.
+
+Clearing the route's last wave wins the run. Losing all your lives ends it, and
+either way you return to the route picker.
 
 ## Audio
 
@@ -140,7 +149,7 @@ are embedded into the binary with `include_bytes!`, so the executable is
 standalone.
 
 ```sh
-python3 tools/gen_sounds.py   # 18 effects → assets/
+python3 tools/gen_sounds.py   # 19 effects → assets/
 python3 tools/gen_music.py    # 2 music loops → assets/
 ```
 
@@ -192,9 +201,10 @@ FRUITSPLAT_SCREENSHOT=/tmp/shot.png cargo run --release
 ```
 
 `FRUITSPLAT_SCREEN` picks what to capture — `panel` opens a tower's stats panel,
-`select` shows the route picker, `menu` the title screen. The default stages a
-board with all four towers at different levels and one fruit of every tier,
-including a chilled one.
+`select` the route picker, `menu` the title screen, `victory` and `over` the two
+end screens. `FRUITSPLAT_TRACK` picks which route's backdrop to stage. The
+default stages a board with all five towers at different levels, one fruit of
+every tier including a chilled one, and spike piles at varying wear.
 
 ## License
 

@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 54 unit tests covering path maths (corner traversal, end clamping,
+- 56 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
   sell values, validation that every authored route enters and exits off-screen
@@ -109,6 +109,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The Long Orchard** (Gentle, 2870px) — plenty of time to shoot.
 - Being overrun now returns to route selection rather than restarting the same
   track, so a different route can be picked after a loss.
+- Runs are finite: every route has a wave count, and surviving them all clears
+  it. Harder routes run shorter — Market Run is 15 waves, Orchard Snake and
+  Zigzag Grove 20, The Long Orchard 25 — so difficulty is a sharper challenge
+  rather than simply a longer one. Every route runs past wave 13, where
+  watermelons first appear, which is asserted by a test.
+- The HUD shows progress as `WAVE 7/20` rather than a bare wave number, and the
+  counter turns amber on the final wave. The send-wave prompt names the total
+  too, and calls out the final wave explicitly.
+- New victory screen when a route is cleared, showing the route name, its wave
+  count and the lives left, with its own fanfare.
+- Route cards show wave count instead of route length in pixels — how long a run
+  is is what the player is actually choosing between.
 
 - Screenshot mode (`FRUITSPLAT_SCREENSHOT`, `FRUITSPLAT_SCREEN`): stages a
   scene, renders a few frames, writes a PNG and exits. Added to make the

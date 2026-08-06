@@ -856,7 +856,14 @@ pub fn draw_splat(s: &Splat) {
 // Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
 // the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool, muted: bool) {
+pub fn draw_hud(
+    lives: u32,
+    cash: u32,
+    wave: u32,
+    total_waves: u32,
+    wave_active: bool,
+    muted: bool,
+) {
     // Dark strip so white text stays readable over the grass.
     draw_rectangle(
         0.0,
@@ -882,15 +889,33 @@ pub fn draw_hud(lives: u32, cash: u32, wave: u32, wave_active: bool, muted: bool
     };
     draw_text(mute_label, 360.0, 34.0, 22.0, mute_color);
 
-    let wave_txt = format!("WAVE {wave}");
+    // Progress through the route, not just the current wave number.
+    let wave_txt = format!("WAVE {wave}/{total_waves}");
     let dims = measure_text(&wave_txt, None, 30, 1.0);
-    draw_text(&wave_txt, screen_width() - dims.width - 20.0, 35.0, 30.0, WHITE);
+    let wave_color = if wave == total_waves {
+        // The final wave is worth flagging.
+        Color::new(1.0, 0.78, 0.35, 1.0)
+    } else {
+        WHITE
+    };
+    draw_text(
+        &wave_txt,
+        screen_width() - dims.width - 20.0,
+        35.0,
+        30.0,
+        wave_color,
+    );
 
     if !wave_active {
-        text_center(
+        let prompt = if wave == total_waves {
             // Plain ASCII only: the default font has no glyph for an em dash
             // and renders it as a tofu box.
-            &format!("SPACE  -  send wave {wave}"),
+            format!("SPACE  -  send the FINAL wave ({wave} of {total_waves})")
+        } else {
+            format!("SPACE  -  send wave {wave} of {total_waves}")
+        };
+        text_center(
+            &prompt,
             PLAYFIELD_H - 22.0,
             30.0,
             Color::new(1.0, 0.9, 0.5, 1.0),
@@ -1290,10 +1315,12 @@ pub fn draw_track_select() {
             19.0,
             difficulty_color(track.difficulty),
         );
-        let len_txt = format!("{} px", track.length() as i32);
-        let dims = measure_text(&len_txt, None, 17, 1.0);
+        // Wave count rather than route length: how long the run is is what the
+        // player is actually choosing between.
+        let waves_txt = format!("{} waves", track.waves);
+        let dims = measure_text(&waves_txt, None, 17, 1.0);
         draw_text(
-            &len_txt,
+            &waves_txt,
             r.x + r.w - dims.width - 12.0,
             r.y + 190.0,
             17.0,
@@ -1381,7 +1408,7 @@ fn difficulty_color(difficulty: &str) -> Color {
 // ─────────────────────────────────────────────────────────────────────────────
 // End screen, shown once the fruit have drained every life.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_game_over(wave: u32) {
+pub fn draw_game_over(wave: u32, total_waves: u32) {
     let cy = screen_height() * 0.42;
     draw_rectangle(
         0.0,
@@ -1393,14 +1420,48 @@ pub fn draw_game_over(wave: u32) {
 
     text_center("OVERRUN", cy - 60.0, 72.0, WHITE);
     text_center(
-        &format!("You held out to wave {wave}"),
+        &format!("You held out to wave {wave} of {total_waves}"),
         cy + 6.0,
         36.0,
         WHITE,
     );
     text_center(
-        "Click to try again",
+        "Click to pick a route",
         cy + 100.0,
+        30.0,
+        Color::new(1.0, 0.85, 0.4, 1.0),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shown when every wave on a route has been survived.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_victory(route: &str, total_waves: u32, lives: u32) {
+    let cy = screen_height() * 0.42;
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.10, 0.03, 0.58),
+    );
+
+    text_center("ROUTE CLEARED", cy - 60.0, 72.0, Color::new(0.72, 1.0, 0.72, 1.0));
+    text_center(
+        &format!("{route} survived, all {total_waves} waves"),
+        cy + 6.0,
+        34.0,
+        WHITE,
+    );
+    text_center(
+        &format!("{lives} lives remaining"),
+        cy + 48.0,
+        28.0,
+        Color::new(1.0, 1.0, 1.0, 0.75),
+    );
+    text_center(
+        "Click to pick another route",
+        cy + 118.0,
         30.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );

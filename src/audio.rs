@@ -28,6 +28,7 @@ const LEAK_VOLUME: f32 = 0.60;
 const WAVE_START_VOLUME: f32 = 0.50;
 const WAVE_CLEAR_VOLUME: f32 = 0.55;
 const GAME_OVER_VOLUME: f32 = 0.60;
+const VICTORY_VOLUME: f32 = 0.65;
 
 /// Most pop sounds allowed to start in a single frame. A Blender hitting a
 /// cluster can pop a dozen fruit at once; playing all of them is a mess.
@@ -61,6 +62,7 @@ pub struct Audio {
     wave_start: Sound,
     wave_clear: Sound,
     game_over: Sound,
+    victory: Sound,
     music_menu: Sound,
     music_game: Sound,
 
@@ -102,6 +104,7 @@ impl Audio {
             wave_start: decode(include_bytes!("../assets/wave_start.wav")).await,
             wave_clear: decode(include_bytes!("../assets/wave_clear.wav")).await,
             game_over: decode(include_bytes!("../assets/game_over.wav")).await,
+            victory: decode(include_bytes!("../assets/victory.wav")).await,
             music_menu: decode(include_bytes!("../assets/music_menu.wav")).await,
             music_game: decode(include_bytes!("../assets/music_game.wav")).await,
 
@@ -207,6 +210,10 @@ impl Audio {
 
     pub fn play_game_over(&self) {
         self.sfx(&self.game_over, GAME_OVER_VOLUME);
+    }
+
+    pub fn play_victory(&self) {
+        self.sfx(&self.victory, VICTORY_VOLUME);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

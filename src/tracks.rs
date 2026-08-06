@@ -21,6 +21,9 @@ pub struct TrackDef {
     /// Short note on how the route plays, shown on the selection card.
     pub blurb: &'static str,
     pub difficulty: &'static str,
+    /// How many waves must be survived to clear this route. Harder routes run
+    /// shorter, so they're a sharper challenge rather than simply a longer one.
+    pub waves: u32,
     /// Waypoints as (x, y) pairs so the table can be a plain const.
     pub points: &'static [(f32, f32)],
 }
@@ -34,9 +37,14 @@ impl TrackDef {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Total route length in pixels. Computed straight from the waypoints so the
-    // selection screen can show it every frame without allocating a Path.
+    // Total route length in pixels, computed straight from the waypoints.
+    //
+    // Test-only: the selection screen shows wave count instead, since that's
+    // what the player is actually choosing between. This stays because the
+    // route table's difficulty labels are asserted against it — a route
+    // labelled Hard must really be the shortest.
     // ─────────────────────────────────────────────────────────────────────────
+    #[cfg(test)]
     pub fn length(&self) -> f32 {
         self.points
             .windows(2)
@@ -54,6 +62,7 @@ pub const TRACKS: [TrackDef; 4] = [
         name: "Orchard Snake",
         blurb: "a steady weave",
         difficulty: "Medium",
+        waves: 20,
         points: &[
             (-40.0, 150.0),
             (260.0, 150.0),
@@ -71,6 +80,7 @@ pub const TRACKS: [TrackDef; 4] = [
         name: "Market Run",
         blurb: "short and direct",
         difficulty: "Hard",
+        waves: 15,
         points: &[
             (-40.0, 340.0),
             (300.0, 340.0),
@@ -84,6 +94,7 @@ pub const TRACKS: [TrackDef; 4] = [
         name: "The Long Orchard",
         blurb: "plenty of time to shoot",
         difficulty: "Gentle",
+        waves: 25,
         points: &[
             (-40.0, 120.0),
             (180.0, 120.0),
@@ -105,6 +116,7 @@ pub const TRACKS: [TrackDef; 4] = [
         name: "Zigzag Grove",
         blurb: "tight lanes, wide cover",
         difficulty: "Medium",
+        waves: 20,
         points: &[
             (-40.0, 180.0),
             (150.0, 180.0),
@@ -209,6 +221,32 @@ mod tests {
                 "{} is longer than Gentle",
                 t.name
             );
+        }
+    }
+
+    #[test]
+    fn every_route_runs_long_enough_to_reach_the_top_fruit_tier() {
+        // A new tier unlocks every third wave, so watermelons first appear on
+        // wave 13. A route shorter than that could never show them.
+        for t in &TRACKS {
+            assert!(
+                t.waves >= 13,
+                "{} ends at wave {}, before watermelons appear",
+                t.name,
+                t.waves
+            );
+            assert!(t.waves <= 40, "{} would outstay its welcome", t.name);
+        }
+    }
+
+    #[test]
+    fn harder_routes_are_shorter_runs() {
+        let hard = TRACKS.iter().find(|t| t.difficulty == "Hard").unwrap();
+        let gentle = TRACKS.iter().find(|t| t.difficulty == "Gentle").unwrap();
+
+        for t in &TRACKS {
+            assert!(hard.waves <= t.waves, "{} is shorter than Hard", t.name);
+            assert!(gentle.waves >= t.waves, "{} is longer than Gentle", t.name);
         }
     }
 

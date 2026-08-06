@@ -64,6 +64,8 @@ enum State {
     TrackSelect,
     Playing,
     GameOver,
+    /// Every wave on the route survived.
+    Victory,
 }
 
 /// The whole game world.
@@ -173,9 +175,9 @@ impl Game {
         }
 
         match self.state {
-            // Both of these lead into route selection rather than straight into
-            // a run, so a fresh route can be picked after being overrun.
-            State::Menu | State::GameOver => {
+            // These all lead into route selection rather than straight into a
+            // run, so a fresh route can be picked after finishing one.
+            State::Menu | State::GameOver | State::Victory => {
                 if is_mouse_button_pressed(MouseButton::Left) || is_key_pressed(KeyCode::Space) {
                     self.state = State::TrackSelect;
                 }
@@ -726,12 +728,30 @@ impl Game {
     // A wave ends once the queue is drained and the field is clear of fruit.
     // ─────────────────────────────────────────────────────────────────────────
     fn check_wave_complete(&mut self) {
-        if self.wave_active && self.queue.is_empty() && self.fruits.is_empty() {
-            self.cash += wave::clear_bonus(self.wave);
-            self.wave += 1;
-            self.wave_active = false;
-            self.audio.play_wave_clear();
+        if !(self.wave_active && self.queue.is_empty() && self.fruits.is_empty()) {
+            return;
         }
+
+        self.cash += wave::clear_bonus(self.wave);
+        self.wave_active = false;
+
+        // That was the final wave, so the route is cleared.
+        if self.wave >= self.total_waves() {
+            self.state = State::Victory;
+            self.audio.play_victory();
+            self.audio.play_music(Track::Menu);
+            return;
+        }
+
+        self.wave += 1;
+        self.audio.play_wave_clear();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How many waves the current route runs for.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn total_waves(&self) -> u32 {
+        tracks::TRACKS[self.track].waves
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -775,12 +795,18 @@ impl Game {
         match self.state {
             State::Menu => render::draw_menu(),
             State::TrackSelect => render::draw_track_select(),
-            State::GameOver => render::draw_game_over(self.wave),
+            State::GameOver => render::draw_game_over(self.wave, self.total_waves()),
+            State::Victory => render::draw_victory(
+                tracks::TRACKS[self.track].name,
+                self.total_waves(),
+                self.lives,
+            ),
             State::Playing => {
                 render::draw_hud(
                     self.lives,
                     self.cash,
                     self.wave,
+                    self.total_waves(),
                     self.wave_active,
                     self.audio.muted(),
                 );
@@ -940,6 +966,17 @@ async fn main() {
         match std::env::var("FRUITSPLAT_SCREEN").as_deref() {
             Ok("select") => game.state = State::TrackSelect,
             Ok("menu") => game.state = State::Menu,
+            Ok("victory") => {
+                game.stage_art_demo();
+                game.wave = game.total_waves();
+                game.lives = 14;
+                game.state = State::Victory;
+            }
+            Ok("over") => {
+                game.stage_art_demo();
+                game.wave = 7;
+                game.state = State::GameOver;
+            }
             _ => game.stage_art_demo(),
         }
     }

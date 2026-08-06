@@ -286,6 +286,23 @@ def make_spikes():
     return normalize(out, 0.52)
 
 
+def make_victory():
+    """A rising fanfare for clearing a whole route: a major triad walked up,
+    then the octave held with a sparkle over it."""
+    n = int(2.2 * SR)
+    out = [0.0] * n
+
+    for i, f in enumerate((523.25, 659.25, 783.99, 1046.5)):
+        tone(out, f, 0.55, vol=0.34, kind="tri", decay=5.0, offset=i * 0.16)
+        tone(out, f * 0.5, 0.55, vol=0.16, kind="sine", decay=4.5, offset=i * 0.16)
+
+    # Held final chord.
+    for f in (523.25, 659.25, 783.99, 1046.5):
+        tone(out, f, 1.1, vol=0.20, kind="tri", decay=2.2, offset=0.72)
+    tone(out, 2093.0, 0.9, vol=0.10, kind="sine", decay=3.0, offset=0.86)
+    return normalize(out, 0.80)
+
+
 def make_game_over():
     """A descending minor figure for being overrun."""
     n = int(1.8 * SR)
@@ -325,6 +342,7 @@ def main():
     # one shared seeded stream, so inserting a call earlier shifts the random
     # numbers every later sound gets and silently rewrites unrelated .wav files.
     write_wav("spikes.wav", make_spikes())
+    write_wav("victory.wav", make_victory())
     print("Done.")
 
 
