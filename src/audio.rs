@@ -17,6 +17,7 @@ const MUSIC_VOLUME: f32 = 0.35;
 const POP_VOLUME: f32 = 0.55;
 const SHOOT_VOLUME: f32 = 0.22;
 const KNIFE_VOLUME: f32 = 0.26;
+const SPIKES_VOLUME: f32 = 0.34;
 const SPLASH_VOLUME: f32 = 0.50;
 const FREEZE_VOLUME: f32 = 0.35;
 const PLACE_VOLUME: f32 = 0.50;
@@ -49,6 +50,7 @@ pub struct Audio {
     pops: Vec<Sound>,
     shoot: Sound,
     knife: Sound,
+    spikes: Sound,
     splash: Sound,
     freeze: Sound,
     place: Sound,
@@ -89,6 +91,7 @@ impl Audio {
             pops,
             shoot: decode(include_bytes!("../assets/shoot.wav")).await,
             knife: decode(include_bytes!("../assets/knife.wav")).await,
+            spikes: decode(include_bytes!("../assets/spikes.wav")).await,
             splash: decode(include_bytes!("../assets/splash.wav")).await,
             freeze: decode(include_bytes!("../assets/freeze.wav")).await,
             place: decode(include_bytes!("../assets/place.wav")).await,
@@ -160,6 +163,10 @@ impl Audio {
         }
         self.knife_cooldown = SHOOT_MIN_GAP;
         self.sfx(&self.knife, KNIFE_VOLUME);
+    }
+
+    pub fn play_spikes(&self) {
+        self.sfx(&self.spikes, SPIKES_VOLUME);
     }
 
     pub fn play_splash(&self) {

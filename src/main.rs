@@ -9,6 +9,7 @@
 // =============================================================================
 
 use macroquad::prelude::*;
+use macroquad::rand::gen_range;
 
 mod audio;
 mod fruit;
@@ -24,7 +25,9 @@ use audio::{Audio, Track};
 use fruit::{Fruit, FruitKind, Splat};
 use path::Path;
 use projectile::{Projectile, ProjectileKind};
-use tower::{Pulse, Tower, TowerKind, PATH_CLEARANCE, TOWER_RADIUS};
+use tower::{
+    Pulse, SpikePile, Tower, TowerKind, PATH_CLEARANCE, SPIKE_SPACING, TOWER_RADIUS,
+};
 
 /// Height of the playable field; the shop bar occupies the strip below it.
 pub const PLAYFIELD_H: f32 = 650.0;
@@ -72,6 +75,8 @@ struct Game {
     projectiles: Vec<Projectile>,
     splats: Vec<Splat>,
     pulses: Vec<Pulse>,
+    /// Spike piles sitting on the track, dropped by Spike Layers.
+    spikes: Vec<SpikePile>,
     /// Fruit still waiting to enter the track this wave.
     queue: Vec<FruitKind>,
     spawn_timer: f32,
@@ -111,6 +116,7 @@ impl Game {
             projectiles: Vec::new(),
             splats: Vec::new(),
             pulses: Vec::new(),
+            spikes: Vec::new(),
             queue: Vec::new(),
             spawn_timer: 0.0,
             wave: 1,
@@ -141,6 +147,7 @@ impl Game {
         self.projectiles.clear();
         self.splats.clear();
         self.pulses.clear();
+        self.spikes.clear();
         self.queue.clear();
         self.spawn_timer = 0.0;
         self.wave = 1;
@@ -218,6 +225,7 @@ impl Game {
 
         self.update_towers(dt);
         self.update_projectiles(dt);
+        self.update_spikes();
         self.update_effects(dt);
 
         self.check_wave_complete();
@@ -233,9 +241,15 @@ impl Game {
     // Hotkeys, tower selection, placement, and sending the next wave.
     // ─────────────────────────────────────────────────────────────────────────
     fn handle_input(&mut self) {
-        for (i, key) in [KeyCode::Key1, KeyCode::Key2, KeyCode::Key3, KeyCode::Key4]
-            .iter()
-            .enumerate()
+        for (i, key) in [
+            KeyCode::Key1,
+            KeyCode::Key2,
+            KeyCode::Key3,
+            KeyCode::Key4,
+            KeyCode::Key5,
+        ]
+        .iter()
+        .enumerate()
         {
             if is_key_pressed(*key) {
                 self.toggle_selection(TowerKind::ALL[i]);
@@ -328,6 +342,12 @@ impl Game {
     // ─────────────────────────────────────────────────────────────────────────
     fn sell_selected(&mut self) {
         let Some(i) = self.selected_tower else { return };
+
+        // A sold tower takes its spikes with it, which keeps the pile count
+        // bounded — otherwise repeatedly building and selling Spike Layers
+        // would litter the track with orphans nothing ever cleans up.
+        let id = self.towers[i].id;
+        self.spikes.retain(|s| s.owner != id);
 
         self.cash += self.towers[i].sell_value();
         self.towers.remove(i);
@@ -463,6 +483,32 @@ impl Game {
             }
 
             let range = t.range();
+
+            if t.kind == TowerKind::SpikeLayer {
+                // Hold off once this tower's allowance of piles is already out
+                // on the track; the cooldown isn't spent, so it drops again as
+                // soon as one is chewed through.
+                let live = self.spikes.iter().filter(|s| s.owner == t.id).count() as u32;
+                if live >= t.max_piles() {
+                    continue;
+                }
+
+                if let Some((dist, pos)) =
+                    pick_spike_spot(&self.path, t.pos, range, &self.spikes)
+                {
+                    self.spikes.push(SpikePile::new(
+                        pos,
+                        dist,
+                        t.spike_charges(),
+                        t.id,
+                        gen_range(0.0, 360.0),
+                    ));
+                    t.cooldown = t.fire_cooldown();
+                    t.shots_fired += 1;
+                    self.audio.play_spikes();
+                }
+                continue;
+            }
 
             if t.kind == TowerKind::Freezer {
                 let (factor, duration) = (t.slow_factor(), t.freeze_duration());
@@ -637,6 +683,33 @@ impl Game {
         self.selected_tower.and_then(|i| self.towers.get(i))
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Run fruit over any spike piles they're standing on. A pile pops one fruit
+    // per charge and vanishes once it's used up.
+    //
+    // Children of a popped fruit spawn at the same point on the track, so they
+    // land on the same pile and get chewed through too — bounded by charges,
+    // which is what makes a Spike Layer good against splits.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn update_spikes(&mut self) {
+        let mut pops: Vec<(usize, u32)> = Vec::new();
+
+        for pile in &mut self.spikes {
+            for (i, f) in self.fruits.iter().enumerate() {
+                if pile.spent() {
+                    break;
+                }
+                if pile.covers(f.dist, f.radius()) {
+                    pile.charges -= 1;
+                    pops.push((i, pile.owner));
+                }
+            }
+        }
+
+        self.spikes.retain(|p| !p.spent());
+        self.apply_pops(pops);
+    }
+
     fn update_effects(&mut self, dt: f32) {
         for s in &mut self.splats {
             s.update(dt);
@@ -674,6 +747,8 @@ impl Game {
             // route the fruit are walking.
             render::draw_scenery(&self.props, &self.palette);
             render::draw_path(&self.path, &self.palette);
+            // Spikes lie on the track, under everything that moves over them.
+            render::draw_spikes(&self.spikes);
 
             // Range footprint of the inspected tower sits under the towers.
             if let Some(t) = self.inspected_tower() {
@@ -729,6 +804,40 @@ impl Game {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Pick where a Spike Layer should drop its next pile.
+//
+// Walks the route looking for points inside the tower's range that aren't
+// already too close to an existing pile, and takes the one furthest along.
+// Dropping at the far edge of coverage first, then working backwards as those
+// spots fill, spreads a tower's piles across its whole stretch of track.
+// ─────────────────────────────────────────────────────────────────────────────
+fn pick_spike_spot(
+    path: &Path,
+    tower: Vec2,
+    range: f32,
+    existing: &[SpikePile],
+) -> Option<(f32, Vec2)> {
+    const STEP: f32 = 12.0;
+
+    let mut best: Option<(f32, Vec2)> = None;
+    let mut d = 0.0;
+
+    while d <= path.total() {
+        let p = path.point_at(d);
+        if p.distance(tower) <= range
+            && existing
+                .iter()
+                .all(|s| (s.dist - d).abs() >= SPIKE_SPACING)
+        {
+            best = Some((d, p));
+        }
+        d += STEP;
+    }
+
+    best
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Current mouse position as a Vec2.
 // ─────────────────────────────────────────────────────────────────────────────
 fn mouse_vec() -> Vec2 {
@@ -760,12 +869,15 @@ impl Game {
         self.start_run(track);
         self.cash = 500;
 
+        // One position per tower kind — must stay the same length as ALL.
         let spots = [
             vec2(185.0, 245.0),
             vec2(395.0, 415.0),
             vec2(640.0, 375.0),
             vec2(880.0, 430.0),
+            vec2(330.0, 250.0),
         ];
+        assert_eq!(spots.len(), TowerKind::ALL.len());
         for (i, kind) in TowerKind::ALL.iter().enumerate() {
             let mut t = Tower::new(*kind, spots[i], self.next_tower_id);
             // Spread the levels so the pips and upgraded stats are visible.
@@ -787,10 +899,25 @@ impl Game {
         // Chill one so the frost treatment shows up too.
         self.fruits[2].chill(0.35, 5.0);
 
+        // Spike piles at varying wear, since a tower would only have managed
+        // one drop in the handful of frames before the capture.
+        for (i, charges) in [9u32, 5, 2].iter().enumerate() {
+            let dist = 520.0 + i as f32 * 240.0;
+            self.spikes.push(SpikePile::new(
+                self.path.point_at(dist),
+                dist,
+                *charges,
+                0,
+                i as f32 * 37.0,
+            ));
+        }
+
         // The panel covers part of the board, so only open it when it's the
         // thing being reviewed.
+        // Selects the last tower placed, which is the most recently added kind
+        // and so usually the one being reviewed.
         if std::env::var("FRUITSPLAT_SCREEN").as_deref() == Ok("panel") {
-            self.selected_tower = Some(0);
+            self.selected_tower = Some(self.towers.len() - 1);
         }
     }
 }

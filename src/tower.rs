@@ -31,15 +31,17 @@ pub enum TowerKind {
     Blender,
     Freezer,
     KnifeThrower,
+    SpikeLayer,
 }
 
 impl TowerKind {
-    /// Shop order, also the order of the 1/2/3/4 hotkeys.
-    pub const ALL: [TowerKind; 4] = [
+    /// Shop order, also the order of the 1–5 hotkeys.
+    pub const ALL: [TowerKind; 5] = [
         TowerKind::SeedShooter,
         TowerKind::Blender,
         TowerKind::Freezer,
         TowerKind::KnifeThrower,
+        TowerKind::SpikeLayer,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -48,6 +50,21 @@ impl TowerKind {
             TowerKind::Blender => "Blender",
             TowerKind::Freezer => "Freezer",
             TowerKind::KnifeThrower => "Knife Thrower",
+            TowerKind::SpikeLayer => "Spike Layer",
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Abbreviated name for the shop buttons, which are too narrow for the full
+    // ones now that there are five of them.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            TowerKind::SeedShooter => "Seeds",
+            TowerKind::Blender => "Blender",
+            TowerKind::Freezer => "Freezer",
+            TowerKind::KnifeThrower => "Knives",
+            TowerKind::SpikeLayer => "Spikes",
         }
     }
 
@@ -58,6 +75,7 @@ impl TowerKind {
             TowerKind::Blender => 170,
             TowerKind::Freezer => 140,
             TowerKind::KnifeThrower => 130,
+            TowerKind::SpikeLayer => 150,
         }
     }
 
@@ -70,6 +88,7 @@ impl TowerKind {
             TowerKind::Blender => [120, 240],
             TowerKind::Freezer => [100, 200],
             TowerKind::KnifeThrower => [110, 220],
+            TowerKind::SpikeLayer => [130, 260],
         };
         match level {
             1 => Some(costs[0]),
@@ -91,6 +110,8 @@ impl TowerKind {
             (TowerKind::Freezer, 2) => "deepest chill, longer",
             (TowerKind::KnifeThrower, 1) => "more pierce, faster",
             (TowerKind::KnifeThrower, 2) => "deepest pierce",
+            (TowerKind::SpikeLayer, 1) => "bigger piles, faster",
+            (TowerKind::SpikeLayer, 2) => "biggest piles",
             _ => "fully upgraded",
         }
     }
@@ -102,6 +123,7 @@ impl TowerKind {
             TowerKind::Blender => [110.0, 128.0, 148.0],
             TowerKind::Freezer => [120.0, 142.0, 165.0],
             TowerKind::KnifeThrower => [145.0, 165.0, 185.0],
+            TowerKind::SpikeLayer => [120.0, 138.0, 158.0],
         };
         table[level_index(level)]
     }
@@ -113,8 +135,32 @@ impl TowerKind {
             TowerKind::Blender => [1.10, 0.88, 0.70],
             TowerKind::Freezer => [1.40, 1.15, 0.95],
             TowerKind::KnifeThrower => [0.75, 0.60, 0.46],
+            // For the Spike Layer this is the gap between dropping piles.
+            TowerKind::SpikeLayer => [2.20, 1.70, 1.30],
         };
         table[level_index(level)]
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How many fruit one dropped pile of spikes can pop before it's used up.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn spike_charges(&self, level: u8) -> u32 {
+        match self {
+            TowerKind::SpikeLayer => [4, 6, 9][level_index(level)],
+            _ => 0,
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // How many of its piles may be on the track at once. This is the real
+    // limiter on the Spike Layer: without it, a tower left alone between waves
+    // would carpet the whole route.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn max_piles(&self, level: u8) -> u32 {
+        match self {
+            TowerKind::SpikeLayer => [3, 4, 5][level_index(level)],
+            _ => 0,
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -170,16 +216,19 @@ impl TowerKind {
             TowerKind::Blender => Color::new(0.62, 0.66, 0.72, 1.0),
             TowerKind::Freezer => Color::new(0.55, 0.80, 0.90, 1.0),
             TowerKind::KnifeThrower => Color::new(0.42, 0.47, 0.60, 1.0),
+            TowerKind::SpikeLayer => Color::new(0.60, 0.34, 0.28, 1.0),
         }
     }
 
-    /// Very short role summary for the shop button, which is narrow.
+    /// Very short role summary for the shop button, which is narrow. Kept to a
+    /// single word so the cost and blurb fit on one line at five buttons wide.
     pub fn blurb(&self) -> &'static str {
         match self {
-            TowerKind::SeedShooter => "single target",
+            TowerKind::SeedShooter => "single",
             TowerKind::Blender => "splash",
             TowerKind::Freezer => "slows",
             TowerKind::KnifeThrower => "pierces",
+            TowerKind::SpikeLayer => "spikes",
         }
     }
 }
@@ -251,6 +300,14 @@ impl Tower {
         self.kind.pierce(self.level)
     }
 
+    pub fn spike_charges(&self) -> u32 {
+        self.kind.spike_charges(self.level)
+    }
+
+    pub fn max_piles(&self) -> u32 {
+        self.kind.max_piles(self.level)
+    }
+
     pub fn slow_factor(&self) -> f32 {
         self.kind.slow_factor(self.level)
     }
@@ -291,6 +348,52 @@ impl Tower {
     // ─────────────────────────────────────────────────────────────────────────
     pub fn sell_value(&self) -> u32 {
         (self.invested as f32 * SELL_REFUND) as u32
+    }
+}
+
+/// Collision half-width of a spike pile, measured along the track.
+pub const SPIKE_RADIUS: f32 = 14.0;
+/// Minimum gap along the track between two piles, so a tower spreads its
+/// spikes out instead of stacking them all on one spot.
+pub const SPIKE_SPACING: f32 = 34.0;
+
+/// A pile of spikes sitting on the track.
+///
+/// `dist` is the position *along the route*, not a world coordinate, and that's
+/// what fruit are tested against. Using euclidean distance would let a pile pop
+/// fruit in a neighbouring lane on the switchback routes, where two stretches
+/// of track run within a few dozen pixels of each other.
+pub struct SpikePile {
+    pub pos: Vec2,
+    pub dist: f32,
+    /// Remaining pops. The number of spikes drawn tracks this, so a worn pile
+    /// is visibly running down without needing to store its original size.
+    pub charges: u32,
+    /// Stable id of the Spike Layer that dropped this, for kill credit.
+    pub owner: u32,
+    pub rot: f32,
+}
+
+impl SpikePile {
+    pub fn new(pos: Vec2, dist: f32, charges: u32, owner: u32, rot: f32) -> Self {
+        SpikePile {
+            pos,
+            dist,
+            charges,
+            owner,
+            rot,
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Is a fruit at `fruit_dist` with radius `radius` standing on this pile?
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn covers(&self, fruit_dist: f32, radius: f32) -> bool {
+        (fruit_dist - self.dist).abs() <= radius + SPIKE_RADIUS
+    }
+
+    pub fn spent(&self) -> bool {
+        self.charges == 0
     }
 }
 
@@ -354,8 +457,55 @@ mod tests {
                 assert!(kind.slow_factor(hi) <= kind.slow_factor(lo));
                 assert!(kind.freeze_duration(hi) >= kind.freeze_duration(lo));
                 assert!(kind.pierce(hi) >= kind.pierce(lo), "pierce regressed");
+                assert!(
+                    kind.spike_charges(hi) >= kind.spike_charges(lo),
+                    "spike charges regressed"
+                );
+                assert!(
+                    kind.max_piles(hi) >= kind.max_piles(lo),
+                    "pile allowance regressed"
+                );
             }
         }
+    }
+
+    #[test]
+    fn only_the_spike_layer_lays_spikes() {
+        for level in 1..=MAX_LEVEL {
+            assert!(TowerKind::SpikeLayer.spike_charges(level) > 0);
+            assert!(TowerKind::SpikeLayer.max_piles(level) > 0);
+            for kind in [
+                TowerKind::SeedShooter,
+                TowerKind::Blender,
+                TowerKind::Freezer,
+                TowerKind::KnifeThrower,
+            ] {
+                assert_eq!(kind.spike_charges(level), 0);
+                assert_eq!(kind.max_piles(level), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_pile_only_covers_fruit_near_it_along_the_track() {
+        let pile = SpikePile::new(Vec2::ZERO, 500.0, 4, 0, 0.0);
+
+        assert!(pile.covers(500.0, 10.0), "fruit on the pile missed it");
+        assert!(pile.covers(500.0 + SPIKE_RADIUS + 9.0, 10.0), "edge case missed");
+        // Far along the route, even though a switchback could put this fruit
+        // physically close to the pile.
+        assert!(!pile.covers(700.0, 10.0), "pile reached down the track");
+        assert!(!pile.covers(300.0, 10.0));
+    }
+
+    #[test]
+    fn a_pile_is_spent_only_once_its_charges_run_out() {
+        let mut pile = SpikePile::new(Vec2::ZERO, 0.0, 2, 0, 0.0);
+        assert!(!pile.spent());
+        pile.charges -= 1;
+        assert!(!pile.spent());
+        pile.charges -= 1;
+        assert!(pile.spent());
     }
 
     #[test]

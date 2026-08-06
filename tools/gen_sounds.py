@@ -271,6 +271,21 @@ def make_sell():
     return normalize(out, 0.60)
 
 
+def make_spikes():
+    """Metallic scatter of caltrops hitting the dirt."""
+    n = int(0.26 * SR)
+    out = [0.0] * n
+
+    # Several short metallic ticks at slightly different times and pitches.
+    for i, (freq, at) in enumerate(((2600.0, 0.0), (1900.0, 0.035), (3100.0, 0.07))):
+        tone(out, freq, 0.08, vol=0.22, kind="tri", decay=50.0, sweep=0.7, offset=at)
+
+    grit = highpass(noise(n), 2400.0)
+    for i in range(n):
+        out[i] += grit[i] * math.exp(-(i / SR) * 22.0) * 0.35
+    return normalize(out, 0.52)
+
+
 def make_game_over():
     """A descending minor figure for being overrun."""
     n = int(1.8 * SR)
@@ -305,6 +320,11 @@ def main():
     write_wav("wave_start.wav", make_wave_start())
     write_wav("wave_clear.wav", make_wave_clear())
     write_wav("game_over.wav", make_game_over())
+
+    # NOTE: new sounds go at the END of this list. Every generator draws from
+    # one shared seeded stream, so inserting a call earlier shifts the random
+    # numbers every later sound gets and silently rewrites unrelated .wav files.
+    write_wav("spikes.wav", make_spikes())
     print("Done.")
 
 

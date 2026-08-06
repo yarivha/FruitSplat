@@ -18,9 +18,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split ladder: popping a fruit bursts it into two of the next tier down.
   Watermelon → Orange → Lime → Strawberry → Blueberry, which does not split.
   Smaller tiers move faster, so an unhandled watermelon becomes a fast swarm.
-- Four towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
-  splash), Knife Thrower ($130, knives pierce 3 fruit), and Freezer ($140, no
-  damage, chills fruit in range to 45% speed).
+- Five towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
+  splash), Knife Thrower ($130, knives pierce 3 fruit), Spike Layer ($150,
+  spikes on the track), and Freezer ($140, no damage, chills fruit in range to
+  45% speed).
+- **Spike Layer** ($150), a fifth tower that doesn't shoot. It drops piles of
+  spikes onto the track itself; each pile pops one fruit per spike, then wears
+  away. Spikes never miss, so the limits are pile size and how many piles a
+  tower may keep on the track at once (3 at Lv1). Strong against splits, since
+  children spawn where their parent died — on top of the same pile.
+  - Piles are tested against fruit by **distance along the route**, not
+    euclidean distance. On the switchback routes two stretches of track run
+    within a few dozen pixels of each other, and a pile on one lane must not pop
+    fruit walking the other.
+  - Upgrades ($130, $260): 4 → 6 → 9 spikes per pile, 3 → 4 → 5 piles allowed,
+    and a faster drop rate.
+  - Selling a Spike Layer removes its piles, which keeps the total bounded —
+    otherwise repeatedly building and selling would litter the track with
+    orphans nothing cleans up.
+  - New piles go at the furthest covered point on the track and work backwards
+    as spots fill, so a tower spreads its spikes across its whole stretch.
+- Shop buttons now use abbreviated tower names, so five of them plus the hint
+  column still fit the window.
 - Pierce as a mechanic: a projectile carries a pierce budget and survives each
   hit until it runs out, instead of being consumed by the first fruit it
   touches. Only the Knife Thrower exceeds 1. Splash hits a blob of fruit around
@@ -42,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 51 unit tests covering path maths (corner traversal, end clamping,
+- 54 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, the slow
   effect and Freezer stacking, wave composition, tower upgrade monotonicity and
   sell values, validation that every authored route enters and exits off-screen

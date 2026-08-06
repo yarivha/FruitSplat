@@ -12,7 +12,7 @@ use crate::fruit::{Fruit, FruitKind, Splat};
 use crate::path::Path;
 use crate::projectile::{Projectile, ProjectileKind};
 use crate::scenery::{Palette, Prop, PropKind};
-use crate::tower::{Pulse, Tower, TowerKind, TOWER_RADIUS};
+use crate::tower::{Pulse, SpikePile, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
 use crate::PLAYFIELD_H;
 
@@ -23,11 +23,12 @@ const FIELD_BANDS: i32 = 40;
 const TRACK_OUTER: f32 = 44.0;
 const TRACK_INNER: f32 = 34.0;
 
-/// Shop bar layout. Sized so all four tower buttons plus the hint column fit
-/// across the window without wrapping.
-const BTN_W: f32 = 178.0;
+/// Shop bar layout. Sized so all five tower buttons plus the hint column fit
+/// across the window without wrapping — which is why the buttons use each
+/// tower's short name rather than its full one.
+const BTN_W: f32 = 150.0;
 const BTN_H: f32 = 62.0;
-const BTN_GAP: f32 = 12.0;
+const BTN_GAP: f32 = 10.0;
 const BTN_X0: f32 = 16.0;
 
 /// Floating tower-panel size.
@@ -634,6 +635,27 @@ fn draw_tower_body(kind: TowerKind, pos: Vec2, angle: f32, r: f32) {
             draw_circle(x - r * 0.08, y - r * 0.08, r * 0.13, WHITE);
         }
 
+        TowerKind::SpikeLayer => {
+            // A hopper of spikes: a dark drum with points poking out the top.
+            let iron = Color::new(0.42, 0.40, 0.42, 1.0);
+            draw_circle(x, y, r * 0.62, shade(iron, 0.78));
+            draw_circle(x - r * 0.06, y - r * 0.08, r * 0.48, iron);
+
+            for i in 0..5 {
+                let a = -std::f32::consts::FRAC_PI_2 + (i as f32 - 2.0) * 0.42;
+                let d = vec2(a.cos(), a.sin());
+                let p = vec2(-d.y, d.x);
+                let base = pos + d * r * 0.44;
+                draw_triangle(
+                    base + d * r * 0.62,
+                    base + p * r * 0.13,
+                    base - p * r * 0.13,
+                    Color::new(0.86, 0.86, 0.90, 1.0),
+                );
+            }
+            draw_circle(x - r * 0.10, y - r * 0.14, r * 0.16, tint(iron, 0.45));
+        }
+
         TowerKind::KnifeThrower => {
             // A blade cocked in the direction of the last target.
             let steel = Color::new(0.90, 0.92, 0.96, 1.0);
@@ -732,6 +754,38 @@ pub fn draw_ghost(pos: Vec2, kind: TowerKind, valid: bool) {
     let c = kind.color();
     draw_circle(pos.x, pos.y, TOWER_RADIUS, Color::new(c.r, c.g, c.b, 0.55));
     draw_circle_lines(pos.x, pos.y, TOWER_RADIUS, 2.0, tint);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw the spike piles sitting on the track. The number of visible spikes
+// tracks the remaining charges, so a pile is visibly wearing down.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_spikes(piles: &[SpikePile]) {
+    for pile in piles {
+        let c = pile.pos;
+        let base = pile.rot.to_radians();
+
+        // A scuffed patch of track under the caltrops.
+        draw_ellipse(c.x, c.y, 15.0, 11.0, 0.0, Color::new(0.0, 0.0, 0.0, 0.18));
+
+        let steel = Color::new(0.84, 0.85, 0.89, 1.0);
+        let spikes = pile.charges.min(9);
+        for i in 0..spikes {
+            let a = base + i as f32 * std::f32::consts::TAU / spikes.max(1) as f32;
+            let d = vec2(a.cos(), a.sin());
+            let p = vec2(-d.y, d.x);
+            let root = c + d * 2.5;
+
+            draw_triangle(
+                root + d * 9.5,
+                root + p * 2.8,
+                root - p * 2.8,
+                shade(steel, 0.75),
+            );
+            draw_triangle(root + d * 9.5, root + p * 2.8, root, steel);
+        }
+        draw_circle(c.x, c.y, 3.4, Color::new(0.36, 0.34, 0.36, 1.0));
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -902,7 +956,7 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
 
         let text_alpha = if affordable { 1.0 } else { 0.45 };
         draw_text(
-            format!("{}. {}", i + 1, kind.name()),
+            format!("{}. {}", i + 1, kind.short_name()),
             r.x + 44.0,
             r.y + 25.0,
             16.0,
@@ -912,16 +966,16 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
             format!("${}  {}", kind.cost(), kind.blurb()),
             r.x + 44.0,
             r.y + 46.0,
-            14.0,
+            13.0,
             Color::new(0.85, 0.85, 0.9, text_alpha),
         );
     }
 
     let dim = Color::new(0.70, 0.70, 0.78, 1.0);
     let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
-    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 16.0, dim);
-    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 16.0, dim);
-    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 16.0, dim);
+    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 14.0, dim);
+    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 14.0, dim);
+    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 14.0, dim);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1013,6 +1067,12 @@ fn draw_tower_stats(t: &Tower, panel: Rect) {
             ("Range", format!("{:.0}", t.range())),
             ("Pierce", t.pierce().to_string()),
             ("Knives", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
+        TowerKind::SpikeLayer => [
+            ("Spikes/pile", t.spike_charges().to_string()),
+            ("Max piles", t.max_piles().to_string()),
+            ("Dropped", t.shots_fired.to_string()),
             ("Kills", t.kills.to_string()),
         ],
         TowerKind::SeedShooter => [
@@ -1394,9 +1454,9 @@ mod tests {
             hint_x >= last.x + last.w,
             "hint text overlaps the last shop button"
         );
-        // Leave enough width for the longest hint string.
+        // Leave enough width for the longest hint string at its font size.
         assert!(
-            hint_x <= WINDOW_W - 190.0,
+            hint_x <= WINDOW_W - 176.0,
             "no room left for the hint column"
         );
     }

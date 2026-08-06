@@ -17,7 +17,7 @@ cargo run --release
 | Input | Action |
 |---|---|
 | `1`–`4` on the route screen | Pick a route |
-| `1`–`4` in play | Arm a tower type |
+| `1`–`5` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
 | Left click a placed tower | Open its stats panel (nothing armed) |
@@ -58,12 +58,24 @@ underneath the track so foliage can't obscure the route.
 | Seed Shooter | $90 | 135 px | 0.45s | Single target, cheap sustained damage |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
+| Spike Layer | $150 | 120 px | 2.20s | Drops spike piles onto the track itself |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
 
 The Blender and the Knife Thrower both beat crowds, but differently: splash hits
 a **blob** of fruit around one point, while pierce hits a **line** of them along
 the shot's path. That makes the Knife Thrower strongest on the switchback
 routes, where fruit queue up single file down a lane.
+
+The Spike Layer is the odd one out — it doesn't shoot. It drops piles of spikes
+directly onto the track, and each pile pops one fruit per spike before it wears
+away. Spikes never miss, so the limits are the pile size and how many piles a
+tower may have out at once (3 at Lv1). It's especially good against splits:
+children spawn where their parent died, right on top of the same pile.
+
+A pile is tested against fruit by **distance along the route**, not by how close
+it is in pixels. On the switchback routes two stretches of track run within a
+few dozen pixels of each other, and a pile on one lane must not pop fruit
+walking the other.
 
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
 along the track. Shots travel in a straight line and do not home, so fast fruit
@@ -80,6 +92,7 @@ what that specific tower has actually done:
 | Seed Shooter | Range, rate, shots fired, kills |
 | Blender | Range, splash, shots fired, kills |
 | Knife Thrower | Range, pierce, knives thrown, kills |
+| Spike Layer | Spikes per pile, max piles, piles dropped, kills |
 | Freezer | Range, chill strength, pulses, fruit chilled |
 
 Kills are credited to the tower whose shot landed, so a Blender's splash banks
@@ -94,6 +107,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 | Seed Shooter | $70 — faster, longer reach | $150 — twin shot, fires at the two lead fruit |
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
 | Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
+| Spike Layer | $130 — 6 spikes/pile, 4 piles, faster | $260 — 9 spikes/pile, 5 piles |
 | Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
 
 Overlapping Freezers stack by keeping the strongest chill and the longest
@@ -126,18 +140,24 @@ are embedded into the binary with `include_bytes!`, so the executable is
 standalone.
 
 ```sh
-python3 tools/gen_sounds.py   # 14 effects → assets/
+python3 tools/gen_sounds.py   # 18 effects → assets/
 python3 tools/gen_music.py    # 2 music loops → assets/
 ```
 
-Both scripts use a fixed random seed, so regenerating produces byte-identical
-files. The committed `assets/*.wav` are a build-time input only — nothing reads
-them at runtime.
+Both scripts use a fixed random seed, so regenerating reproduces the existing
+files byte for byte. The committed `assets/*.wav` are a build-time input only —
+nothing reads them at runtime.
+
+> **Adding a sound:** put its `write_wav` call at the **end** of `main()` in
+> `gen_sounds.py`. Every generator draws from one shared seeded stream, so
+> inserting a call earlier shifts the random numbers each later sound receives
+> and silently rewrites unrelated `.wav` files.
 
 Fruit pop at five different pitches, highest for blueberries down to lowest for
 watermelons. To keep a busy field readable, pops are capped at 3 per frame with
-each successive one 22% quieter, and the shoot sound is limited to one per 55ms
-across every tower.
+each successive one 22% quieter, and the firing sounds are rate-limited — seeds
+and knives on separate gates, so a row of Seed Shooters can't silence every
+Knife Thrower.
 
 ## Layout
 
@@ -146,9 +166,10 @@ across every tower.
 | `src/main.rs` | Window config, game state, frame loop, economy |
 | `src/path.rs` | Track polyline, distance lookup, placement clearance |
 | `src/fruit.rs` | Fruit tiers, the split ladder, splat particles |
-| `src/tower.rs` | Tower stats and the Freezer pulse effect |
-| `src/projectile.rs` | Shots in flight and their splash radii |
+| `src/tower.rs` | Tower stats, spike piles, the Freezer pulse effect |
+| `src/projectile.rs` | Shots in flight, their splash radii and pierce |
 | `src/tracks.rs` | The four selectable routes |
+| `src/scenery.rs` | Per-route palettes and decorative prop layout |
 | `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |
 | `src/audio.rs` | Clip loading, playback, throttling, mute |
