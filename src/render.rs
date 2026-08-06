@@ -12,6 +12,7 @@ use crate::fruit::{Fruit, FruitKind, Splat};
 use crate::path::Path;
 use crate::projectile::Projectile;
 use crate::tower::{Pulse, Tower, TowerKind, TOWER_RADIUS};
+use crate::tracks::TRACKS;
 use crate::PLAYFIELD_H;
 
 /// Grass colours for the vertical gradient behind the track.
@@ -29,6 +30,15 @@ const BTN_W: f32 = 210.0;
 const BTN_H: f32 = 62.0;
 const BTN_GAP: f32 = 16.0;
 const BTN_X0: f32 = 24.0;
+
+/// Route-selection card layout.
+const CARD_W: f32 = 220.0;
+const CARD_H: f32 = 210.0;
+const CARD_GAP: f32 = 16.0;
+const CARD_Y: f32 = 296.0;
+/// The coordinate space routes are authored in, used to scale the previews.
+const AUTHOR_W: f32 = 1000.0;
+const AUTHOR_H: f32 = 650.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Paint the grass gradient behind the whole playfield.
@@ -562,6 +572,159 @@ pub fn draw_menu() {
         32.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of route card `i`, so main.rs can hit-test clicks against the same
+// layout this file draws.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn track_card_rect(i: usize) -> Rect {
+    let n = TRACKS.len() as f32;
+    let total = n * CARD_W + (n - 1.0) * CARD_GAP;
+    let x0 = (screen_width() - total) * 0.5;
+
+    Rect::new(x0 + i as f32 * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Route selection screen: one card per track, each showing a scaled preview of
+// the actual polyline the fruit will walk.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_track_select() {
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, 0.62),
+    );
+
+    text_center("CHOOSE YOUR ROUTE", 150.0, 62.0, WHITE);
+    text_center(
+        "Longer routes give your towers more time to shoot",
+        200.0,
+        26.0,
+        Color::new(1.0, 1.0, 1.0, 0.7),
+    );
+
+    let mouse = {
+        let (x, y) = mouse_position();
+        vec2(x, y)
+    };
+
+    for (i, track) in TRACKS.iter().enumerate() {
+        let r = track_card_rect(i);
+        let hovered = r.contains(mouse);
+
+        let bg = if hovered {
+            Color::new(0.24, 0.28, 0.24, 1.0)
+        } else {
+            Color::new(0.16, 0.17, 0.21, 1.0)
+        };
+        draw_rectangle(r.x, r.y, r.w, r.h, bg);
+        draw_rectangle_lines(
+            r.x,
+            r.y,
+            r.w,
+            r.h,
+            if hovered { 3.0 } else { 1.5 },
+            if hovered {
+                Color::new(0.7, 1.0, 0.7, 1.0)
+            } else {
+                Color::new(0.4, 0.4, 0.48, 1.0)
+            },
+        );
+
+        draw_text(
+            &format!("{}. {}", i + 1, track.name),
+            r.x + 12.0,
+            r.y + 26.0,
+            21.0,
+            WHITE,
+        );
+
+        draw_track_preview(track.points, r);
+
+        draw_text(
+            track.difficulty,
+            r.x + 12.0,
+            r.y + 190.0,
+            19.0,
+            difficulty_color(track.difficulty),
+        );
+        let len_txt = format!("{} px", track.length() as i32);
+        let dims = measure_text(&len_txt, None, 17, 1.0);
+        draw_text(
+            &len_txt,
+            r.x + r.w - dims.width - 12.0,
+            r.y + 190.0,
+            17.0,
+            Color::new(0.75, 0.75, 0.82, 1.0),
+        );
+
+        draw_text(
+            track.blurb,
+            r.x + 12.0,
+            r.y + 168.0,
+            15.0,
+            Color::new(0.72, 0.72, 0.80, 1.0),
+        );
+    }
+
+    text_center(
+        "click a route, or press 1-4",
+        CARD_Y + CARD_H + 48.0,
+        26.0,
+        Color::new(1.0, 0.85, 0.4, 1.0),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw a route's polyline scaled down to fit inside a selection card.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_track_preview(points: &[(f32, f32)], card: Rect) {
+    let inner_x = card.x + 10.0;
+    let inner_y = card.y + 40.0;
+    let inner_w = card.w - 20.0;
+    let inner_h = 130.0;
+
+    draw_rectangle(
+        inner_x,
+        inner_y,
+        inner_w,
+        inner_h,
+        Color::new(0.30, 0.42, 0.28, 1.0),
+    );
+
+    // Uniform scale keeps the route's shape honest rather than stretching it.
+    let scale = (inner_w / AUTHOR_W).min(inner_h / AUTHOR_H);
+    let to_card = |p: (f32, f32)| vec2(inner_x + p.0 * scale, inner_y + p.1 * scale);
+
+    for w in points.windows(2) {
+        let (a, b) = (to_card(w[0]), to_card(w[1]));
+        draw_line(a.x, a.y, b.x, b.y, 5.0, Color::new(0.55, 0.43, 0.29, 1.0));
+    }
+    for &p in points {
+        let c = to_card(p);
+        draw_circle(c.x, c.y, 2.5, Color::new(0.55, 0.43, 0.29, 1.0));
+    }
+
+    // Mark the exit the player is defending.
+    if let Some(&last) = points.last() {
+        let e = to_card(last);
+        draw_circle(e.x, e.y, 5.0, Color::new(0.85, 0.25, 0.25, 0.9));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colour for a difficulty label.
+// ─────────────────────────────────────────────────────────────────────────────
+fn difficulty_color(difficulty: &str) -> Color {
+    match difficulty {
+        "Gentle" => Color::new(0.55, 0.95, 0.60, 1.0),
+        "Hard" => Color::new(1.0, 0.50, 0.45, 1.0),
+        _ => Color::new(1.0, 0.85, 0.45, 1.0),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

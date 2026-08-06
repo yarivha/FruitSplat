@@ -16,14 +16,32 @@ cargo run --release
 
 | Input | Action |
 |---|---|
-| `1` `2` `3` | Arm a tower type |
+| `1`–`4` on the route screen | Pick a route |
+| `1` `2` `3` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
-| Right click | Cancel placement |
+| Left click a placed tower | Inspect it (nothing armed) |
+| `U` | Upgrade the inspected tower |
+| `S` | Sell the inspected tower |
+| Right click | Cancel placement / deselect |
 | `Space` | Send the next wave |
 | `M` | Mute / unmute |
 
 Close the window to quit.
+
+## Routes
+
+Each run starts by picking one of four routes. Length is the main difficulty
+dial — a longer route means more seconds under fire before a fruit reaches the
+exit. Turn count matters too: tight switchbacks let one tower cover several
+lanes at once.
+
+| Route | Difficulty | Length | Character |
+|---|---|---|---|
+| Market Run | Hard | 1500 px | Short and direct |
+| Orchard Snake | Medium | 2370 px | A steady weave |
+| Zigzag Grove | Medium | 2780 px | Tight lanes, one tower covers two |
+| The Long Orchard | Gentle | 2870 px | Plenty of time to shoot |
 
 ## Towers
 
@@ -36,6 +54,21 @@ Close the window to quit.
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
 along the track. Shots travel in a straight line and do not home, so fast fruit
 can be missed.
+
+### Upgrades
+
+Click a placed tower with nothing armed to inspect it, then `U` to upgrade or
+`S` to sell. Every tower runs Lv1 → Lv3 along one track, and selling refunds
+**60%** of everything invested, upgrades included.
+
+| Tower | Lv2 | Lv3 |
+|---|---|---|
+| Seed Shooter | $70 — faster, longer reach | $150 — twin shot, fires at the two lead fruit |
+| Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
+| Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
+
+Overlapping Freezers stack by keeping the strongest chill and the longest
+remaining duration.
 
 ## Fruit
 
@@ -86,6 +119,7 @@ across every tower.
 | `src/fruit.rs` | Fruit tiers, the split ladder, splat particles |
 | `src/tower.rs` | Tower stats and the Freezer pulse effect |
 | `src/projectile.rs` | Shots in flight and their splash radii |
+| `src/tracks.rs` | The four selectable routes |
 | `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |
 | `src/audio.rs` | Clip loading, playback, throttling, mute |

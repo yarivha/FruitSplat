@@ -32,9 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 19 unit tests covering path maths (corner traversal, end clamping,
-  perpendicular distance, zero-length segments), the split ladder, slow effect,
-  and wave composition.
+- 34 unit tests covering path maths (corner traversal, end clamping,
+  perpendicular distance, zero-length segments), the split ladder, the slow
+  effect and Freezer stacking, wave composition, tower upgrade monotonicity and
+  sell values, and validation that every authored route enters and exits
+  off-screen and leaves room for towers beside it.
 - Procedurally generated audio — 14 sound effects and 2 music loops, produced by
   pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
   the binary stays standalone.
@@ -48,7 +50,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
-- `M` toggles mute, with the current state shown in the shop bar.
+- `M` toggles mute, with the current state shown in the HUD strip.
+- Tower upgrades — every tower runs Lv1 → Lv3 along one linear track, each kind
+  leaning into its existing role:
+  - Seed Shooter ($70, $150): faster and longer-reaching, then splits its fire
+    across the two lead fruit at Lv3.
+  - Blender ($120, $240): splash widens from 58px to 90px and the rate climbs.
+  - Freezer ($100, $200): chill deepens from 45% to 25% speed and lasts longer.
+- Tower selling — click a placed tower and press `S` to refund 60% of everything
+  invested in it, upgrades included.
+- Tower inspection UI: click any placed tower to see its level, next upgrade and
+  sell value, with its range ring drawn on the field. Gold pips under each tower
+  show its level without needing a click.
+- Overlapping Freezers now stack by keeping the strongest chill and the longest
+  remaining duration, instead of the last one to fire winning.
+- Route selection — four hand-authored tracks to choose from at the start of a
+  run, each shown as a scaled preview of the actual polyline:
+  - **Market Run** (Hard, 1500px) — short and direct.
+  - **Orchard Snake** (Medium, 2370px) — a steady weave.
+  - **Zigzag Grove** (Medium, 2780px) — tight lanes, one tower covers two.
+  - **The Long Orchard** (Gentle, 2870px) — plenty of time to shoot.
+- Being overrun now returns to route selection rather than restarting the same
+  track, so a different route can be picked after a loss.
 
 ### Changed
 

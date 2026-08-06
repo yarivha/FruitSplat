@@ -16,6 +16,7 @@ mod path;
 mod projectile;
 mod render;
 mod tower;
+mod tracks;
 mod wave;
 
 use audio::{Audio, Track};
@@ -47,30 +48,12 @@ fn window_conf() -> Conf {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// The track the fruit follow: a snake from off the left edge to off the right.
-// Starting and ending outside the window means fruit fade in and out of view
-// rather than popping into existence at the border.
-// ─────────────────────────────────────────────────────────────────────────────
-fn build_path() -> Path {
-    Path::new(vec![
-        vec2(-40.0, 150.0),
-        vec2(260.0, 150.0),
-        vec2(260.0, 330.0),
-        vec2(110.0, 330.0),
-        vec2(110.0, 520.0),
-        vec2(520.0, 520.0),
-        vec2(520.0, 230.0),
-        vec2(760.0, 230.0),
-        vec2(760.0, 560.0),
-        vec2(1040.0, 560.0),
-    ])
-}
-
 /// Which screen the game is currently on.
 #[derive(Clone, Copy, PartialEq)]
 enum State {
     Menu,
+    /// Picking which route to defend, before a run starts.
+    TrackSelect,
     Playing,
     GameOver,
 }
@@ -95,6 +78,8 @@ struct Game {
     selected: Option<TowerKind>,
     /// Index into `towers` of the placed tower being inspected, if any.
     selected_tower: Option<usize>,
+    /// Which entry of tracks::TRACKS the current run is being played on.
+    track: usize,
     audio: Audio,
 }
 
@@ -106,7 +91,9 @@ impl Game {
     fn new(audio: Audio) -> Self {
         Game {
             state: State::Menu,
-            path: build_path(),
+            // Placeholder until a route is chosen; the menu draws it as a
+            // backdrop and start_run replaces it.
+            path: tracks::TRACKS[0].path(),
             fruits: Vec::new(),
             towers: Vec::new(),
             projectiles: Vec::new(),
@@ -120,14 +107,18 @@ impl Game {
             cash: START_CASH,
             selected: None,
             selected_tower: None,
+            track: 0,
             audio,
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Clear the board and start from wave 1.
+    // Clear the board and start from wave 1 on the chosen route.
     // ─────────────────────────────────────────────────────────────────────────
-    fn start_game(&mut self) {
+    fn start_run(&mut self, track: usize) {
+        self.track = track.min(tracks::TRACKS.len() - 1);
+        self.path = tracks::TRACKS[self.track].path();
+
         self.fruits.clear();
         self.towers.clear();
         self.projectiles.clear();
@@ -157,12 +148,37 @@ impl Game {
         }
 
         match self.state {
+            // Both of these lead into route selection rather than straight into
+            // a run, so a fresh route can be picked after being overrun.
             State::Menu | State::GameOver => {
                 if is_mouse_button_pressed(MouseButton::Left) || is_key_pressed(KeyCode::Space) {
-                    self.start_game();
+                    self.state = State::TrackSelect;
                 }
             }
+            State::TrackSelect => self.update_track_select(),
             State::Playing => self.update_play(dt),
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Route selection: click a card or press its number to start that run.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn update_track_select(&mut self) {
+        for i in 0..tracks::TRACKS.len() {
+            let picked_by_key = match i {
+                0 => is_key_pressed(KeyCode::Key1),
+                1 => is_key_pressed(KeyCode::Key2),
+                2 => is_key_pressed(KeyCode::Key3),
+                3 => is_key_pressed(KeyCode::Key4),
+                _ => false,
+            };
+            let picked_by_click = is_mouse_button_pressed(MouseButton::Left)
+                && render::track_card_rect(i).contains(mouse_vec());
+
+            if picked_by_key || picked_by_click {
+                self.start_run(i);
+                return;
+            }
         }
     }
 
@@ -578,31 +594,37 @@ impl Game {
     // ─────────────────────────────────────────────────────────────────────────
     fn draw(&self) {
         render::draw_background();
-        render::draw_path(&self.path);
 
-        // Range footprint of the inspected tower sits under the towers.
-        if let Some(t) = self.inspected_tower() {
-            render::draw_tower_selection(t);
-        }
+        // The selection screen shows its own route previews, so the live board
+        // is hidden behind it rather than drawn as a stale backdrop.
+        if self.state != State::TrackSelect {
+            render::draw_path(&self.path);
 
-        for t in &self.towers {
-            render::draw_tower(t);
-        }
-        for p in &self.pulses {
-            render::draw_pulse(p);
-        }
-        for f in &self.fruits {
-            render::draw_fruit(f);
-        }
-        for p in &self.projectiles {
-            render::draw_projectile(p);
-        }
-        for s in &self.splats {
-            render::draw_splat(s);
+            // Range footprint of the inspected tower sits under the towers.
+            if let Some(t) = self.inspected_tower() {
+                render::draw_tower_selection(t);
+            }
+
+            for t in &self.towers {
+                render::draw_tower(t);
+            }
+            for p in &self.pulses {
+                render::draw_pulse(p);
+            }
+            for f in &self.fruits {
+                render::draw_fruit(f);
+            }
+            for p in &self.projectiles {
+                render::draw_projectile(p);
+            }
+            for s in &self.splats {
+                render::draw_splat(s);
+            }
         }
 
         match self.state {
             State::Menu => render::draw_menu(),
+            State::TrackSelect => render::draw_track_select(),
             State::GameOver => render::draw_game_over(self.wave),
             State::Playing => {
                 render::draw_hud(
