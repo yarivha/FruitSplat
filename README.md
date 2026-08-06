@@ -21,6 +21,7 @@ cargo run --release
 | Left click on field | Place the armed tower |
 | Right click | Cancel placement |
 | `Space` | Send the next wave |
+| `M` | Mute / unmute |
 
 Close the window to quit.
 
@@ -55,6 +56,27 @@ A new tier unlocks every third wave. Spawn intervals tighten from 0.85s toward a
 0.30s floor, and clearing a wave pays a bonus on top of the $1 earned per pop.
 You start with 20 lives and $250.
 
+## Audio
+
+All music and sound effects are **generated procedurally** by pure-standard-library
+Python scripts — no samples, no numpy, no external audio tools. The resulting WAVs
+are embedded into the binary with `include_bytes!`, so the executable is
+standalone.
+
+```sh
+python3 tools/gen_sounds.py   # 14 effects → assets/
+python3 tools/gen_music.py    # 2 music loops → assets/
+```
+
+Both scripts use a fixed random seed, so regenerating produces byte-identical
+files. The committed `assets/*.wav` are a build-time input only — nothing reads
+them at runtime.
+
+Fruit pop at five different pitches, highest for blueberries down to lowest for
+watermelons. To keep a busy field readable, pops are capped at 3 per frame with
+each successive one 22% quieter, and the shoot sound is limited to one per 55ms
+across every tower.
+
 ## Layout
 
 | File | Purpose |
@@ -66,6 +88,9 @@ You start with 20 lives and $250.
 | `src/projectile.rs` | Shots in flight and their splash radii |
 | `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |
+| `src/audio.rs` | Clip loading, playback, throttling, mute |
+| `tools/gen_sounds.py` | Sound effect generator |
+| `tools/gen_music.py` | Music loop generator |
 
 ## Test
 

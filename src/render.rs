@@ -357,7 +357,7 @@ pub fn shop_button_rect(i: usize) -> Rect {
 // Bottom shop bar: one button per tower, dimmed when it can't be afforded and
 // outlined when it's the current selection.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
+pub fn draw_shop(selected: Option<TowerKind>, cash: u32, muted: bool) {
     draw_rectangle(
         0.0,
         PLAYFIELD_H,
@@ -406,13 +406,29 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
         );
     }
 
+    let hint_x = BTN_X0 + 3.0 * (BTN_W + BTN_GAP);
     draw_text(
-        "click to place  ·  right-click to cancel",
-        BTN_X0 + 3.0 * (BTN_W + BTN_GAP),
-        PLAYFIELD_H + 44.0,
+        "click to place",
+        hint_x,
+        PLAYFIELD_H + 32.0,
         18.0,
         Color::new(0.7, 0.7, 0.78, 1.0),
     );
+    draw_text(
+        "right-click cancels",
+        hint_x,
+        PLAYFIELD_H + 52.0,
+        18.0,
+        Color::new(0.7, 0.7, 0.78, 1.0),
+    );
+
+    // Mute state doubles as the hint for the key that toggles it.
+    let (label, color) = if muted {
+        ("M  muted", Color::new(1.0, 0.55, 0.5, 1.0))
+    } else {
+        ("M  sound on", Color::new(0.6, 0.85, 0.65, 1.0))
+    };
+    draw_text(label, hint_x, PLAYFIELD_H + 76.0, 18.0, color);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

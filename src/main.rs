@@ -10,6 +10,7 @@
 
 use macroquad::prelude::*;
 
+mod audio;
 mod fruit;
 mod path;
 mod projectile;
@@ -17,6 +18,7 @@ mod render;
 mod tower;
 mod wave;
 
+use audio::{Audio, Track};
 use fruit::{Fruit, FruitKind, Splat};
 use path::Path;
 use projectile::{Projectile, ProjectileKind};
@@ -91,13 +93,15 @@ struct Game {
     cash: u32,
     /// Tower type armed for placement, if any.
     selected: Option<TowerKind>,
+    audio: Audio,
 }
 
 impl Game {
     // ─────────────────────────────────────────────────────────────────────────
-    // Build the game sitting on the title screen.
+    // Build the game sitting on the title screen. Audio is loaded by the caller
+    // because decoding the embedded clips is async.
     // ─────────────────────────────────────────────────────────────────────────
-    fn new() -> Self {
+    fn new(audio: Audio) -> Self {
         Game {
             state: State::Menu,
             path: build_path(),
@@ -113,6 +117,7 @@ impl Game {
             lives: START_LIVES,
             cash: START_CASH,
             selected: None,
+            audio,
         }
     }
 
@@ -133,12 +138,20 @@ impl Game {
         self.cash = START_CASH;
         self.selected = None;
         self.state = State::Playing;
+        self.audio.play_music(Track::Game);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Advance the whole game by `dt` seconds.
     // ─────────────────────────────────────────────────────────────────────────
     fn update(&mut self, dt: f32) {
+        self.audio.begin_frame(dt);
+
+        // Mute works on every screen, not just during play.
+        if is_key_pressed(KeyCode::M) {
+            self.audio.toggle_mute();
+        }
+
         match self.state {
             State::Menu | State::GameOver => {
                 if is_mouse_button_pressed(MouseButton::Left) || is_key_pressed(KeyCode::Space) {
@@ -173,6 +186,8 @@ impl Game {
 
         if self.lives == 0 {
             self.state = State::GameOver;
+            self.audio.play_game_over();
+            self.audio.play_music(Track::Menu);
         }
     }
 
@@ -234,11 +249,13 @@ impl Game {
     fn try_place(&mut self, p: Vec2) {
         let Some(kind) = self.selected else { return };
         if !self.placement_valid(p, kind) {
+            self.audio.play_deny();
             return;
         }
 
         self.cash -= kind.cost();
         self.towers.push(Tower::new(kind, p));
+        self.audio.play_place();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -273,6 +290,7 @@ impl Game {
         self.queue = wave::build_wave(self.wave);
         self.spawn_timer = 0.0;
         self.wave_active = true;
+        self.audio.play_wave_start();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -308,6 +326,11 @@ impl Game {
             let f = self.fruits.remove(i);
             self.lives = self.lives.saturating_sub(f.kind.leak_cost());
         }
+
+        // One warning per frame, however many got through together.
+        if !leaked.is_empty() {
+            self.audio.play_leak();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -335,6 +358,7 @@ impl Game {
                 if chilled_any {
                     t.cooldown = t.kind.cooldown();
                     self.pulses.push(Pulse::new(t.pos, range));
+                    self.audio.play_freeze();
                 }
                 continue;
             }
@@ -360,6 +384,7 @@ impl Game {
                 };
                 self.projectiles.push(Projectile::new(t.pos, target, kind));
                 t.cooldown = t.kind.cooldown();
+                self.audio.play_shoot();
             }
         }
     }
@@ -399,6 +424,7 @@ impl Game {
                         pops.push(i);
                     }
                 }
+                self.audio.play_splash();
             } else {
                 pops.push(fi);
             }
@@ -430,6 +456,7 @@ impl Game {
             let f = self.fruits.remove(i);
             self.cash += CASH_PER_POP;
             self.splats.push(Splat::burst(f.pos, f.kind));
+            self.audio.play_pop(f.kind.tier());
             children.extend(f.split(&self.path));
         }
         self.fruits.extend(children);
@@ -455,6 +482,7 @@ impl Game {
             self.cash += wave::clear_bonus(self.wave);
             self.wave += 1;
             self.wave_active = false;
+            self.audio.play_wave_clear();
         }
     }
 
@@ -486,7 +514,7 @@ impl Game {
             State::GameOver => render::draw_game_over(self.wave),
             State::Playing => {
                 render::draw_hud(self.lives, self.cash, self.wave, self.wave_active);
-                render::draw_shop(self.selected, self.cash);
+                render::draw_shop(self.selected, self.cash, self.audio.muted());
 
                 // Placement preview follows the cursor while a tower is armed.
                 if let Some(kind) = self.selected {
@@ -524,7 +552,8 @@ async fn main() {
     // Without seeding, every run would deal the identical fruit sequence.
     macroquad::rand::srand(miniquad::date::now() as u64);
 
-    let mut game = Game::new();
+    let mut game = Game::new(Audio::load().await);
+    game.audio.play_music(Track::Menu);
 
     loop {
         let dt = get_frame_time().min(0.05); // clamp so a stutter can't teleport fruit

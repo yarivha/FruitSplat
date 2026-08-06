@@ -35,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 19 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, slow effect,
   and wave composition.
+- Procedurally generated audio — 14 sound effects and 2 music loops, produced by
+  pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
+  the binary stays standalone.
+  - Per-tier pop sounds: five pitches, highest for blueberries down to lowest
+    for watermelons.
+  - Effects for tower fire, Blender splash, Freezer pulse, tower placement,
+    rejected placement, fruit leaking, wave start, wave cleared, and game over.
+  - `music_game.wav` — 16 bars at 132 BPM, drums, bass, arpeggio and a lead that
+    joins on the second pass. `music_menu.wav` — 8 bars at 96 BPM, pad and
+    arpeggio, no drums. Both loop seamlessly.
+- Audio throttling so a busy field stays readable: pops are capped at 3 per
+  frame and each successive one ducks 22%, and the shoot sound is rate-limited
+  to one per 55ms across all towers.
+- `M` toggles mute, with the current state shown in the shop bar.
 
 ### Changed
 
