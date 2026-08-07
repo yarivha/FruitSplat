@@ -1,27 +1,16 @@
 // =============================================================================
 // mode.rs — the difficulty a run is played at
 //
-// A mode is picked on the route screen, alongside the route, and sets what the
-// player starts with. It deliberately does not touch what a wave *sends*: the
-// wave table, the speed ramp and the per-fruit payout are tuned together against
-// `wave::balance_report`, and a mode that quietly rewrote them would make that
-// whole curve a fiction on two runs out of three.
+// A mode is picked on the route screen, alongside the route. It sets what the
+// player starts with, and how hard the waves lean on them once they have it.
 //
-// So a mode moves two numbers, and they do different jobs at different times.
+// So a mode moves three numbers, and they do different jobs at different times.
 //
-//   Cash  is the opening hand, and only the opening hand. `balance_report`
-//         prints all three modes, and the affordability ratios say plainly how
-//         fast it stops mattering:
-//
-//             wave     1     5    10    15    25
-//             Easy   6.6   3.6   1.3   1.0   1.2
-//             Medium 4.1   2.6   1.1   0.9   1.2
-//             Hard   2.9   2.2   1.0   0.9   1.1
-//
-//         A 2.3x spread at wave 1 is gone by wave 15. Cumulative income dwarfs
-//         anything you started with, and it must — the alternative is a mode
-//         that scales income, which compounds and would tear the economy curve
-//         apart by the late waves.
+//   Cash  is the opening hand, and only the opening hand. Cumulative income
+//         dwarfs it within about ten waves, and it must — the alternative is a
+//         mode that scales income, which compounds and would tear the economy
+//         curve apart by the late waves. On cash alone the three modes opened
+//         2.3x apart and were indistinguishable by wave 15.
 //
 //   Lives is what carries the rest of the run, and it is the reason the modes
 //         still differ once the cash has evened out. Leaks cost by tier — five
@@ -30,19 +19,44 @@
 //         as sharp on the last wave as on the first, and the report above cannot
 //         see it at all.
 //
-// Cash alone would have left Easy and Hard genuinely indistinguishable from the
-// midpoint on, which is why lives moves with it.
+//   Speed is the ramp fruit accelerate along as the waves go by, and it is the
+//         only dial that never fades. Speed divides how much every tower gets
+//         done on every wave, so a gentler ramp is still being felt on the last
+//         one. `balance_report` prints all three modes; the affordability ratio
+//         is what the dials add up to:
+//
+//             wave     1     5    10    13    15    20    25
+//             Easy   8.6   4.8   1.7   1.2   1.3   1.5   1.6
+//             Medium 4.1   2.6   1.1   0.9   0.9   1.1   1.2
+//             Hard   2.9   2.2   1.0   0.8   0.9   1.1   1.1
+//
+//         Below 1.0 means the wave outruns what the player can afford. Easy
+//         never goes there; Medium and Hard both do, at wave 13 and again at
+//         the first boss wave. That gap is the whole point, and it was cash and
+//         lives alone that could not hold it open — on those two the modes had
+//         converged on the same fight by wave 13, which is exactly how it
+//         played.
+//
+// Speed is the one thing here that changes what a wave *does* rather than what
+// the player brings to it, and that is a line worth drawing carefully: a mode
+// still never changes what a wave **sends**. The fruit, their count, their
+// order, the boss schedule and every payout are identical on all three, so the
+// economy curve is one curve and the modes are pressure applied to it.
 // =============================================================================
 
 /// One difficulty setting.
 ///
-/// Deliberately just a name and two numbers. The button prints the numbers
-/// themselves rather than a flavour line, because "$300, 25 lives" tells the
-/// player what they are choosing and "room to learn" does not.
+/// Deliberately just a name and numbers. The button prints them rather than a
+/// flavour line, because "$400, 30 lives" tells the player what they are
+/// choosing and "room to learn" does not.
 pub struct Mode {
     pub name: &'static str,
     pub start_cash: u32,
     pub start_lives: u32,
+    /// How much faster fruit get with each wave.
+    pub speed_ramp: f32,
+    /// The ceiling that ramp climbs to.
+    pub max_speed: f32,
 }
 
 /// Cash and lives the game's balance was actually tuned against. Medium is
@@ -55,15 +69,23 @@ pub const TUNED_LIVES: u32 = 15;
 pub const MODES: [Mode; 3] = [
     Mode {
         name: "Easy",
-        // Three towers up before the first wave instead of two, and enough
-        // lives to leak four Durians and still be standing.
-        start_cash: 300,
-        start_lives: 25,
+        // Four towers up before the first wave, and enough lives to leak five
+        // Durians and still be standing.
+        start_cash: 400,
+        start_lives: 30,
+        // The dial that carries. Fruit still speed up, but reach x1.35 by the
+        // end of a long route where Medium reaches x1.90 — so a tower lands
+        // roughly 40% more shots on each fruit at wave 25, every wave, rather
+        // than only while the opening cash lasts.
+        speed_ramp: 0.015,
+        max_speed: 1.35,
     },
     Mode {
         name: "Medium",
         start_cash: TUNED_CASH,
         start_lives: TUNED_LIVES,
+        speed_ramp: crate::wave::TUNED_SPEED_RAMP,
+        max_speed: crate::wave::TUNED_MAX_SPEED,
     },
     Mode {
         name: "Hard",
@@ -71,6 +93,11 @@ pub const MODES: [Mode; 3] = [
         // leaked Durian takes most of what you have.
         start_cash: 120,
         start_lives: 8,
+        // Deliberately the tuned ramp, not a steeper one. Hard is meant to be
+        // the balanced fight with no slack, and nobody asked for it to get
+        // faster as well.
+        speed_ramp: crate::wave::TUNED_SPEED_RAMP,
+        max_speed: crate::wave::TUNED_MAX_SPEED,
     },
 ];
 
@@ -90,10 +117,23 @@ mod tests {
 
     #[test]
     fn modes_get_steadily_harder() {
-        // The row is authored easiest first, and both dials must agree with
-        // that order — a mode with more cash but fewer lives than its neighbour
-        // would not be "easier" in any way a player could act on.
+        // The row is authored easiest first, and every dial must agree with that
+        // order — a mode with more cash but fewer lives than its neighbour would
+        // not be "easier" in any way a player could act on. Speed is compared
+        // non-strictly because Medium and Hard deliberately share the tuned ramp.
         for w in MODES.windows(2) {
+            assert!(
+                w[0].speed_ramp <= w[1].speed_ramp,
+                "{} ramps up faster than {}",
+                w[0].name,
+                w[1].name
+            );
+            assert!(
+                w[0].max_speed <= w[1].max_speed,
+                "{} tops out faster than {}",
+                w[0].name,
+                w[1].name
+            );
             assert!(
                 w[0].start_cash > w[1].start_cash,
                 "{} does not start richer than {}",
@@ -110,6 +150,32 @@ mod tests {
     }
 
     #[test]
+    fn no_mode_is_harsher_than_the_tuned_baseline() {
+        // Medium is the balanced fight. Nothing should out-accelerate it — Hard
+        // is meant to be that fight with no slack, not a faster one.
+        for m in &MODES {
+            assert!(m.speed_ramp <= crate::wave::TUNED_SPEED_RAMP, "{}", m.name);
+            assert!(m.max_speed <= crate::wave::TUNED_MAX_SPEED, "{}", m.name);
+        }
+    }
+
+    #[test]
+    fn easy_stays_slower_than_the_baseline_for_the_whole_run() {
+        // The point of the speed dial: it has to still be doing something on the
+        // last wave, which is where cash has long since stopped mattering.
+        let easy = mode(0);
+        let medium = mode(DEFAULT_MODE);
+
+        for w in 2..=25u32 {
+            let (e, m) = (
+                crate::wave::speed_multiplier(w, easy),
+                crate::wave::speed_multiplier(w, medium),
+            );
+            assert!(e < m, "wave {w}: Easy runs at {e}, Medium at {m}");
+        }
+    }
+
+    #[test]
     fn medium_is_the_balanced_baseline() {
         // balance_report models these numbers. If Medium drifts off them the
         // report stops describing any mode the player can actually pick.
@@ -117,6 +183,8 @@ mod tests {
         assert_eq!(medium.name, "Medium");
         assert_eq!(medium.start_cash, TUNED_CASH);
         assert_eq!(medium.start_lives, TUNED_LIVES);
+        assert_eq!(medium.speed_ramp, crate::wave::TUNED_SPEED_RAMP);
+        assert_eq!(medium.max_speed, crate::wave::TUNED_MAX_SPEED);
     }
 
     #[test]

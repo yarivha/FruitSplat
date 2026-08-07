@@ -679,7 +679,7 @@ impl Game {
                     lane,
                     0.0,
                     &self.paths[lane],
-                    wave::speed_multiplier(self.wave),
+                    wave::speed_multiplier(self.wave, mode::mode(self.mode)),
                 ));
             }
             self.spawn_timer = wave::spawn_interval(self.wave);

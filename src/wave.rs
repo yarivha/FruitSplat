@@ -10,6 +10,7 @@
 use macroquad::rand::gen_range;
 
 use crate::fruit::FruitKind;
+use crate::mode::Mode;
 
 /// A new fruit tier unlocks every this many waves.
 const WAVES_PER_TIER: i32 = 3;
@@ -132,9 +133,11 @@ pub fn clear_bonus(wave: u32) -> u32 {
     15 + wave * 2
 }
 
-/// How much faster fruit move each wave, and the ceiling on that.
-const SPEED_RAMP_PER_WAVE: f32 = 0.035;
-const MAX_SPEED_MULTIPLIER: f32 = 1.90;
+/// How much faster fruit move each wave, and the ceiling on that, for the
+/// difficulty the game is balanced around. Modes may soften these; Medium is
+/// these numbers exactly.
+pub const TUNED_SPEED_RAMP: f32 = 0.035;
+pub const TUNED_MAX_SPEED: f32 = 1.90;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Speed multiplier applied to every fruit spawned during `wave`.
@@ -143,9 +146,14 @@ const MAX_SPEED_MULTIPLIER: f32 = 1.90;
 // themselves never get harder. Since a tower's output is bounded by how long a
 // fruit stays in its range, speeding fruit up cuts the shots each tower lands,
 // which is the escalation that count alone can't provide.
+//
+// The ramp comes from the mode, because it is the only difficulty dial that
+// does not fade. Cash decides the opening and is swamped by income within ten
+// waves; speed divides how much a tower gets done on every single wave, so a
+// gentler ramp is still being felt on the last one.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn speed_multiplier(wave: u32) -> f32 {
-    (1.0 + (wave.saturating_sub(1)) as f32 * SPEED_RAMP_PER_WAVE).min(MAX_SPEED_MULTIPLIER)
+pub fn speed_multiplier(wave: u32, m: &Mode) -> f32 {
+    (1.0 + (wave.saturating_sub(1)) as f32 * m.speed_ramp).min(m.max_speed)
 }
 
 #[cfg(test)]
@@ -207,10 +215,10 @@ mod tests {
         // what fades out as cumulative income takes over.
         for m in &crate::mode::MODES {
             println!(
-                "\n=== {} — ${} start, {} lives ===",
-                m.name, m.start_cash, m.start_lives
+                "\n=== {} — ${} start, {} lives, ramp {:.3} capped {:.2} ===",
+                m.name, m.start_cash, m.start_lives, m.speed_ramp, m.max_speed
             );
-            balance_table(TOTAL, m.start_cash as f32);
+            balance_table(TOTAL, m);
         }
         println!();
     }
@@ -218,11 +226,11 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────
     // One difficulty's curve, printed as a table.
     // ─────────────────────────────────────────────────────────────────────────
-    fn balance_table(total: u32, start_cash: f32) {
+    fn balance_table(total: u32, m: &Mode) {
         const SEED_SHOOTER_COST: f32 = 90.0;
         const SEED_SHOOTER_DPS: f32 = 1.0 / 0.45;
 
-        let mut cash = start_cash;
+        let mut cash = m.start_cash as f32;
         println!(
             "{:>4} {:>6} {:>5} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
             "wave", "fruit", "boss", "hits", "wave $", "cum $", "speed", "need/s", "afford",
@@ -234,7 +242,7 @@ mod tests {
             let hits: u32 = queue.iter().copied().map(subtree_hits).sum();
             let payout: u32 = queue.iter().copied().map(subtree_payout).sum();
             let seconds = queue.len() as f32 * spawn_interval(wave);
-            let speed = speed_multiplier(wave);
+            let speed = speed_multiplier(wave, m);
             let bosses = boss_count(wave, total);
 
             let income = payout as f32 + clear_bonus(wave) as f32;
@@ -394,28 +402,34 @@ mod tests {
 
     #[test]
     fn the_speed_ramp_starts_at_one_and_only_climbs() {
-        assert_eq!(speed_multiplier(1), 1.0, "wave 1 must run at base speed");
+        for m in &crate::mode::MODES {
+            assert_eq!(speed_multiplier(1, m), 1.0, "{} must open at base speed", m.name);
 
-        let mut prev = 0.0;
-        for w in 1..=60 {
-            let s = speed_multiplier(w);
-            assert!(s >= prev, "speed went backwards at wave {w}");
-            prev = s;
+            let mut prev = 0.0;
+            for w in 1..=60 {
+                let s = speed_multiplier(w, m);
+                assert!(s >= prev, "{} went backwards at wave {w}", m.name);
+                prev = s;
+            }
         }
     }
 
     #[test]
     fn the_speed_ramp_is_capped() {
         // Uncapped, late waves would outrun the projectiles entirely.
-        for w in [30u32, 100, 10_000, u32::MAX] {
-            assert!(speed_multiplier(w) <= MAX_SPEED_MULTIPLIER);
+        for m in &crate::mode::MODES {
+            for w in [30u32, 100, 10_000, u32::MAX] {
+                assert!(speed_multiplier(w, m) <= m.max_speed, "{} blew its cap", m.name);
+            }
         }
     }
 
     #[test]
     fn wave_zero_does_not_underflow_the_ramp() {
         // saturating_sub guards this; a plain subtraction would wrap.
-        assert_eq!(speed_multiplier(0), 1.0);
+        for m in &crate::mode::MODES {
+            assert_eq!(speed_multiplier(0, m), 1.0, "{}", m.name);
+        }
     }
 
     #[test]

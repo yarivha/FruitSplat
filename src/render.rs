@@ -70,10 +70,10 @@ const CARD_MARGIN: f32 = 14.0;
 /// Difficulty selector, sitting above the route cards on the same screen: the
 /// mode is a setting you carry into whichever route you then pick, so it reads
 /// better as a row above them than as a screen of its own in between.
-const MODE_BTN_W: f32 = 150.0;
-const MODE_BTN_H: f32 = 46.0;
+const MODE_BTN_W: f32 = 196.0;
+const MODE_BTN_H: f32 = 58.0;
 const MODE_BTN_GAP: f32 = 12.0;
-const MODE_BTN_Y: f32 = 226.0;
+const MODE_BTN_Y: f32 = 220.0;
 /// The coordinate space routes are authored in, used to scale the previews.
 const AUTHOR_W: f32 = PLAYFIELD_W;
 const AUTHOR_H: f32 = PLAYFIELD_H;
@@ -1762,16 +1762,26 @@ pub fn draw_mode_buttons(selected: usize) {
         );
 
         // What the mode actually changes, so the choice isn't three words with
-        // nothing behind them.
-        let detail = format!("${}  {} lives", m.start_cash, m.start_lives);
-        let dims = measure_text(&detail, None, 14, 1.0);
-        draw_text(
-            &detail,
-            r.x + (r.w - dims.width) * 0.5,
-            r.y + 40.0,
-            14.0,
-            Color::new(0.70, 0.70, 0.78, 1.0),
-        );
+        // nothing behind them. Both lines, because the speed cap is the dial
+        // that decides how the late waves feel and it would otherwise be
+        // invisible — the player would see only the opening hand.
+        let detail = Color::new(0.70, 0.70, 0.78, 1.0);
+        for (line, text) in [
+            format!("${}   {} lives", m.start_cash, m.start_lives),
+            format!("fruit up to +{:.0}% speed", (m.max_speed - 1.0) * 100.0),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let dims = measure_text(&text, None, 14, 1.0);
+            draw_text(
+                &text,
+                r.x + (r.w - dims.width) * 0.5,
+                r.y + 38.0 + line as f32 * 15.0,
+                14.0,
+                detail,
+            );
+        }
     }
 }
 
@@ -1811,8 +1821,8 @@ pub fn draw_track_select(selected_mode: usize) {
     // own difficulty word too, and "Hard" would otherwise mean two things on one
     // screen: how punishing the track is, versus how much you start with.
     text_center(
-        "DIFFICULTY  -  what you start with, on any route",
-        214.0,
+        "DIFFICULTY  -  applies to whichever route you pick",
+        208.0,
         17.0,
         Color::new(1.0, 1.0, 1.0, 0.55),
     );
@@ -2132,11 +2142,15 @@ mod tests {
         // Character budget rather than measure_text, which needs a graphics
         // context. The detail line is the longer of the two at 14px.
         for m in &MODES {
-            let detail = format!("${}  {} lives", m.start_cash, m.start_lives);
-            assert!(
-                detail.len() as f32 * 7.5 + 12.0 <= MODE_BTN_W,
-                "\"{detail}\" overflows the mode button"
-            );
+            for line in [
+                format!("${}   {} lives", m.start_cash, m.start_lives),
+                format!("fruit up to +{:.0}% speed", (m.max_speed - 1.0) * 100.0),
+            ] {
+                assert!(
+                    line.len() as f32 * 7.5 + 12.0 <= MODE_BTN_W,
+                    "\"{line}\" overflows the mode button"
+                );
+            }
             assert!(m.name.len() as f32 * 12.0 + 12.0 <= MODE_BTN_W);
         }
     }

@@ -37,41 +37,43 @@ Close the window to quit.
 Before picking a route you pick a **mode**, from a row of three above the route
 cards. It carries over between runs, and the HUD shows which one you're on.
 
-| Mode | Starting cash | Starting lives |
-|---|---|---|
-| Easy | $300 | 25 |
-| Medium | $180 | 15 |
-| Hard | $120 | 8 |
+| Mode | Starting cash | Starting lives | Fruit speed by the end |
+|---|---|---|---|
+| Easy | $400 | 30 | +35% |
+| Medium | $180 | 15 | +90% |
+| Hard | $120 | 8 | +90% |
 
-A mode only changes **what you start with**. It never touches what a wave sends
-— the wave table, the speed ramp and the per-fruit payout are tuned together
-against `balance_report`, and a mode that quietly rewrote them would make that
-whole curve a fiction on two runs out of three.
+A mode never changes what a wave **sends**. The fruit, their count, their order,
+the boss schedule and every payout are identical on all three — the economy is
+one curve, and the modes are pressure applied to it.
 
-The two numbers do different jobs at different times, and it's worth knowing
-which:
+The three dials do different jobs at different times:
 
-**Cash is the opening hand, and only the opening hand.** The report prints all
-three modes, and the affordability ratios say how fast it stops mattering:
+**Cash is the opening hand, and only the opening hand.** Cumulative income
+swamps it within about ten waves, and it has to — the alternative is a mode that
+scales income, which compounds and would tear the economy curve apart late.
 
-| Wave | 1 | 5 | 10 | 15 | 25 |
-|---|---|---|---|---|---|
-| Easy | 6.6 | 3.6 | 1.3 | 1.0 | 1.2 |
-| Medium | 4.1 | 2.6 | 1.1 | 0.9 | 1.2 |
-| Hard | 2.9 | 2.2 | 1.0 | 0.9 | 1.1 |
+**Lives are the margin for error.** Leaks cost by tier, so 30 lives absorbs five
+leaked Durians while 8 doesn't survive two leaked watermelons.
 
-A 2.3× spread at wave 1 is gone by wave 15. Cumulative income dwarfs anything
-you began with — and it has to, because the alternative is a mode that scales
-income, which compounds and would tear the economy curve apart by the late
-waves.
+**Speed is the only dial that never fades.** It divides how much every tower
+gets done on every wave, so a gentler ramp is still being felt on the last one.
+`balance_report` prints a table per mode, and the affordability ratio is what
+the three dials add up to:
 
-**Lives are what carry the rest of the run.** Leaks cost by tier, so 25 lives
-absorbs four leaked Durians while 8 doesn't survive two leaked watermelons.
-That question is as sharp on the last wave as on the first — and the table above
-can't see it at all, because the report models cash and not lives.
+| Wave | 1 | 5 | 10 | 13 | 15 | 20 | 25 |
+|---|---|---|---|---|---|---|---|
+| Easy | 8.6 | 4.8 | 1.7 | **1.2** | **1.3** | 1.5 | 1.6 |
+| Medium | 4.1 | 2.6 | 1.1 | **0.9** | **0.9** | 1.1 | 1.2 |
+| Hard | 2.9 | 2.2 | 1.0 | **0.8** | **0.9** | 1.1 | 1.1 |
 
-So: Easy and Hard feel very different for the first ten waves because of the
-money, and stay different after that because of the margin for error.
+Below 1.0 means the wave outruns what you can afford. Easy never goes there;
+Medium and Hard both do, at wave 13 and again at the first boss wave.
+
+That gap is the point, and cash and lives alone could not hold it open. On those
+two dials the modes had converged on the same fight by wave 13 — Easy was merely
+*rich early*, not easy. The speed ramp is what makes it easy all the way
+through.
 
 ## Routes
 
@@ -271,8 +273,9 @@ Because it is armoured, the towers sort themselves into roles against it:
 
 A new tier unlocks every third wave, so watermelons first appear on wave 13 —
 every route runs long enough to see them. Spawn intervals tighten from 0.85s
-toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9×.
-What you start with is set by the difficulty mode — $180 and 15 lives on Medium.
+toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9× —
+both on Medium and Hard; Easy ramps at 1.5% to a 1.35× cap. What you start with
+is set by the difficulty mode too.
 
 ### Boss waves
 

@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 114 unit tests covering path maths (corner traversal, end clamping,
+- 116 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
@@ -174,8 +174,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     survive two leaked watermelons — and that is what keeps the modes apart once
     the money has evened out. Cash alone would have left Easy and Hard genuinely
     indistinguishable from the midpoint on.
-  - Medium is the tuned baseline, asserted against the numbers the balance work
-    was done at, so it cannot drift off them without a test failing.
+  - **Easy also ramps fruit speed up more gently** — 1.5% a wave to a 1.35x cap,
+    against Medium's tuned 3.5% to 1.90x. Cash and lives alone could not keep
+    the modes apart: both fade, and by wave 13 all three converged on the same
+    fight, so Easy played as merely rich early rather than easy. Speed is the
+    one dial that never fades, because it divides how much every tower gets done
+    on every wave. Easy's affordability ratio now stays at or above 1.2 for a
+    whole run where Medium and Hard both drop below 1.0 at wave 13 and again at
+    the first boss wave.
+  - Speed is the only thing a mode changes about the waves themselves, and the
+    line still holds elsewhere: fruit, counts, order, boss schedule and payouts
+    are identical on all three, so the economy remains one curve.
+  - Hard deliberately keeps the tuned ramp rather than a steeper one — it is
+    meant to be the balanced fight with no slack, not a faster one.
+  - Medium is the tuned baseline, asserted against the cash, lives and ramp the
+    balance work was done at, so it cannot drift off them without a test
+    failing. The mode buttons print the speed cap alongside cash and lives,
+    since the dial that decides how the late waves feel would otherwise be
+    invisible at the point of choosing.
 - **Lanes.** A route is now one or more polylines rather than exactly one, and
   every fruit and spike pile carries the index of the lane it belongs to. Lanes
   stay independent for their whole length even where they converge on screen: a
