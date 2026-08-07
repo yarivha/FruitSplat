@@ -24,7 +24,8 @@ cargo run --release
 | Left click a placed tower | Open its stats panel (nothing armed) |
 | Click **Upgrade** / **Sell** | Upgrade or sell that tower |
 | Right click | Cancel placement / close the panel |
-| `Space` | Send the next wave |
+| `Space` | Send the next wave now |
+| Click **AUTO** | Waves send themselves, three seconds apart |
 | Click the speaker button | Mute / unmute sound effects |
 | Click the note button | Mute / unmute music |
 | Click **QUIT RUN**, then **SURE?** | Abandon the run, back to the title screen |
@@ -277,6 +278,22 @@ end.
 
 Clearing the route's last wave wins the run. Losing all your lives ends it, and
 either way you return to the route picker.
+
+### Sending waves
+
+By default each wave waits for `Space`. The **AUTO** toggle in the top strip
+hands that over: once it's lit, the next wave goes out three seconds after the
+field clears, and the between-waves prompt counts down instead of asking. The
+setting persists across runs, and `Space` still overrides it — pressing it skips
+whatever is left of the gap.
+
+The gap is deliberately not zero. Between waves is when towers get bought,
+placed and upgraded, and that is most of the game's decision-making — sending
+instantly would take it away rather than automate it. Three seconds is enough to
+place a tower or buy an upgrade without turning the gap into dead time.
+
+Auto never sends past the end of a run: clearing a route's last wave settles
+into the victory screen rather than counting down to a wave that doesn't exist.
 
 ### Economy
 

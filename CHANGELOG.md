@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 111 unit tests covering path maths (corner traversal, end clamping,
+- 114 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
@@ -125,6 +125,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **AUTO toggle** in the top strip: waves send themselves three seconds after
+  the field clears, so a run can be played without reaching for the keyboard
+  between every wave. The between-waves prompt counts the gap down rather than
+  asking for Space, and the setting persists across runs like the difficulty.
+  - The gap is deliberately not zero. Between waves is when towers get bought,
+    placed and upgraded, which is most of the game's decision-making — sending
+    instantly would take that away rather than automate it. Space still
+    overrides the timer for anyone who wants the wave now.
+  - It cannot send past the end of a run: the countdown is ticked after wave
+    completion is settled, so clearing a route's last wave lands on the victory
+    screen instead of counting down to a wave that does not exist.
+  - `draw_hud` now takes a `HudState` rather than eight positional arguments,
+    which is where it was heading.
 - **Three difficulty modes** — Easy, Medium and Hard — picked from a row above
   the route cards before choosing a route. The setting carries between runs, the
   HUD names it during play, and the victory screen records which one a route was

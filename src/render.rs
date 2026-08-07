@@ -51,6 +51,12 @@ const QUIT_BTN_W: f32 = 96.0;
 const QUIT_LABEL: &str = "QUIT RUN";
 const QUIT_LABEL_ARMED: &str = "SURE?";
 
+/// Auto-send toggle, in the gap between the difficulty label and the wave
+/// counter — the right half of the strip, where the wave state already lives.
+const AUTO_BTN_X: f32 = 650.0;
+const AUTO_BTN_W: f32 = 92.0;
+const AUTO_LABEL: &str = "AUTO";
+
 /// Route-selection card layout. The cards share a single row, so their width
 /// falls out of how many routes there are rather than being fixed — at the old
 /// fixed 220px a fifth route ran 164px off the side of the window, and two rows
@@ -1017,14 +1023,18 @@ pub fn draw_splat(s: &Splat) {
 // Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
 // the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(
-    lives: u32,
-    cash: u32,
-    wave: u32,
-    total_waves: u32,
-    wave_active: bool,
-    mode: usize,
-) {
+pub fn draw_hud(h: &HudState) {
+    let HudState {
+        lives,
+        cash,
+        wave,
+        total_waves,
+        wave_active,
+        mode,
+        auto,
+        auto_countdown,
+    } = *h;
+
     // Dark strip so white text stays readable over the grass.
     draw_rectangle(
         0.0,
@@ -1070,10 +1080,22 @@ pub fn draw_hud(
         wave_color,
     );
 
+    draw_auto_button(auto);
+
     if !wave_active {
-        let prompt = if wave == total_waves {
-            // Plain ASCII only: the default font has no glyph for an em dash
-            // and renders it as a tofu box.
+        // Plain ASCII only throughout: the default font has no glyph for an em
+        // dash and renders it as a tofu box.
+        let final_wave = wave == total_waves;
+        let prompt = if auto {
+            // Counting down rather than just saying "auto": the player needs to
+            // know how long they have left to spend before it goes.
+            let secs = auto_countdown.max(0.0).ceil() as u32;
+            if final_wave {
+                format!("AUTO  -  FINAL wave in {secs}s")
+            } else {
+                format!("AUTO  -  wave {wave} of {total_waves} in {secs}s")
+            }
+        } else if final_wave {
             format!("SPACE  -  send the FINAL wave ({wave} of {total_waves})")
         } else {
             format!("SPACE  -  send wave {wave} of {total_waves}")
@@ -1085,6 +1107,22 @@ pub fn draw_hud(
             Color::new(1.0, 0.9, 0.5, 1.0),
         );
     }
+}
+
+/// Everything the HUD draws itself from, gathered into one value rather than
+/// passed as eight positional arguments nobody could read at the call site.
+pub struct HudState {
+    pub lives: u32,
+    pub cash: u32,
+    pub wave: u32,
+    pub total_waves: u32,
+    pub wave_active: bool,
+    pub mode: usize,
+    /// Whether waves send themselves.
+    pub auto: bool,
+    /// Seconds until the next one does. Only meaningful while `auto` is on and
+    /// no wave is walking.
+    pub auto_countdown: f32,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1234,6 +1272,57 @@ pub fn draw_quit_button(armed: bool) {
     let dims = measure_text(label, None, 15, 1.0);
     draw_text(
         label,
+        r.x + (r.w - dims.width) * 0.5,
+        r.y + r.h * 0.5 + 5.0,
+        15.0,
+        ink,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of the auto-send toggle.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn auto_button_rect() -> Rect {
+    Rect::new(AUTO_BTN_X, AUDIO_BTN_Y, AUTO_BTN_W, AUDIO_BTN)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The auto-send toggle. Lit when waves are sending themselves.
+//
+// Unlike the audio toggles this has no "off" icon to fall back on, so being on
+// has to be carried by the fill and the outline alone — which is why the lit
+// state is a solid green plate rather than a tint.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_auto_button(on: bool) {
+    let r = auto_button_rect();
+    let hovered = r.contains(mouse_vec());
+
+    let (bg, edge, ink) = if on {
+        (
+            Color::new(0.16, 0.34, 0.20, 0.96),
+            Color::new(0.55, 1.0, 0.60, 1.0),
+            Color::new(0.72, 1.0, 0.76, 1.0),
+        )
+    } else if hovered {
+        (
+            Color::new(0.22, 0.24, 0.28, 0.95),
+            Color::new(0.62, 0.64, 0.72, 0.95),
+            Color::new(0.90, 0.90, 0.94, 1.0),
+        )
+    } else {
+        (
+            Color::new(0.10, 0.11, 0.15, 0.78),
+            Color::new(0.46, 0.48, 0.56, 0.9),
+            Color::new(0.72, 0.72, 0.78, 1.0),
+        )
+    };
+
+    draw_rectangle(r.x, r.y, r.w, r.h, bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, if on { 2.5 } else { 1.5 }, edge);
+
+    let dims = measure_text(AUTO_LABEL, None, 15, 1.0);
+    draw_text(
+        AUTO_LABEL,
         r.x + (r.w - dims.width) * 0.5,
         r.y + r.h * 0.5 + 5.0,
         15.0,
@@ -2069,6 +2158,48 @@ mod tests {
         assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "quit overhangs");
         // The wave counter is right-aligned; leave it its half of the strip.
         assert!(r.x + r.w <= WINDOW_W * 0.6, "quit crowds the wave counter");
+    }
+
+    #[test]
+    fn the_top_strip_buttons_never_overlap_each_other() {
+        // Audio, quit and auto all live in the same 52px strip and all take a
+        // click before the field does. Two overlapping would make which one
+        // fires depend on their order in the code rather than on what was hit.
+        let rects = [
+            ("sfx", audio_button_rect(0)),
+            ("music", audio_button_rect(1)),
+            ("quit", quit_button_rect()),
+            ("auto", auto_button_rect()),
+        ];
+
+        for (i, (an, a)) in rects.iter().enumerate() {
+            for (bn, b) in rects.iter().skip(i + 1) {
+                assert!(
+                    a.x + a.w <= b.x || b.x + b.w <= a.x,
+                    "the {an} and {bn} buttons overlap"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_auto_button_sits_inside_the_strip_clear_of_the_wave_counter() {
+        let r = auto_button_rect();
+        assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "auto overhangs");
+        // "WAVE 25/25" is right-aligned at 30px, about 165px wide plus a 20px
+        // margin, so the counter owns roughly the last 185px of the strip.
+        assert!(
+            r.x + r.w <= WINDOW_W - 185.0,
+            "the auto button crowds the wave counter"
+        );
+    }
+
+    #[test]
+    fn the_auto_label_fits_its_button() {
+        assert!(
+            AUTO_LABEL.len() as f32 * 8.0 + 12.0 <= AUTO_BTN_W,
+            "\"{AUTO_LABEL}\" overflows the auto button"
+        );
     }
 
     #[test]

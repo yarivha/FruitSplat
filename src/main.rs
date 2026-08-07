@@ -59,6 +59,15 @@ const NUMBER_KEYS: [KeyCode; 5] = [
     KeyCode::Key4,
     KeyCode::Key5,
 ];
+/// Seconds between a wave clearing and the next one going out on its own, once
+/// auto-send is armed.
+///
+/// Deliberately not zero. Between waves is when towers get bought, placed and
+/// upgraded, and that is most of the game's decision-making — sending instantly
+/// would take that away rather than automate it. Three seconds is enough to
+/// place a tower or buy an upgrade without turning the gap into dead time, and
+/// Space still overrides it for anyone who wants the wave now.
+const AUTO_WAVE_DELAY: f32 = 3.0;
 /// How long the quit button stays armed waiting for its confirming click.
 /// Long enough to move the mouse back deliberately, short enough that it can't
 /// still be waiting by the time an unrelated click lands on it later.
@@ -141,6 +150,12 @@ struct Game {
     /// Seconds left on the armed quit button. Above zero, the next click on it
     /// ends the run; it forgets it was asked once this runs out.
     quit_armed: f32,
+    /// Whether waves send themselves. Kept across runs like the difficulty —
+    /// someone who wants this on wants it on for the next route too.
+    auto_wave: bool,
+    /// Seconds until the next wave sends itself. Only counts down while
+    /// `auto_wave` is on and no wave is walking.
+    auto_timer: f32,
     audio: Audio,
 }
 
@@ -176,6 +191,8 @@ impl Game {
             props: Vec::new(),
             next_tower_id: 0,
             quit_armed: 0.0,
+            auto_wave: false,
+            auto_timer: AUTO_WAVE_DELAY,
             audio,
         }
     }
@@ -220,6 +237,10 @@ impl Game {
         self.selected_tower = None;
         self.quit_armed = 0.0;
         self.next_lane = 0;
+        // The auto-send *setting* survives — it is a preference, not run state —
+        // but its countdown restarts, so a fresh run always gets the full gap
+        // before wave one rather than inheriting a part-spent timer.
+        self.auto_timer = AUTO_WAVE_DELAY;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -380,6 +401,31 @@ impl Game {
         }
 
         self.check_wave_complete();
+
+        // After completion, so clearing the last wave of a route settles into
+        // Victory rather than auto-sending a wave past the end of the run.
+        if self.state == State::Playing {
+            self.tick_auto_wave(dt);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Send the next wave on its own, once the gap has run down.
+    //
+    // The timer is held at full whenever a wave is walking, so it always starts
+    // from the top the moment the field clears rather than carrying a part-spent
+    // countdown across from somewhere else.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn tick_auto_wave(&mut self, dt: f32) {
+        if !self.auto_wave || self.wave_active {
+            self.auto_timer = AUTO_WAVE_DELAY;
+            return;
+        }
+
+        self.auto_timer -= dt;
+        if self.auto_timer <= 0.0 {
+            self.start_wave();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -410,6 +456,10 @@ impl Game {
             // float underneath it, and whatever is on top should take the click.
             if self.click_quit_button(m) {
                 // Consumed.
+            } else if render::auto_button_rect().contains(m) {
+                self.auto_wave = !self.auto_wave;
+                self.auto_timer = AUTO_WAVE_DELAY;
+                self.audio.play_place();
             } else if m.y >= PLAYFIELD_H {
                 self.click_shop(m);
             } else if !self.click_tower_panel(m) {
@@ -1009,14 +1059,16 @@ impl Game {
                 self.mode,
             ),
             State::Playing => {
-                render::draw_hud(
-                    self.lives,
-                    self.cash,
-                    self.wave,
-                    self.total_waves(),
-                    self.wave_active,
-                    self.mode,
-                );
+                render::draw_hud(&render::HudState {
+                    lives: self.lives,
+                    cash: self.cash,
+                    wave: self.wave,
+                    total_waves: self.total_waves(),
+                    wave_active: self.wave_active,
+                    mode: self.mode,
+                    auto: self.auto_wave,
+                    auto_countdown: self.auto_timer,
+                });
                 render::draw_shop(self.selected, self.cash);
 
                 // The tower panel floats over the field, above everything else.
