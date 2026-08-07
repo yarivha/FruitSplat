@@ -359,12 +359,17 @@ pub const SPIKE_SPACING: f32 = 34.0;
 
 /// A pile of spikes sitting on the track.
 ///
-/// `dist` is the position *along the route*, not a world coordinate, and that's
-/// what fruit are tested against. Using euclidean distance would let a pile pop
-/// fruit in a neighbouring lane on the switchback routes, where two stretches
-/// of track run within a few dozen pixels of each other.
+/// A pile belongs to exactly one lane, and `dist` is its position *along that
+/// lane*, not a world coordinate. Fruit are matched on both. Two things would go
+/// wrong with euclidean distance instead: on the switchback routes two stretches
+/// of the same lane run within a few dozen pixels of each other, and on a
+/// two-entrance route the two lanes pass close together on their way to the
+/// shared exit. In both cases a pile must only touch fruit actually walking over
+/// it, not fruit that merely happens to be nearby.
 pub struct SpikePile {
     pub pos: Vec2,
+    /// Which lane this pile sits on. A pile never touches another lane's fruit.
+    pub lane: usize,
     pub dist: f32,
     /// Remaining pops. The number of spikes drawn tracks this, so a worn pile
     /// is visibly running down without needing to store its original size.
@@ -375,9 +380,10 @@ pub struct SpikePile {
 }
 
 impl SpikePile {
-    pub fn new(pos: Vec2, dist: f32, charges: u32, owner: u32, rot: f32) -> Self {
+    pub fn new(pos: Vec2, lane: usize, dist: f32, charges: u32, owner: u32, rot: f32) -> Self {
         SpikePile {
             pos,
+            lane,
             dist,
             charges,
             owner,
@@ -386,10 +392,11 @@ impl SpikePile {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Is a fruit at `fruit_dist` with radius `radius` standing on this pile?
+    // Is a fruit on `lane` at `fruit_dist` with radius `radius` standing on this
+    // pile? A fruit on any other lane never is, however close it looks.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn covers(&self, fruit_dist: f32, radius: f32) -> bool {
-        (fruit_dist - self.dist).abs() <= radius + SPIKE_RADIUS
+    pub fn covers(&self, lane: usize, fruit_dist: f32, radius: f32) -> bool {
+        self.lane == lane && (fruit_dist - self.dist).abs() <= radius + SPIKE_RADIUS
     }
 
     pub fn spent(&self) -> bool {
@@ -488,19 +495,33 @@ mod tests {
 
     #[test]
     fn a_pile_only_covers_fruit_near_it_along_the_track() {
-        let pile = SpikePile::new(Vec2::ZERO, 500.0, 4, 0, 0.0);
+        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0);
 
-        assert!(pile.covers(500.0, 10.0), "fruit on the pile missed it");
-        assert!(pile.covers(500.0 + SPIKE_RADIUS + 9.0, 10.0), "edge case missed");
+        assert!(pile.covers(0, 500.0, 10.0), "fruit on the pile missed it");
+        assert!(
+            pile.covers(0, 500.0 + SPIKE_RADIUS + 9.0, 10.0),
+            "edge case missed"
+        );
         // Far along the route, even though a switchback could put this fruit
         // physically close to the pile.
-        assert!(!pile.covers(700.0, 10.0), "pile reached down the track");
-        assert!(!pile.covers(300.0, 10.0));
+        assert!(!pile.covers(0, 700.0, 10.0), "pile reached down the track");
+        assert!(!pile.covers(0, 300.0, 10.0));
+    }
+
+    #[test]
+    fn a_pile_never_touches_another_lane() {
+        // On a two-entrance route both lanes converge on the same exit, so a
+        // pile near the end of one sits close to fruit walking the other. Same
+        // distance, different lane: it must not connect.
+        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0);
+
+        assert!(pile.covers(0, 500.0, 10.0), "own lane missed");
+        assert!(!pile.covers(1, 500.0, 10.0), "pile reached across lanes");
     }
 
     #[test]
     fn a_pile_is_spent_only_once_its_charges_run_out() {
-        let mut pile = SpikePile::new(Vec2::ZERO, 0.0, 2, 0, 0.0);
+        let mut pile = SpikePile::new(Vec2::ZERO, 0, 0.0, 2, 0, 0.0);
         assert!(!pile.spent());
         pile.charges -= 1;
         assert!(!pile.spent());

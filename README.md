@@ -16,7 +16,7 @@ cargo run --release
 
 | Input | Action |
 |---|---|
-| `1`–`4` on the route screen | Pick a route |
+| `1`–`5` on the route screen | Pick a route |
 | `1`–`5` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
@@ -32,7 +32,7 @@ Close the window to quit.
 
 ## Routes
 
-Each run starts by picking one of four routes. Length is the main difficulty
+Each run starts by picking one of five routes. Length is the main difficulty
 dial — a longer route means more seconds under fire before a fruit reaches the
 exit. Turn count matters too: tight switchbacks let one tower cover several
 lanes at once.
@@ -40,9 +40,38 @@ lanes at once.
 | Route | Difficulty | Waves | Length | Character | Backdrop |
 |---|---|---|---|---|---|
 | Market Run | Hard | 15 | 1500 px | Short and direct | Dusty market of crates and fences |
+| Twin Gates | Tricky | 18 | 1600 px ×2 | **Two entrances**, one exit | Cold rocky highland |
 | Orchard Snake | Medium | 20 | 2370 px | A steady weave | Temperate orchard |
 | Zigzag Grove | Medium | 20 | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
 | The Long Orchard | Gentle | 25 | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+
+### Twin Gates, and lanes
+
+Every other route is one lane. **Twin Gates is two**: fruit enter at two gates on
+the left, one high and one low, and both streams leave by the same exit on the
+right. Each wave is dealt to the gates in turn, so it arrives as two
+half-strength streams rather than one you can meet head on.
+
+Neither lane is long — the difficulty is that they are far apart. A single
+cluster of towers cannot answer both, so the same money has to cover two
+approaches. That makes it a different kind of hard from Market Run, which is why
+it gets its own label rather than sitting on the length scale with the others.
+
+Lanes are independent for their whole length, even where they converge on
+screen. A fruit belongs to one lane and never changes; a spike pile belongs to
+one lane and never touches the other's fruit, however close the two pass. The
+two lanes meet at the exit *point* rather than sharing a stretch of track before
+it, precisely so that rule never becomes visible as a Spike Layer that pops only
+half the fruit crossing it.
+
+Two things had to change to make lanes work at all:
+
+- **Targeting ranks fruit by fraction of their lane walked, not raw distance.**
+  The lanes are different lengths, so 900px along the short one is nearer its
+  exit — and so more urgent — than 900px along the long one. Comparing raw
+  distances would have every tower covering both gates quietly favour whichever
+  lane happened to be longer.
+- **Tower placement must clear every lane**, and so must scenery.
 
 You can walk away from a run at any point with the **QUIT RUN** button in the top
 strip. It asks before it acts: the first click turns it into **SURE?** and the
@@ -92,15 +121,17 @@ A fruit costs exactly one spike however many piles it happens to be standing on.
 Piles sit 34px apart and each reaches `radius + 14px` along the track, so overlap
 is the norm — a watermelon is wide enough to sit on three at once.
 
-A pile is tested against fruit by **distance along the route**, not by how close
-it is in pixels. On the switchback routes two stretches of track run within a
-few dozen pixels of each other, and a pile on one lane must not pop fruit
-walking the other.
+A pile is tested against fruit by **lane, and distance along that lane** — never
+by how close it is in pixels. Two stretches of track can run within a few dozen
+pixels of each other, either as a switchback on one lane or as the two lanes of
+Twin Gates converging, and a pile must only touch the fruit actually walking
+over it.
 
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
-along the track. Shots don't home, but towers **lead** their targets: they aim
-at where the fruit will be once the shot arrives, which is what keeps them
-useful against the late-wave speed ramp.
+along its lane, measured as a **fraction** of that lane rather than in pixels, so
+that lanes of different lengths compare fairly. Shots don't home, but towers
+**lead** their targets: they aim at where the fruit will be once the shot
+arrives, which is what keeps them useful against the late-wave speed ramp.
 
 ### Stats and upgrades
 
@@ -306,7 +337,7 @@ way to seek a playing sound.
 | `src/fruit.rs` | Fruit tiers, the split ladder, splat particles |
 | `src/tower.rs` | Tower stats, spike piles, the Freezer pulse effect |
 | `src/projectile.rs` | Shots in flight, their splash radii and pierce |
-| `src/tracks.rs` | The four selectable routes |
+| `src/tracks.rs` | The five selectable routes and their lanes |
 | `src/scenery.rs` | Per-route palettes and decorative prop layout |
 | `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |

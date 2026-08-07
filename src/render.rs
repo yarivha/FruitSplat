@@ -50,11 +50,15 @@ const QUIT_BTN_W: f32 = 96.0;
 const QUIT_LABEL: &str = "QUIT RUN";
 const QUIT_LABEL_ARMED: &str = "SURE?";
 
-/// Route-selection card layout.
-const CARD_W: f32 = 220.0;
+/// Route-selection card layout. The cards share a single row, so their width
+/// falls out of how many routes there are rather than being fixed — at the old
+/// fixed 220px a fifth route ran 164px off the side of the window, and two rows
+/// don't fit under the title.
 const CARD_H: f32 = 210.0;
-const CARD_GAP: f32 = 16.0;
+const CARD_GAP: f32 = 12.0;
 const CARD_Y: f32 = 296.0;
+/// Space left either side of the row of cards.
+const CARD_MARGIN: f32 = 14.0;
 /// The coordinate space routes are authored in, used to scale the previews.
 const AUTHOR_W: f32 = 1000.0;
 const AUTHOR_H: f32 = 650.0;
@@ -333,24 +337,43 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Draw the track as a thick dirt polyline. Circles at the joints round off the
-// corners, which macroquad's square line caps would otherwise leave notched.
+// Draw every lane of the route as a thick dirt polyline. Circles at the joints
+// round off the corners, which macroquad's square line caps would otherwise
+// leave notched.
+//
+// Both passes run across all lanes before the next begins — every border, then
+// every dirt fill — so that where two lanes converge the second lane's dark
+// border can't be painted over the first lane's finished surface, which would
+// leave a seam down the middle of what should look like one piece of track.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_path(path: &Path, palette: &Palette) {
+pub fn draw_paths(paths: &[Path], palette: &Palette) {
     for (width, color) in [
         (TRACK_OUTER, palette.track_border),
         (TRACK_INNER, palette.track_dirt),
     ] {
-        for w in path.points().windows(2) {
-            draw_line(w[0].x, w[0].y, w[1].x, w[1].y, width, color);
-        }
-        for p in path.points() {
-            draw_circle(p.x, p.y, width * 0.5, color);
+        for path in paths {
+            for w in path.points().windows(2) {
+                draw_line(w[0].x, w[0].y, w[1].x, w[1].y, width, color);
+            }
+            for p in path.points() {
+                draw_circle(p.x, p.y, width * 0.5, color);
+            }
         }
     }
 
-    // Exit marker — the thing the player is defending.
-    if let Some(end) = path.points().last() {
+    // Exit markers — the thing the player is defending. Lanes of a multi-lane
+    // route share an exit, so identical positions are drawn once; stacking two
+    // translucent markers on one spot would just make it darker than the others.
+    let mut drawn: Vec<Vec2> = Vec::new();
+    for path in paths {
+        let Some(&end) = path.points().last() else {
+            continue;
+        };
+        if drawn.iter().any(|p| p.distance(end) < 1.0) {
+            continue;
+        }
+        drawn.push(end);
+
         draw_circle(end.x, end.y, 26.0, Color::new(0.85, 0.25, 0.25, 0.55));
         draw_circle_lines(end.x, end.y, 26.0, 3.0, Color::new(1.0, 0.85, 0.85, 0.9));
     }
@@ -1508,11 +1531,21 @@ pub fn draw_menu() {
 // layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn track_card_rect(i: usize) -> Rect {
+    let w = card_width();
     let n = TRACKS.len() as f32;
-    let total = n * CARD_W + (n - 1.0) * CARD_GAP;
+    let total = n * w + (n - 1.0) * CARD_GAP;
     let x0 = (screen_width() - total) * 0.5;
 
-    Rect::new(x0 + i as f32 * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H)
+    Rect::new(x0 + i as f32 * (w + CARD_GAP), CARD_Y, w, CARD_H)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// How wide each route card is: whatever divides the window evenly once the
+// margins and the gaps between cards are taken out.
+// ─────────────────────────────────────────────────────────────────────────────
+fn card_width() -> f32 {
+    let n = TRACKS.len() as f32;
+    (AUTHOR_W - 2.0 * CARD_MARGIN - (n - 1.0) * CARD_GAP) / n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1564,17 +1597,19 @@ pub fn draw_track_select() {
             },
         );
 
+        // 19px, not 21: at five cards to a row the longest route name sat hard
+        // against the card border.
         draw_text(
             format!("{}. {}", i + 1, track.name),
             r.x + 12.0,
             r.y + 26.0,
-            21.0,
+            19.0,
             WHITE,
         );
 
         // Preview in the route's own colours, so the backdrops are comparable
         // before committing to a run.
-        draw_track_preview(track.points, r, &crate::scenery::palette(i));
+        draw_track_preview(track.lanes, r, &crate::scenery::palette(i));
 
         draw_text(
             track.difficulty,
@@ -1605,7 +1640,7 @@ pub fn draw_track_select() {
     }
 
     text_center(
-        "click a route, or press 1-4",
+        &format!("click a route, or press 1-{}", TRACKS.len()),
         CARD_Y + CARD_H + 48.0,
         26.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
@@ -1615,7 +1650,7 @@ pub fn draw_track_select() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Draw a route's polyline scaled down to fit inside a selection card.
 // ─────────────────────────────────────────────────────────────────────────────
-fn draw_track_preview(points: &[(f32, f32)], card: Rect, palette: &Palette) {
+fn draw_track_preview(lanes: &[&[(f32, f32)]], card: Rect, palette: &Palette) {
     let inner_x = card.x + 10.0;
     let inner_y = card.y + 40.0;
     let inner_w = card.w - 20.0;
@@ -1646,19 +1681,34 @@ fn draw_track_preview(points: &[(f32, f32)], card: Rect, palette: &Palette) {
     let scale = (inner_w / AUTHOR_W).min(inner_h / AUTHOR_H);
     let to_card = |p: (f32, f32)| vec2(inner_x + p.0 * scale, inner_y + p.1 * scale);
 
-    for w in points.windows(2) {
-        let (a, b) = (to_card(w[0]), to_card(w[1]));
-        draw_line(a.x, a.y, b.x, b.y, 5.0, Color::new(0.55, 0.43, 0.29, 1.0));
-    }
-    for &p in points {
-        let c = to_card(p);
-        draw_circle(c.x, c.y, 2.5, Color::new(0.55, 0.43, 0.29, 1.0));
+    let dirt = Color::new(0.55, 0.43, 0.29, 1.0);
+    for lane in lanes {
+        for w in lane.windows(2) {
+            let (a, b) = (to_card(w[0]), to_card(w[1]));
+            draw_line(a.x, a.y, b.x, b.y, 5.0, dirt);
+        }
+        for &p in *lane {
+            let c = to_card(p);
+            draw_circle(c.x, c.y, 2.5, dirt);
+        }
     }
 
-    // Mark the exit the player is defending.
-    if let Some(&last) = points.last() {
-        let e = to_card(last);
-        draw_circle(e.x, e.y, 5.0, Color::new(0.85, 0.25, 0.25, 0.9));
+    // Mark each entrance, so a two-lane route is recognisable as such from the
+    // card rather than only once the first wave is already walking.
+    for lane in lanes {
+        if let Some(&first) = lane.first() {
+            let s = to_card(first);
+            draw_circle(s.x, s.y, 4.0, Color::new(0.55, 0.85, 1.0, 0.9));
+        }
+    }
+
+    // Mark the exit the player is defending. Lanes share one, so this draws the
+    // same point twice on a two-lane route — harmless, it is fully opaque.
+    for lane in lanes {
+        if let Some(&last) = lane.last() {
+            let e = to_card(last);
+            draw_circle(e.x, e.y, 5.0, Color::new(0.85, 0.25, 0.25, 0.9));
+        }
     }
 }
 

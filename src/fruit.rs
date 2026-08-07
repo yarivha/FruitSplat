@@ -208,6 +208,10 @@ impl FruitKind {
 /// is; `pos` is just the cached world position for that distance.
 pub struct Fruit {
     pub kind: FruitKind,
+    /// Which of the route's lanes this fruit walks. Most routes have one lane;
+    /// on a two-entrance route `dist` only means anything measured against this
+    /// one, and two distances on different lanes are not comparable at all.
+    pub lane: usize,
     pub dist: f32,
     pub pos: Vec2,
     /// Seconds of Freezer slow remaining.
@@ -228,11 +232,12 @@ pub struct Fruit {
 
 impl Fruit {
     // ─────────────────────────────────────────────────────────────────────────
-    // Spawn a fruit at `dist` along the track.
+    // Spawn a fruit at `dist` along `lane`. `path` must be that lane's polyline.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn new(kind: FruitKind, dist: f32, path: &Path, speed_mult: f32) -> Self {
+    pub fn new(kind: FruitKind, lane: usize, dist: f32, path: &Path, speed_mult: f32) -> Self {
         Fruit {
             kind,
+            lane,
             dist,
             pos: path.point_at(dist),
             slow_timer: 0.0,
@@ -329,9 +334,29 @@ impl Fruit {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // How far along its lane this fruit is, as 0.0 at the entrance to 1.0 at the
+    // exit.
+    //
+    // This is what "first" targeting sorts on, not the raw distance: on a
+    // two-lane route the lanes are different lengths, so 900px along the short
+    // lane is a more urgent threat than 900px along the long one, and a tower
+    // covering both would otherwise always favour whichever lane happened to be
+    // longer.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn progress(&self, path: &Path) -> f32 {
+        if path.total() <= 0.0 {
+            return 0.0;
+        }
+        self.dist / path.total()
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // The children this fruit bursts into, if any. Each one trails a little
     // further back down the track, so a split visibly fans out rather than
     // stacking every child on the same spot.
+    //
+    // Children stay on their parent's lane — a fruit never changes lanes, which
+    // is what lets a lane index and a distance describe it completely.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn split(&self, path: &Path) -> Vec<Fruit> {
         let Some(child) = self.kind.child() else {
@@ -343,7 +368,7 @@ impl Fruit {
             .map(|i| {
                 let dist = (self.dist - i as f32 * spread).max(0.0);
                 // Children inherit the wave's speed ramp from their parent.
-                Fruit::new(child, dist, path, self.speed_mult)
+                Fruit::new(child, self.lane, dist, path, self.speed_mult)
             })
             .collect()
     }
@@ -499,14 +524,14 @@ mod tests {
     #[test]
     fn an_ordinary_fruit_bursts_on_its_first_hit() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Watermelon, 100.0, &path, 1.0);
+        let mut f = Fruit::new(FruitKind::Watermelon, 0, 100.0, &path, 1.0);
         assert!(f.take_hit(), "a watermelon should not survive a hit");
     }
 
     #[test]
     fn a_durian_soaks_its_whole_armour_before_bursting() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Durian, 100.0, &path, 1.0);
+        let mut f = Fruit::new(FruitKind::Durian, 0, 100.0, &path, 1.0);
 
         for hit in 1..DURIAN_ARMOUR {
             assert!(!f.take_hit(), "burst early, on hit {hit}");
@@ -523,7 +548,7 @@ mod tests {
     #[test]
     fn the_health_bar_tracks_the_armour_down() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Durian, 0.0, &path, 1.0);
+        let mut f = Fruit::new(FruitKind::Durian, 0, 0.0, &path, 1.0);
         assert_eq!(f.health_fraction(), 1.0);
 
         for _ in 0..DURIAN_ARMOUR / 2 {
@@ -532,14 +557,14 @@ mod tests {
         assert!((f.health_fraction() - 0.5).abs() < 0.01);
 
         // An unarmoured fruit is always full, which is why it gets no bar.
-        let g = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        let g = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
         assert_eq!(g.health_fraction(), 1.0);
     }
 
     #[test]
     fn a_durian_bursts_into_a_fanned_out_cluster_of_watermelons() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(2000.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Durian, 900.0, &path, 1.0);
+        let f = Fruit::new(FruitKind::Durian, 0, 900.0, &path, 1.0);
         let kids = f.split(&path);
 
         assert_eq!(kids.len(), DURIAN_PAYLOAD);
@@ -560,7 +585,7 @@ mod tests {
     #[test]
     fn a_split_yields_two_children_one_trailing() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Watermelon, 200.0, &path, 1.0);
+        let f = Fruit::new(FruitKind::Watermelon, 0, 200.0, &path, 1.0);
         let kids = f.split(&path);
 
         assert_eq!(kids.len(), 2);
@@ -572,14 +597,14 @@ mod tests {
     #[test]
     fn a_blueberry_split_yields_nothing() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Blueberry, 10.0, &path, 1.0);
+        let f = Fruit::new(FruitKind::Blueberry, 0, 10.0, &path, 1.0);
         assert!(f.split(&path).is_empty());
     }
 
     #[test]
     fn splitting_at_the_start_does_not_produce_negative_distance() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let f = Fruit::new(FruitKind::Watermelon, 0.0, &path, 1.0);
+        let f = Fruit::new(FruitKind::Watermelon, 0, 0.0, &path, 1.0);
         assert!(f.split(&path).iter().all(|k| k.dist >= 0.0));
     }
 
@@ -587,8 +612,8 @@ mod tests {
     fn a_chilled_fruit_travels_slower() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
 
-        let mut normal = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
-        let mut chilled = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        let mut normal = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
+        let mut chilled = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
         chilled.chill(0.45, 1.0);
 
         normal.update(0.5, &path);
@@ -601,7 +626,7 @@ mod tests {
     #[test]
     fn overlapping_freezers_keep_the_strongest_chill() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        let mut f = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
 
         f.chill(0.45, 1.6);
         f.chill(0.25, 1.0);
@@ -618,7 +643,7 @@ mod tests {
     #[test]
     fn a_chill_wearing_off_restores_full_speed() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(9000.0, 0.0)]);
-        let mut f = Fruit::new(FruitKind::Lime, 0.0, &path, 1.0);
+        let mut f = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
         f.chill(0.25, 0.1);
 
         f.update(0.2, &path);

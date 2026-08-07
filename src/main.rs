@@ -89,7 +89,14 @@ enum State {
 /// The whole game world.
 struct Game {
     state: State,
-    path: Path,
+    /// One path per lane of the current route. Most routes have a single lane;
+    /// a two-entrance route has two, and every fruit and spike pile carries the
+    /// index of the one it belongs to.
+    paths: Vec<Path>,
+    /// Which lane the next spawned fruit goes down. Lanes are dealt in turn, so
+    /// a two-entrance route splits each wave evenly between its gates instead of
+    /// leaving the split to chance.
+    next_lane: usize,
     fruits: Vec<Fruit>,
     towers: Vec<Tower>,
     projectiles: Vec<Projectile>,
@@ -133,7 +140,8 @@ impl Game {
             state: State::Menu,
             // Placeholder until a route is chosen; the menu draws it as a
             // backdrop and start_run replaces it.
-            path: tracks::TRACKS[0].path(),
+            paths: tracks::TRACKS[0].paths(),
+            next_lane: 0,
             fruits: Vec::new(),
             towers: Vec::new(),
             projectiles: Vec::new(),
@@ -162,9 +170,9 @@ impl Game {
     // ─────────────────────────────────────────────────────────────────────────
     fn start_run(&mut self, track: usize) {
         self.track = track.min(tracks::TRACKS.len() - 1);
-        self.path = tracks::TRACKS[self.track].path();
+        self.paths = tracks::TRACKS[self.track].paths();
         self.palette = scenery::palette(self.track);
-        self.props = scenery::generate(self.track, &self.path);
+        self.props = scenery::generate(self.track, &self.paths);
 
         self.clear_board();
         self.spawn_timer = 0.0;
@@ -192,6 +200,16 @@ impl Game {
         self.selected = None;
         self.selected_tower = None;
         self.quit_armed = 0.0;
+        self.next_lane = 0;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // The path a fruit or pile on `lane` walks. Falls back to the first lane
+    // rather than panicking: nothing should ever hold a stale lane index, but a
+    // wave is a bad moment to find out otherwise.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn lane(&self, lane: usize) -> &Path {
+        self.paths.get(lane).unwrap_or(&self.paths[0])
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -304,7 +322,10 @@ impl Game {
         }
 
         for f in &mut self.fruits {
-            f.update(dt, &self.path);
+            // Each fruit advances along its own lane. Borrowed by index rather
+            // than through lane() because that borrows all of self.
+            let path = self.paths.get(f.lane).unwrap_or(&self.paths[0]);
+            f.update(dt, path);
         }
         self.handle_leaks();
 
@@ -528,7 +549,13 @@ impl Game {
         {
             return false;
         }
-        if self.path.distance_to(p) < PATH_CLEARANCE {
+        // Clear of every lane, not just one — on a two-entrance route the two
+        // gates are far apart and a tower is only legal if it crowds neither.
+        if self
+            .paths
+            .iter()
+            .any(|path| path.distance_to(p) < PATH_CLEARANCE)
+        {
             return false;
         }
         if self
@@ -549,7 +576,12 @@ impl Game {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Release queued fruit onto the start of the track on the spawn timer.
+    // Release queued fruit onto the start of a lane on the spawn timer.
+    //
+    // Lanes are dealt in turn rather than at random, so a two-entrance route
+    // splits every wave evenly between its gates. Leaving it to chance would let
+    // a run of bad luck send most of a wave down one lane, and the player would
+    // have no way to tell that from the route being unfair.
     // ─────────────────────────────────────────────────────────────────────────
     fn spawn_from_queue(&mut self, dt: f32) {
         if self.queue.is_empty() {
@@ -559,12 +591,16 @@ impl Game {
         self.spawn_timer -= dt;
         if self.spawn_timer <= 0.0 {
             if let Some(kind) = self.queue.pop() {
+                let lane = self.next_lane % self.paths.len();
+                self.next_lane = (self.next_lane + 1) % self.paths.len();
+
                 // Fruit carry the wave's speed ramp, and pass it to their
                 // children when they split.
                 self.fruits.push(Fruit::new(
                     kind,
+                    lane,
                     0.0,
-                    &self.path,
+                    &self.paths[lane],
                     wave::speed_multiplier(self.wave),
                 ));
             }
@@ -580,7 +616,7 @@ impl Game {
             .fruits
             .iter()
             .enumerate()
-            .filter(|(_, f)| f.reached_end(&self.path))
+            .filter(|(_, f)| f.reached_end(self.lane(f.lane)))
             .map(|(i, _)| i)
             .collect();
 
@@ -617,11 +653,12 @@ impl Game {
                     continue;
                 }
 
-                if let Some((dist, pos)) =
-                    pick_spike_spot(&self.path, t.pos, range, &self.spikes)
+                if let Some((lane, dist, pos)) =
+                    pick_spike_spot(&self.paths, t.pos, range, &self.spikes)
                 {
                     self.spikes.push(SpikePile::new(
                         pos,
+                        lane,
                         dist,
                         t.spike_charges(),
                         t.id,
@@ -656,18 +693,34 @@ impl Game {
 
             // "First" targeting: the fruit closest to the exit is the threat.
             // Collect owned copies so the fruit list isn't borrowed while firing.
-            let mut in_range: Vec<(f32, Vec2, f32)> = self
+            //
+            // Sorted on *fraction* of the lane walked, not raw distance. On a
+            // two-entrance route the lanes are different lengths, so a fruit
+            // 900px down the short lane is nearer its exit — and so more urgent
+            // — than one 900px down the long lane. Comparing raw distances would
+            // have a tower covering both gates quietly favour whichever lane
+            // happened to be longer.
+            let mut in_range: Vec<(f32, Vec2, f32, usize, f32)> = self
                 .fruits
                 .iter()
                 .filter(|f| f.pos.distance(t.pos) <= range)
-                .map(|f| (f.dist, f.pos, f.current_speed()))
+                .map(|f| {
+                    let path = self.paths.get(f.lane).unwrap_or(&self.paths[0]);
+                    (
+                        f.progress(path),
+                        f.pos,
+                        f.current_speed(),
+                        f.lane,
+                        f.dist,
+                    )
+                })
                 .collect();
 
             if in_range.is_empty() {
                 continue;
             }
 
-            // Furthest along the track first.
+            // Furthest along its lane first.
             in_range.sort_by(|a, b| b.0.total_cmp(&a.0));
 
             let projectile_kind = match t.kind {
@@ -680,12 +733,14 @@ impl Game {
 
             // A Lv3 Seed Shooter engages the two lead fruit; everything else
             // fires a single shot.
-            for (dist, pos, speed) in in_range.iter().take(t.shots()) {
+            for (_, pos, speed, lane, dist) in in_range.iter().take(t.shots()) {
                 // Aim where the fruit will be, not where it is. Shots don't
                 // home, so without leading, the late-wave speed ramp would make
                 // towers miss almost everything through no fault of the player.
+                // The lead runs along the target's own lane.
                 let travel = pos.distance(t.pos) / projectile_kind.speed();
-                let aim = self.path.point_at(dist + speed * travel);
+                let path = self.paths.get(*lane).unwrap_or(&self.paths[0]);
+                let aim = path.point_at(dist + speed * travel);
 
                 self.projectiles.push(Projectile::new(
                     t.pos,
@@ -801,7 +856,7 @@ impl Game {
             }
             self.splats.push(Splat::burst(f.pos, f.kind));
             self.audio.play_pop(f.kind.tier(), f.kind.is_boss());
-            children.extend(f.split(&self.path));
+            children.extend(f.split(self.paths.get(f.lane).unwrap_or(&self.paths[0])));
 
             // The firing tower may already have been sold, in which case the
             // credit is simply dropped. Only the killing blow scores, so a boss
@@ -895,7 +950,7 @@ impl Game {
             // Scenery sits under the track, so foliage can never obscure the
             // route the fruit are walking.
             render::draw_scenery(&self.props, &self.palette);
-            render::draw_path(&self.path, &self.palette);
+            render::draw_paths(&self.paths, &self.palette);
             // Spikes lie on the track, under everything that moves over them.
             render::draw_spikes(&self.spikes);
 
@@ -1014,7 +1069,7 @@ fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32
         // the same — so it is simply the first one with any left.
         let pile = piles
             .iter_mut()
-            .find(|p| !p.spent() && p.covers(f.dist, f.radius()));
+            .find(|p| !p.spent() && p.covers(f.lane, f.dist, f.radius()));
 
         if let Some(pile) = pile {
             pile.charges -= 1;
@@ -1026,34 +1081,52 @@ fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pick where a Spike Layer should drop its next pile.
+// Pick which lane and where along it a Spike Layer should drop its next pile.
+// Returns (lane, distance along that lane, world position).
 //
-// Walks the route looking for points inside the tower's range that aren't
-// already too close to an existing pile, and takes the one furthest along.
-// Dropping at the far edge of coverage first, then working backwards as those
-// spots fill, spreads a tower's piles across its whole stretch of track.
+// Walks every lane looking for points inside the tower's range that aren't
+// already too close to an existing pile on that same lane, and takes the one
+// furthest along. Dropping at the far edge of coverage first, then working
+// backwards as those spots fill, spreads a tower's piles across its whole
+// stretch of track.
+//
+// Candidates are ranked by *fraction* of the lane covered so far, so a tower
+// that reaches both gates of a two-entrance route treats them evenly instead of
+// emptying its allowance into whichever lane happens to be longer. Spacing is
+// only checked against piles on the same lane: two lanes running close together
+// near the shared exit are still different track, and a pile on one does not
+// block the other.
 // ─────────────────────────────────────────────────────────────────────────────
 fn pick_spike_spot(
-    path: &Path,
+    paths: &[Path],
     tower: Vec2,
     range: f32,
     existing: &[SpikePile],
-) -> Option<(f32, Vec2)> {
+) -> Option<(usize, f32, Vec2)> {
     const STEP: f32 = 12.0;
 
-    let mut best: Option<(f32, Vec2)> = None;
-    let mut d = 0.0;
+    let mut best: Option<(usize, f32, Vec2)> = None;
+    let mut best_progress = f32::NEG_INFINITY;
 
-    while d <= path.total() {
-        let p = path.point_at(d);
-        if p.distance(tower) <= range
-            && existing
+    for (lane, path) in paths.iter().enumerate() {
+        let total = path.total();
+        let mut d = 0.0;
+
+        while d <= total {
+            let p = path.point_at(d);
+            let clear = existing
                 .iter()
-                .all(|s| (s.dist - d).abs() >= SPIKE_SPACING)
-        {
-            best = Some((d, p));
+                .all(|s| s.lane != lane || (s.dist - d).abs() >= SPIKE_SPACING);
+
+            if p.distance(tower) <= range && clear {
+                let progress = if total > 0.0 { d / total } else { 0.0 };
+                if progress >= best_progress {
+                    best_progress = progress;
+                    best = Some((lane, d, p));
+                }
+            }
+            d += STEP;
         }
-        d += STEP;
     }
 
     best
@@ -1112,11 +1185,20 @@ impl Game {
             self.towers.push(t);
         }
 
+        // Everything is staged on the first lane; a multi-lane route's second
+        // lane is left clear so the two can be told apart in the capture.
+        let lane = 0;
+
         // One fruit of every ordinary tier, spaced out along the route.
         for tier in 0..5u8 {
             let dist = 340.0 + tier as f32 * 300.0;
-            self.fruits
-                .push(Fruit::new(FruitKind::from_tier(tier), dist, &self.path, 1.0));
+            self.fruits.push(Fruit::new(
+                FruitKind::from_tier(tier),
+                lane,
+                dist,
+                &self.paths[lane],
+                1.0,
+            ));
         }
         // Chill one so the frost treatment shows up too.
         self.fruits[2].chill(0.35, 5.0);
@@ -1128,8 +1210,9 @@ impl Game {
         // can't be judged.
         let mut boss = Fruit::new(
             FruitKind::Durian,
-            self.path.total() - 240.0,
-            &self.path,
+            lane,
+            self.paths[lane].total() - 240.0,
+            &self.paths[lane],
             1.0,
         );
         // Rough it up so the armour bar is on screen; an untouched boss
@@ -1142,7 +1225,8 @@ impl Game {
         for (i, charges) in [9u32, 5, 2].iter().enumerate() {
             let dist = 520.0 + i as f32 * 240.0;
             self.spikes.push(SpikePile::new(
-                self.path.point_at(dist),
+                self.paths[lane].point_at(dist),
+                lane,
                 dist,
                 *charges,
                 0,
@@ -1228,12 +1312,21 @@ mod tests {
         Path::new(vec![vec2(0.0, 0.0), vec2(2000.0, 0.0)])
     }
 
+    /// Everything defaults to lane 0; the tests that care about lanes say so.
     fn fruit_at(kind: FruitKind, dist: f32, path: &Path) -> Fruit {
-        Fruit::new(kind, dist, path, 1.0)
+        Fruit::new(kind, 0, dist, path, 1.0)
+    }
+
+    fn fruit_on(kind: FruitKind, lane: usize, dist: f32, path: &Path) -> Fruit {
+        Fruit::new(kind, lane, dist, path, 1.0)
+    }
+
+    fn pile_on(lane: usize, dist: f32, charges: u32, owner: u32) -> SpikePile {
+        SpikePile::new(Vec2::ZERO, lane, dist, charges, owner, 0.0)
     }
 
     fn pile_at(dist: f32, charges: u32, owner: u32) -> SpikePile {
-        SpikePile::new(Vec2::ZERO, dist, charges, owner, 0.0)
+        pile_on(0, dist, charges, owner)
     }
 
     #[test]
@@ -1250,7 +1343,7 @@ mod tests {
         assert!(
             piles
                 .iter()
-                .all(|p| p.covers(fruits[0].dist, fruits[0].radius())),
+                .all(|p| p.covers(fruits[0].lane, fruits[0].dist, fruits[0].radius())),
             "setup is wrong: both piles must cover the fruit"
         );
 
@@ -1313,12 +1406,13 @@ mod tests {
 
     #[test]
     fn a_spike_spot_is_inside_range_and_clear_of_the_piles_already_down() {
-        let path = straight_path();
+        let paths = vec![straight_path()];
         let tower = vec2(600.0, 0.0);
         let existing = vec![pile_at(640.0, 4, 0)];
 
-        let (dist, pos) = pick_spike_spot(&path, tower, 120.0, &existing).unwrap();
+        let (lane, dist, pos) = pick_spike_spot(&paths, tower, 120.0, &existing).unwrap();
 
+        assert_eq!(lane, 0, "only one lane to choose from");
         assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
         assert!(
             (dist - existing[0].dist).abs() >= SPIKE_SPACING,
@@ -1327,6 +1421,84 @@ mod tests {
         // Coverage runs to the far edge of range, then works backwards as spots
         // fill, so a tower spreads its piles over its whole stretch.
         assert!(dist > tower.x, "should favour the far end of the coverage");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Two-lane routes. These are the cases a single-lane route can never reach,
+    // and the ones where getting it wrong is invisible rather than obvious.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Two lanes running parallel a short distance apart, as the two gates of a
+    /// two-entrance route do on their way to the shared exit.
+    fn two_lanes() -> Vec<Path> {
+        vec![
+            Path::new(vec![vec2(0.0, 0.0), vec2(2000.0, 0.0)]),
+            Path::new(vec![vec2(0.0, 60.0), vec2(2000.0, 60.0)]),
+        ]
+    }
+
+    #[test]
+    fn a_pile_never_pops_fruit_walking_the_other_lane() {
+        // Same distance along, 60px apart in the world. Only the fruit actually
+        // standing on the pile may be hit.
+        let paths = two_lanes();
+        let mut piles = vec![pile_on(0, 500.0, 4, 7)];
+        let fruits = vec![
+            fruit_on(FruitKind::Lime, 1, 500.0, &paths[1]),
+            fruit_on(FruitKind::Lime, 0, 500.0, &paths[0]),
+        ];
+
+        let hits = run_over_spikes(&mut piles, &fruits);
+
+        assert_eq!(hits, vec![(1, 7)], "the wrong lane's fruit was hit");
+        assert_eq!(piles[0].charges, 3, "exactly one spike spent");
+    }
+
+    #[test]
+    fn a_spike_layer_covering_both_lanes_can_drop_on_either() {
+        // A tower between the two lanes reaches both. Which lane it picks is not
+        // fixed, but it must be a lane it can actually reach.
+        let paths = two_lanes();
+        let tower = vec2(600.0, 30.0);
+
+        let (lane, _, pos) = pick_spike_spot(&paths, tower, 120.0, &[]).unwrap();
+
+        assert!(lane < paths.len(), "picked a lane that does not exist");
+        assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+    }
+
+    #[test]
+    fn a_pile_on_one_lane_does_not_block_a_spot_on_the_other() {
+        // Spacing is a per-lane rule. Two lanes that run close together near the
+        // shared exit are still different track, so a pile on one must not stop
+        // a Spike Layer dropping at the same point along the other.
+        let paths = two_lanes();
+        let tower = vec2(600.0, 30.0);
+
+        // Saturate lane 0 across the tower's whole reach.
+        let existing: Vec<SpikePile> = (0..40)
+            .map(|i| pile_on(0, 480.0 + i as f32 * SPIKE_SPACING * 0.5, 4, 0))
+            .collect();
+
+        let (lane, _, _) = pick_spike_spot(&paths, tower, 120.0, &existing)
+            .expect("lane 1 was still wide open");
+        assert_eq!(lane, 1, "a full lane 0 should push the drop onto lane 1");
+    }
+
+    #[test]
+    fn targeting_ranks_fruit_by_how_far_along_their_own_lane_they_are() {
+        // The lanes are deliberately different lengths. The fruit that is fewer
+        // pixels along is nearer its own exit, and so the greater threat.
+        let short = Path::new(vec![vec2(0.0, 0.0), vec2(1000.0, 0.0)]);
+        let long = Path::new(vec![vec2(0.0, 60.0), vec2(3000.0, 60.0)]);
+
+        let near_exit = fruit_on(FruitKind::Lime, 0, 900.0, &short);
+        let barely_started = fruit_on(FruitKind::Lime, 1, 900.0, &long);
+
+        assert!(
+            near_exit.progress(&short) > barely_started.progress(&long),
+            "raw distance would have called these two equally urgent"
+        );
     }
 
     #[test]

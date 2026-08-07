@@ -117,6 +117,8 @@ enum Theme {
     Market,
     Farm,
     Grove,
+    /// The two-entrance route: a cold upland with two ways down into it.
+    Highland,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +130,8 @@ fn theme(track: usize) -> Theme {
         0 => Theme::Orchard,
         1 => Theme::Market,
         2 => Theme::Farm,
-        _ => Theme::Grove,
+        3 => Theme::Grove,
+        _ => Theme::Highland,
     }
 }
 
@@ -169,6 +172,16 @@ pub fn palette(track: usize) -> Palette {
             track_border: Color::new(0.31, 0.23, 0.15, 1.0),
             track_dirt: Color::new(0.50, 0.39, 0.26, 1.0),
             foliage: Color::new(0.19, 0.38, 0.22, 1.0),
+        },
+        // Cold, thin upland grass over pale stone. Deliberately the bluest of
+        // the five: the two-lane route asks the player to watch two places at
+        // once, and it helps if a glance at the field says which route this is.
+        Theme::Highland => Palette {
+            grass_top: Color::new(0.34, 0.46, 0.42, 1.0),
+            grass_bottom: Color::new(0.22, 0.33, 0.33, 1.0),
+            track_border: Color::new(0.33, 0.31, 0.28, 1.0),
+            track_dirt: Color::new(0.56, 0.53, 0.47, 1.0),
+            foliage: Color::new(0.24, 0.42, 0.34, 1.0),
         },
     }
 }
@@ -225,6 +238,22 @@ fn prop_mix(theme: Theme) -> (&'static [PropKind], usize) {
             ],
             62,
         ),
+        // Rocky and sparse. Two lanes leave less open ground to build on, so
+        // the scatter is thinner than anywhere else — scenery never blocks
+        // placement, but a crowded field makes it harder to read where the
+        // legal ground actually is.
+        Theme::Highland => (
+            &[
+                PropKind::Rock,
+                PropKind::Rock,
+                PropKind::Rock,
+                PropKind::Bush,
+                PropKind::Bush,
+                PropKind::Tree,
+                PropKind::Flowers,
+            ],
+            34,
+        ),
     }
 }
 
@@ -235,7 +264,7 @@ fn prop_mix(theme: Theme) -> (&'static [PropKind], usize) {
 // track or another prop, and give up on that prop after a bounded number of
 // tries so a busy route can never spin forever.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn generate(track: usize, path: &Path) -> Vec<Prop> {
+pub fn generate(track: usize, paths: &[Path]) -> Vec<Prop> {
     let (mix, count) = prop_mix(theme(track));
     // Seeded from the route index, so a route always looks the same.
     let mut rng = Rng::new(0x5EED_0000 + track as u64);
@@ -255,7 +284,12 @@ pub fn generate(track: usize, path: &Path) -> Vec<Prop> {
                 rng.range(HUD_BOTTOM + up, PLAYFIELD_H - EDGE_MARGIN - down),
             );
 
-            if path.distance_to(pos) < kind.clearance() {
+            // Clear of every lane. A prop crowding the second gate of a
+            // two-entrance route is just as much in the way as one on the first.
+            if paths
+                .iter()
+                .any(|path| path.distance_to(pos) < kind.clearance())
+            {
                 continue;
             }
             let spacing = PROP_SEPARATION + kind.footprint();
@@ -322,8 +356,8 @@ mod tests {
     use super::*;
     use crate::tracks::TRACKS;
 
-    fn test_path(track: usize) -> Path {
-        TRACKS[track].path()
+    fn test_paths(track: usize) -> Vec<Path> {
+        TRACKS[track].paths()
     }
 
     #[test]
@@ -357,7 +391,7 @@ mod tests {
     #[test]
     fn every_route_gets_scenery() {
         for track in 0..TRACKS.len() {
-            let props = generate(track, &test_path(track));
+            let props = generate(track, &test_paths(track));
             assert!(!props.is_empty(), "route {track} generated no scenery");
         }
     }
@@ -365,10 +399,15 @@ mod tests {
     #[test]
     fn no_prop_sits_on_the_track() {
         for track in 0..TRACKS.len() {
-            let path = test_path(track);
-            for p in generate(track, &path) {
+            let paths = test_paths(track);
+            for p in generate(track, &paths) {
+                // Clear of every lane, not merely the first one.
+                let nearest = paths
+                    .iter()
+                    .map(|path| path.distance_to(p.pos))
+                    .fold(f32::MAX, f32::min);
                 assert!(
-                    path.distance_to(p.pos) >= p.kind.clearance(),
+                    nearest >= p.kind.clearance(),
                     "route {track} put a prop on the track"
                 );
             }
@@ -380,7 +419,7 @@ mod tests {
         // Checks the drawn extent, not just the centre point: ponds used to
         // hang off the window edge and tree canopies reached into the HUD.
         for track in 0..TRACKS.len() {
-            for p in generate(track, &test_path(track)) {
+            for p in generate(track, &test_paths(track)) {
                 let (ex, up, down) = p.kind.extent();
                 let (ex, up, down) = (ex * p.scale, up * p.scale, down * p.scale);
 
@@ -404,9 +443,9 @@ mod tests {
     #[test]
     fn layout_is_repeatable_for_a_route() {
         for track in 0..TRACKS.len() {
-            let path = test_path(track);
-            let a = generate(track, &path);
-            let b = generate(track, &path);
+            let paths = test_paths(track);
+            let a = generate(track, &paths);
+            let b = generate(track, &paths);
 
             assert_eq!(a.len(), b.len());
             for (p, q) in a.iter().zip(b.iter()) {
@@ -418,14 +457,14 @@ mod tests {
 
     #[test]
     fn different_routes_get_different_layouts() {
-        let a = generate(0, &test_path(0));
-        let b = generate(1, &test_path(1));
+        let a = generate(0, &test_paths(0));
+        let b = generate(1, &test_paths(1));
         assert_ne!(a[0].pos, b[0].pos);
     }
 
     #[test]
     fn props_are_sorted_back_to_front() {
-        let props = generate(0, &test_path(0));
+        let props = generate(0, &test_paths(0));
         for w in props.windows(2) {
             assert!(w[0].pos.y <= w[1].pos.y, "painter order is broken");
         }

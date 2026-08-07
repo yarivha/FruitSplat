@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Lv2. Its knives tumble end over end in flight and it has its own metallic
   whoosh, gated separately from the seed thwip so a field of Seed Shooters can't
   silence it.
-- "First" targeting: towers engage the fruit furthest along the track.
+- "First" targeting: towers engage the fruit furthest along its lane.
 - Free-form tower placement on open ground, with a live range preview that turns
   red when the spot is unaffordable, off-field, too close to the track, or
   overlapping another tower.
@@ -95,15 +95,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 93 unit tests covering path maths (corner traversal, end clamping,
+- 103 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
-  charge accounting and where a Spike Layer drops its next pile, validation that
-  every authored route enters and exits off-screen, leaves room for towers
-  beside it and runs long enough to meet the boss, UI layout assertions that the
-  four shop buttons and the hint column fit the window without overlapping, and
-  scenery checks covering prop placement, determinism and the local RNG's range.
+  charge accounting and where a Spike Layer drops its next pile, lane isolation
+  (a pile never reaching another lane, spacing staying per-lane, targeting
+  ranking by lane fraction), validation that every authored lane enters and exits
+  off-screen, leaves room for towers beside it, runs long enough to meet the boss
+  and never shares a corridor with another lane, UI layout assertions that the
+  shop buttons, the audio toggles, the quit button and both card text columns fit
+  without overlapping, and scenery checks covering prop placement, determinism
+  and the local RNG's range.
 - Procedurally generated audio — 14 sound effects and 2 music loops, produced by
   pure-stdlib Python scripts in `tools/` and embedded with `include_bytes!` so
   the binary stays standalone.
@@ -120,6 +123,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **Lanes.** A route is now one or more polylines rather than exactly one, and
+  every fruit and spike pile carries the index of the lane it belongs to. Lanes
+  stay independent for their whole length even where they converge on screen: a
+  fruit never changes lane, and a pile never touches another lane's fruit.
+  - **"Twin Gates"**, a fifth route (Tricky, 18 waves) and the first with two
+    lanes. Fruit enter at two gates on the left, one high and one low, and both
+    streams leave by the same exit on the right. Each wave is dealt to the gates
+    in turn, so it arrives as two half-strength streams instead of one the player
+    can meet head on. Neither lane is long — the difficulty is that they are far
+    apart, so one cluster of towers cannot answer both and the same money has to
+    cover two approaches.
+  - The lanes converge on the exit *point* rather than sharing a stretch of track
+    before it. A shared corridor would look right and play wrong: piles belong to
+    one lane, so a Spike Layer covering the shared run would pop only half the
+    fruit walking over it, for no reason the player could see. A test walks both
+    lanes and fails if they ever come within 60px outside the exit.
+  - **Targeting now ranks fruit by fraction of their lane walked, not by raw
+    distance.** The lanes are different lengths, so 900px along the short one is
+    nearer its exit — and so more urgent — than 900px along the long one.
+    Comparing raw distances would have had every tower covering both gates
+    quietly favour whichever lane happened to be longer.
+  - Tower placement clearance, scenery rejection and Spike Layer drop spots all
+    consider every lane. Pile spacing stays a per-lane rule, so a pile on one
+    lane cannot block a drop on the other where the two run close together.
+  - Route cards size themselves to however many routes exist — at the old fixed
+    220px a fifth card ran 164px off the window — and their previews draw every
+    lane with each entrance marked, so a two-lane route is recognisable from the
+    selection screen rather than only once the first wave is walking.
+  - New "Highland" backdrop for it: cold, thin upland grass over pale stone, the
+    bluest of the five, and a sparser scatter of props since two lanes leave less
+    open ground to read as buildable.
 - **QUIT RUN** button in the HUD strip, to abandon a run in progress and go back
   to the title screen. Drawn only during play — there is nothing to quit from
   the title screen.
