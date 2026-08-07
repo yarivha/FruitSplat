@@ -43,6 +43,13 @@ const AUDIO_BTN_X0: f32 = 352.0;
 const AUDIO_BTN_Y: f32 = 11.0;
 const AUDIO_BTN_GAP: f32 = 8.0;
 
+/// Quit button, just right of the audio toggles. Only drawn during a run —
+/// there is nothing to quit from the title screen.
+const QUIT_BTN_X: f32 = 432.0;
+const QUIT_BTN_W: f32 = 96.0;
+const QUIT_LABEL: &str = "QUIT RUN";
+const QUIT_LABEL_ARMED: &str = "SURE?";
+
 /// Route-selection card layout.
 const CARD_W: f32 = 220.0;
 const CARD_H: f32 = 210.0;
@@ -1132,6 +1139,59 @@ fn draw_note_icon(c: Vec2, ink: Color) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Rect of the quit button, which abandons the run and returns to the title.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn quit_button_rect() -> Rect {
+    Rect::new(QUIT_BTN_X, AUDIO_BTN_Y, QUIT_BTN_W, AUDIO_BTN)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The quit button. `armed` is the second half of a two-click confirm: it sits a
+// dozen pixels from the audio toggles, and a single stray click there throwing
+// away a twenty-five wave run would be unforgivable. The button asks rather than
+// a dialog does, so nothing has to interrupt the wave to ask it.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_quit_button(armed: bool) {
+    let r = quit_button_rect();
+    let hovered = r.contains(mouse_vec());
+
+    let (bg, edge, ink, label) = if armed {
+        (
+            Color::new(0.44, 0.14, 0.14, 0.96),
+            Color::new(1.0, 0.50, 0.45, 1.0),
+            Color::new(1.0, 0.86, 0.82, 1.0),
+            QUIT_LABEL_ARMED,
+        )
+    } else if hovered {
+        (
+            Color::new(0.30, 0.22, 0.22, 0.95),
+            Color::new(0.78, 0.62, 0.60, 0.95),
+            Color::new(0.99, 0.93, 0.91, 1.0),
+            QUIT_LABEL,
+        )
+    } else {
+        (
+            Color::new(0.10, 0.11, 0.15, 0.78),
+            Color::new(0.46, 0.48, 0.56, 0.9),
+            Color::new(0.82, 0.82, 0.88, 1.0),
+            QUIT_LABEL,
+        )
+    };
+
+    draw_rectangle(r.x, r.y, r.w, r.h, bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.5, edge);
+
+    let dims = measure_text(label, None, 15, 1.0);
+    draw_text(
+        label,
+        r.x + (r.w - dims.width) * 0.5,
+        r.y + r.h * 0.5 + 5.0,
+        15.0,
+        ink,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Rect of shop button `i`, so main.rs can hit-test clicks against the same
 // layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1757,6 +1817,42 @@ mod tests {
             audio_button_rect(0).x >= 310.0,
             "audio buttons crowd the cash readout"
         );
+    }
+
+    #[test]
+    fn the_quit_button_clears_the_audio_toggles() {
+        // They sit side by side in the same strip, and the quit button ends a
+        // run — it must not be reachable by a slip off the music toggle.
+        let music = audio_button_rect(1);
+        let quit = quit_button_rect();
+
+        assert!(quit.x >= music.x + music.w, "quit overlaps the audio toggles");
+        assert!(quit.x - (music.x + music.w) >= 8.0, "quit crowds them");
+    }
+
+    #[test]
+    fn the_quit_button_sits_inside_the_hud_strip() {
+        let r = quit_button_rect();
+        assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "quit overhangs");
+        // The wave counter is right-aligned; leave it its half of the strip.
+        assert!(r.x + r.w <= WINDOW_W * 0.6, "quit crowds the wave counter");
+    }
+
+    #[test]
+    fn both_quit_labels_fit_the_button() {
+        // measure_text needs a graphics context that a unit test has no way to
+        // get, so this is a character budget instead — the same trick the route
+        // blurbs use. At 15px the default font runs about 8px per capital.
+        const PX_PER_CHAR: f32 = 8.0;
+        const PADDING: f32 = 12.0;
+
+        for label in [QUIT_LABEL, QUIT_LABEL_ARMED] {
+            assert!(
+                label.len() as f32 * PX_PER_CHAR + PADDING <= quit_button_rect().w,
+                "\"{label}\" is {} chars, too wide for the button",
+                label.len()
+            );
+        }
     }
 
     #[test]

@@ -26,6 +26,7 @@ cargo run --release
 | `Space` | Send the next wave |
 | Click the speaker button | Mute / unmute sound effects |
 | Click the note button | Mute / unmute music |
+| Click **QUIT RUN**, then **SURE?** | Abandon the run, back to the title screen |
 
 Close the window to quit.
 
@@ -42,6 +43,14 @@ lanes at once.
 | Orchard Snake | Medium | 20 | 2370 px | A steady weave | Temperate orchard |
 | Zigzag Grove | Medium | 20 | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
 | The Long Orchard | Gentle | 25 | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+
+You can walk away from a run at any point with the **QUIT RUN** button in the top
+strip. It asks before it acts: the first click turns it into **SURE?** and the
+second confirms, and it stands itself down after three seconds or on a right
+click. It sits a dozen pixels from the audio toggles, so one stray click there
+throwing away a twenty-five wave run would be unforgivable — the button does the
+asking rather than a dialog, so nothing has to interrupt the wave to ask it.
+Quitting sweeps the board and drops the music back to the menu loop.
 
 A run is finite: survive every wave on the route and it's cleared. Harder routes
 run **shorter**, so they're a sharper challenge rather than simply a longer one.

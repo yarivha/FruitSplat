@@ -49,6 +49,10 @@ const START_CASH: u32 = 180;
 /// for the bottom of the split ladder roughly halves late-game income while
 /// still rewarding bigger fruit, which are worth 16 blueberries apiece.
 const CASH_PER_FRUIT_CLEARED: u32 = 1;
+/// How long the quit button stays armed waiting for its confirming click.
+/// Long enough to move the mouse back deliberately, short enough that it can't
+/// still be waiting by the time an unrelated click lands on it later.
+const QUIT_ARM_SECONDS: f32 = 3.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Window configuration, consumed by the macroquad::main attribute.
@@ -113,6 +117,9 @@ struct Game {
     /// Handed out to each placed tower so projectiles can credit kills back to
     /// a specific tower even after others are sold.
     next_tower_id: u32,
+    /// Seconds left on the armed quit button. Above zero, the next click on it
+    /// ends the run; it forgets it was asked once this runs out.
+    quit_armed: f32,
     audio: Audio,
 }
 
@@ -145,6 +152,7 @@ impl Game {
             palette: scenery::palette(0),
             props: Vec::new(),
             next_tower_id: 0,
+            quit_armed: 0.0,
             audio,
         }
     }
@@ -158,6 +166,21 @@ impl Game {
         self.palette = scenery::palette(self.track);
         self.props = scenery::generate(self.track, &self.path);
 
+        self.clear_board();
+        self.spawn_timer = 0.0;
+        self.wave = 1;
+        self.lives = START_LIVES;
+        self.cash = START_CASH;
+        self.next_tower_id = 0;
+        self.state = State::Playing;
+        self.audio.play_music(Track::Game);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sweep everything a run put on the board. Shared by starting a run and
+    // walking away from one, so neither can forget a list the other clears.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn clear_board(&mut self) {
         self.fruits.clear();
         self.towers.clear();
         self.projectiles.clear();
@@ -165,16 +188,25 @@ impl Game {
         self.pulses.clear();
         self.spikes.clear();
         self.queue.clear();
-        self.spawn_timer = 0.0;
-        self.wave = 1;
         self.wave_active = false;
-        self.lives = START_LIVES;
-        self.cash = START_CASH;
         self.selected = None;
         self.selected_tower = None;
-        self.next_tower_id = 0;
-        self.state = State::Playing;
-        self.audio.play_music(Track::Game);
+        self.quit_armed = 0.0;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Give up on the run in progress and go back to the title screen.
+    //
+    // The board is swept rather than left standing, so the title screen looks
+    // like a title screen instead of the wreckage of the run just walked away
+    // from. The music dropping back to the menu loop is the confirmation that
+    // the run is over — there is no sound effect for quitting, because none of
+    // the ones here mean this.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn abandon_run(&mut self) {
+        self.clear_board();
+        self.state = State::Menu;
+        self.audio.play_music(Track::Menu);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -257,6 +289,16 @@ impl Game {
     fn update_play(&mut self, dt: f32, audio_click: bool) {
         self.handle_input(audio_click);
 
+        // Input can have just walked away from the run, in which case the board
+        // is already swept and there is nothing left to step.
+        if self.state != State::Playing {
+            return;
+        }
+
+        if self.quit_armed > 0.0 {
+            self.quit_armed -= dt;
+        }
+
         if self.wave_active {
             self.spawn_from_queue(dt);
         }
@@ -310,6 +352,9 @@ impl Game {
         if is_mouse_button_pressed(MouseButton::Right) {
             self.selected = None;
             self.selected_tower = None;
+            // Right click is already this game's "cancel", so it stands the
+            // quit button down too.
+            self.quit_armed = 0.0;
         }
 
         if is_key_pressed(KeyCode::Space) && !self.wave_active {
@@ -318,13 +363,34 @@ impl Game {
 
         if is_mouse_button_pressed(MouseButton::Left) && !audio_click {
             let m = mouse_vec();
-            if m.y >= PLAYFIELD_H {
+            // Quit is tested first because it is drawn last: the tower panel can
+            // float underneath it, and whatever is on top should take the click.
+            if self.click_quit_button(m) {
+                // Consumed.
+            } else if m.y >= PLAYFIELD_H {
                 self.click_shop(m);
             } else if !self.click_tower_panel(m) {
                 // Only treat it as a field click if the panel didn't take it.
                 self.click_field(m);
             }
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Route a click at the quit button. The first click arms it, a second
+    // confirms, and the arming lapses on its own if neither happens.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn click_quit_button(&mut self, m: Vec2) -> bool {
+        if !render::quit_button_rect().contains(m) {
+            return false;
+        }
+
+        if self.quit_armed > 0.0 {
+            self.abandon_run();
+        } else {
+            self.quit_armed = QUIT_ARM_SECONDS;
+        }
+        true
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -890,8 +956,12 @@ impl Game {
         }
 
         // Above everything, on every screen — matching the fact that they take
-        // a click before every screen does.
+        // a click before every screen does. Quit joins them during a run, and
+        // is drawn last for the same reason: the tower panel can float under it.
         render::draw_audio_buttons(self.audio.sfx_muted(), self.audio.music_muted());
+        if self.state == State::Playing {
+            render::draw_quit_button(self.quit_armed > 0.0);
+        }
     }
 }
 

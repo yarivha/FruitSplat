@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 90 unit tests covering path maths (corner traversal, end clamping,
+- 93 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
@@ -120,6 +120,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **QUIT RUN** button in the HUD strip, to abandon a run in progress and go back
+  to the title screen. Drawn only during play — there is nothing to quit from
+  the title screen.
+  - It asks before it acts: the first click turns it into **SURE?** and the
+    second confirms. It sits a dozen pixels from the audio toggles, and one
+    stray click there silently throwing away a twenty-five wave run would be
+    unforgivable. The button does the asking rather than a dialog, so nothing
+    has to interrupt the wave to ask it.
+  - The arming lapses after three seconds, and a right click stands it down —
+    right click is already this game's cancel.
+  - Quitting sweeps the board, so the title screen looks like a title screen
+    rather than the wreckage of the run just walked away from. Board clearing
+    is now shared with starting a run, so neither can forget a list the other
+    clears.
 - Two audio toggles in the HUD strip — a speaker for sound effects and a note
   for music — each silencing its half independently. Someone playing with the
   game in the background usually wants one or the other gone, not both, which a
