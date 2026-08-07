@@ -75,8 +75,8 @@ const MODE_BTN_H: f32 = 46.0;
 const MODE_BTN_GAP: f32 = 12.0;
 const MODE_BTN_Y: f32 = 226.0;
 /// The coordinate space routes are authored in, used to scale the previews.
-const AUTHOR_W: f32 = 1000.0;
-const AUTHOR_H: f32 = 650.0;
+const AUTHOR_W: f32 = PLAYFIELD_W;
+const AUTHOR_H: f32 = PLAYFIELD_H;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shading helpers
@@ -377,7 +377,7 @@ pub fn draw_paths(paths: &[Path], palette: &Palette) {
     }
 
     // Exit markers — the thing the player is defending. Lanes of a multi-lane
-    // route share an exit, so identical positions are drawn once; stacking two
+    // route share an exit, so identical endpoints are marked once; stacking two
     // translucent markers on one spot would just make it darker than the others.
     let mut drawn: Vec<Vec2> = Vec::new();
     for path in paths {
@@ -389,9 +389,34 @@ pub fn draw_paths(paths: &[Path], palette: &Palette) {
         }
         drawn.push(end);
 
-        draw_circle(end.x, end.y, 26.0, Color::new(0.85, 0.25, 0.25, 0.55));
-        draw_circle_lines(end.x, end.y, 26.0, 3.0, Color::new(1.0, 0.85, 0.85, 0.9));
+        let at = exit_marker_pos(end);
+        draw_circle(at.x, at.y, 26.0, Color::new(0.85, 0.25, 0.25, 0.55));
+        draw_circle_lines(at.x, at.y, 26.0, 3.0, Color::new(1.0, 0.85, 0.85, 0.9));
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Where a route's exit marker is drawn.
+//
+// Not at the terminal waypoint. Routes deliberately run off the edge of the
+// window so fruit leave the screen rather than blinking out at the border, which
+// put the one thing the player is defending permanently out of sight — the
+// marker was drawn every frame, entirely outside the window, on every route.
+//
+// Clamping it back inside puts it where the track crosses out of the field,
+// which is the honest answer anyway: that is the last place a fruit can still be
+// shot. On a route whose lanes converge, the clamped shared endpoint lands
+// between them, right where they meet.
+// ─────────────────────────────────────────────────────────────────────────────
+fn exit_marker_pos(end: Vec2) -> Vec2 {
+    /// Far enough in that the whole 26px marker clears the window edge with a
+    /// visible gap, rather than sitting flush against it.
+    const INSET: f32 = 42.0;
+
+    vec2(
+        end.x.clamp(INSET, PLAYFIELD_W - INSET),
+        end.y.clamp(INSET, PLAYFIELD_H - INSET),
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2032,7 +2057,7 @@ mod tests {
     use super::*;
 
     /// The fixed window width the layout constants are tuned against.
-    const WINDOW_W: f32 = 1000.0;
+    const WINDOW_W: f32 = PLAYFIELD_W;
 
     #[test]
     fn every_shop_button_fits_inside_the_window() {

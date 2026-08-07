@@ -125,6 +125,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **Wider window: 1200 x 740, up from 1000 x 740.** Every route ran off the
+  right edge with its last stretch still to come, so the approach to the exit
+  could not be seen and fruit vanished mid-field while still shootable.
+  - The exit marker is now drawn **clamped back inside the window** instead of
+    at the route's terminal waypoint. Routes deliberately end off-screen so
+    fruit leave rather than blink out at the border, which meant the marker was
+    drawn every frame, entirely outside the window, on every route — the one
+    thing the player is defending had never been visible. Clamped, it sits where
+    the track crosses out of the field, which is also the last point a fruit can
+    still be shot at.
+  - Routes were reshaped rather than merely stretched: each one's rightmost
+    vertical moved out by 200px and its final run shortened by the same amount,
+    so the widened field is used instead of leaving a dead column of grass, and
+    every route's length is unchanged to the pixel by the reshaping. Twin Gates'
+    two lanes now hold 140px apart until the final dive, so they stay clearly
+    two lanes right up to the point they merge.
+  - Every route is nonetheless 200px longer than before the window changed,
+    because the exits moved out with the edge. That is a small uniform easing:
+    fruit spend about two extra seconds under fire on the shortest route.
 - **AUTO toggle** in the top strip: waves send themselves three seconds after
   the field clears, so a run can be played without reaching for the keyboard
   between every wave. The between-waves prompt counts the gap down rather than

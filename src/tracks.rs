@@ -2,7 +2,7 @@
 // tracks.rs — the selectable routes the fruit walk
 //
 // Each track is one or more hand-authored polylines — lanes — in playfield
-// coordinates (0..1000 by 0..650). Lanes start and end just outside the window
+// coordinates (0..1200 by 0..650). Lanes start and end just outside the window
 // so fruit enter and leave off-screen rather than blinking into existence at the
 // border.
 //
@@ -92,9 +92,9 @@ pub const TRACKS: [TrackDef; 5] = [
             (110.0, 520.0),
             (520.0, 520.0),
             (520.0, 230.0),
-            (760.0, 230.0),
-            (760.0, 560.0),
-            (1040.0, 560.0),
+            (960.0, 230.0),
+            (960.0, 560.0),
+            (1240.0, 560.0),
         ]],
     },
     TrackDef {
@@ -106,9 +106,9 @@ pub const TRACKS: [TrackDef; 5] = [
             (-40.0, 340.0),
             (300.0, 340.0),
             (300.0, 200.0),
-            (700.0, 200.0),
-            (700.0, 480.0),
-            (1040.0, 480.0),
+            (900.0, 200.0),
+            (900.0, 480.0),
+            (1240.0, 480.0),
         ]],
     },
     TrackDef {
@@ -128,9 +128,9 @@ pub const TRACKS: [TrackDef; 5] = [
             (500.0, 560.0),
             (700.0, 560.0),
             (700.0, 250.0),
-            (860.0, 250.0),
-            (860.0, 470.0),
-            (1040.0, 470.0),
+            (1060.0, 250.0),
+            (1060.0, 470.0),
+            (1240.0, 470.0),
         ]],
     },
     TrackDef {
@@ -148,9 +148,9 @@ pub const TRACKS: [TrackDef; 5] = [
             (530.0, 520.0),
             (720.0, 520.0),
             (720.0, 180.0),
-            (900.0, 180.0),
-            (900.0, 520.0),
-            (1040.0, 520.0),
+            (1100.0, 180.0),
+            (1100.0, 520.0),
+            (1240.0, 520.0),
         ]],
     },
     // ─────────────────────────────────────────────────────────────────────────
@@ -182,8 +182,8 @@ pub const TRACKS: [TrackDef; 5] = [
                 (450.0, 130.0),
                 (700.0, 130.0),
                 (700.0, 330.0),
-                (880.0, 330.0),
-                (1040.0, 400.0),
+                (1000.0, 330.0),
+                (1240.0, 400.0),
             ],
             // The low road.
             &[
@@ -193,9 +193,9 @@ pub const TRACKS: [TrackDef; 5] = [
                 (380.0, 380.0),
                 (380.0, 560.0),
                 (620.0, 560.0),
-                (620.0, 420.0),
-                (860.0, 420.0),
-                (1040.0, 400.0),
+                (620.0, 470.0),
+                (1000.0, 470.0),
+                (1240.0, 400.0),
             ],
         ],
     },
@@ -208,7 +208,7 @@ mod tests {
     use crate::PLAYFIELD_H;
 
     /// The coordinate space the routes are authored in.
-    const AUTHOR_W: f32 = 1000.0;
+    const AUTHOR_W: f32 = crate::PLAYFIELD_W;
 
     /// Longest blurb that fits inside a selection card at its font size.
     /// Measured against the card, not guessed. Was 26 when four cards shared the

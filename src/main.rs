@@ -35,7 +35,13 @@ pub const PLAYFIELD_H: f32 = 650.0;
 /// Width of the playable field. Routes and scenery are authored against this
 /// fixed space rather than the live window size, so layout is reproducible
 /// without a graphics context.
-pub const PLAYFIELD_W: f32 = 1000.0;
+///
+/// Widened from 1000 because every route ran off the right edge with its exit
+/// still to come: the last stretch of track, and the exit marker itself, were
+/// permanently out of sight. Routes still overhang the window at both ends so
+/// fruit enter and leave off-screen, but the overhang is now margin rather than
+/// the end of the route.
+pub const PLAYFIELD_W: f32 = 1200.0;
 
 const WINDOW_W: i32 = PLAYFIELD_W as i32;
 const WINDOW_H: i32 = 740;

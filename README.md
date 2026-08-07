@@ -82,11 +82,11 @@ lanes at once.
 
 | Route | Difficulty | Waves | Length | Character | Backdrop |
 |---|---|---|---|---|---|
-| Market Run | Hard | 15 | 1500 px | Short and direct | Dusty market of crates and fences |
-| Twin Gates | Tricky | 18 | 1600 px ×2 | **Two entrances**, one exit | Cold rocky highland |
-| Orchard Snake | Medium | 20 | 2370 px | A steady weave | Temperate orchard |
-| Zigzag Grove | Medium | 20 | 2780 px | Tight lanes, one tower covers two at once | Dark, dense forest |
-| The Long Orchard | Gentle | 25 | 2870 px | Plenty of time to shoot | Lush farmland with ponds |
+| Market Run | Hard | 15 | 1700 px | Short and direct | Dusty market of crates and fences |
+| Twin Gates | Tricky | 18 | 1775 px avg | **Two entrances**, one exit | Cold rocky highland |
+| Orchard Snake | Medium | 20 | 2570 px | A steady weave | Temperate orchard |
+| Zigzag Grove | Medium | 20 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
+| The Long Orchard | Gentle | 25 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
 
 ### Twin Gates, and lanes
 
@@ -137,6 +137,21 @@ the scenery repeatable doesn't also make the fruit order repeatable.
 
 Scenery is purely decorative: it never blocks tower placement, and it is drawn
 underneath the track so foliage can't obscure the route.
+
+### The field
+
+The window is a fixed **1200 × 740** — 1200 × 650 of playfield with the shop bar
+below it. Routes are authored in that space and deliberately overhang it at both
+ends, by 40px, so fruit walk on and off the screen rather than blinking into
+existence at the border.
+
+The exit marker is drawn **clamped back inside the window** rather than at the
+route's final waypoint. Because routes end off-screen, drawing it at the endpoint
+put the one thing you are defending permanently out of sight — on every route.
+Clamped, it lands where the track crosses out of the field, which is the honest
+answer anyway: that is the last place a fruit can still be shot. On Twin Gates
+the shared endpoint clamps to a point between the two converging lanes, right
+where they meet.
 
 ## Towers
 
