@@ -35,6 +35,14 @@ const BTN_X0: f32 = 16.0;
 const PANEL_W: f32 = 250.0;
 const PANEL_H: f32 = 228.0;
 
+/// Audio toggles: effects first, then music. They sit in the gap between the
+/// cash readout and the wave counter, which is the only part of the top strip
+/// nothing else claims.
+const AUDIO_BTN: f32 = 30.0;
+const AUDIO_BTN_X0: f32 = 352.0;
+const AUDIO_BTN_Y: f32 = 11.0;
+const AUDIO_BTN_GAP: f32 = 8.0;
+
 /// Route-selection card layout.
 const CARD_W: f32 = 220.0;
 const CARD_H: f32 = 210.0;
@@ -970,14 +978,7 @@ pub fn draw_splat(s: &Splat) {
 // Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
 // the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(
-    lives: u32,
-    cash: u32,
-    wave: u32,
-    total_waves: u32,
-    wave_active: bool,
-    muted: bool,
-) {
+pub fn draw_hud(lives: u32, cash: u32, wave: u32, total_waves: u32, wave_active: bool) {
     // Dark strip so white text stays readable over the grass.
     draw_rectangle(
         0.0,
@@ -994,14 +995,6 @@ pub fn draw_hud(
     };
     draw_text(format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
     draw_text(format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
-
-    // Mute state doubles as the hint for the key that toggles it.
-    let (mute_label, mute_color) = if muted {
-        ("M  muted", Color::new(1.0, 0.55, 0.5, 1.0))
-    } else {
-        ("M  sound on", Color::new(0.62, 0.85, 0.68, 1.0))
-    };
-    draw_text(mute_label, 360.0, 34.0, 22.0, mute_color);
 
     // Progress through the route, not just the current wave number.
     let wave_txt = format!("WAVE {wave}/{total_waves}");
@@ -1035,6 +1028,107 @@ pub fn draw_hud(
             Color::new(1.0, 0.9, 0.5, 1.0),
         );
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of audio toggle `i` — 0 is effects, 1 is music. main.rs hit-tests clicks
+// against the same layout this file draws.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn audio_button_rect(i: usize) -> Rect {
+    Rect::new(
+        AUDIO_BTN_X0 + i as f32 * (AUDIO_BTN + AUDIO_BTN_GAP),
+        AUDIO_BTN_Y,
+        AUDIO_BTN,
+        AUDIO_BTN,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The two audio toggles. Drawn on every screen, not just during play: the menu
+// and the end screens have music too, and a mute you can only reach mid-run is
+// a mute you reach too late.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_audio_buttons(sfx_muted: bool, music_muted: bool) {
+    let mouse = mouse_vec();
+
+    for (i, muted) in [sfx_muted, music_muted].into_iter().enumerate() {
+        let r = audio_button_rect(i);
+        let hovered = r.contains(mouse);
+
+        // Each button carries its own backing plate rather than leaning on the
+        // HUD strip, since on the menu and the end screens there isn't one.
+        let bg = if hovered {
+            Color::new(0.26, 0.28, 0.34, 0.95)
+        } else {
+            Color::new(0.10, 0.11, 0.15, 0.78)
+        };
+        draw_rectangle(r.x, r.y, r.w, r.h, bg);
+        draw_rectangle_lines(r.x, r.y, r.w, r.h, 1.5, Color::new(0.46, 0.48, 0.56, 0.9));
+
+        let ink = if muted {
+            Color::new(0.58, 0.58, 0.64, 1.0)
+        } else {
+            Color::new(0.86, 0.93, 0.88, 1.0)
+        };
+        let c = vec2(r.x + r.w * 0.5, r.y + r.h * 0.5);
+
+        if i == 0 {
+            draw_speaker_icon(c, ink, !muted);
+        } else {
+            draw_note_icon(c, ink);
+        }
+
+        if muted {
+            // A slash says "off" at a glance in a way a dimmed icon never does.
+            draw_line(
+                r.x + 6.0,
+                r.y + r.h - 6.0,
+                r.x + r.w - 6.0,
+                r.y + 6.0,
+                2.5,
+                Color::new(1.0, 0.42, 0.38, 1.0),
+            );
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A little speaker: box, cone, and two arcs of sound coming off it. The arcs
+// are dropped when it's muted, so the icon still reads without the slash.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_speaker_icon(c: Vec2, ink: Color, sounding: bool) {
+    draw_rectangle(c.x - 8.0, c.y - 3.0, 5.0, 6.0, ink);
+    // The cone, as two triangles making a trapezoid that widens to the right.
+    let (near_t, near_b) = (vec2(c.x - 3.0, c.y - 3.0), vec2(c.x - 3.0, c.y + 3.0));
+    let (far_t, far_b) = (vec2(c.x + 1.0, c.y - 7.0), vec2(c.x + 1.0, c.y + 7.0));
+    draw_triangle(near_t, near_b, far_b, ink);
+    draw_triangle(near_t, far_t, far_b, ink);
+
+    if sounding {
+        for radius in [5.0, 8.5] {
+            draw_arc(c.x + 1.0, c.y, 24, radius, -55.0, 1.6, 110.0, ink);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// A beamed pair of quavers. At 30px a pair reads as music far more reliably
+// than a single note, whose flag merges into its own stem at this size.
+//
+// Unlike the speaker this keeps every part when muted: a speaker without its
+// arcs is the conventional "silent" icon, but there is no such convention for a
+// note, and a note missing pieces just looks broken. The slash carries it.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_note_icon(c: Vec2, ink: Color) {
+    let (lx, rx) = (c.x - 6.5, c.x + 4.0);
+    let head_y = c.y + 5.0;
+
+    draw_ellipse(lx, head_y, 4.2, 3.2, -20.0, ink);
+    draw_ellipse(rx, head_y - 2.0, 4.2, 3.2, -20.0, ink);
+
+    draw_rectangle(lx + 2.6, c.y - 8.0, 2.0, 13.0, ink);
+    draw_rectangle(rx + 2.6, c.y - 8.0, 2.0, 11.0, ink);
+    draw_rectangle(lx + 2.6, c.y - 8.0, (rx - lx) + 2.0, 3.0, ink);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1633,6 +1727,35 @@ mod tests {
         assert!(
             hint_x <= WINDOW_W - 176.0,
             "no room left for the hint column"
+        );
+    }
+
+    /// The dark strip along the top of the playfield, which the audio toggles
+    /// have to stay inside to read against a backing rather than the grass.
+    const HUD_STRIP_H: f32 = 52.0;
+
+    #[test]
+    fn the_audio_buttons_sit_inside_the_hud_strip() {
+        for i in 0..2 {
+            let r = audio_button_rect(i);
+            assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "button {i} overhangs");
+            assert!(r.x >= 0.0 && r.x + r.w <= WINDOW_W, "button {i} runs off");
+        }
+    }
+
+    #[test]
+    fn the_audio_buttons_do_not_overlap_each_other() {
+        let (sfx, music) = (audio_button_rect(0), audio_button_rect(1));
+        assert!(music.x >= sfx.x + sfx.w, "the two toggles overlap");
+    }
+
+    #[test]
+    fn the_audio_buttons_clear_the_cash_readout() {
+        // The cash text starts at x=200 at size 30. Six digits of it is about
+        // 100px, and the buttons must not land on top of a rich player's total.
+        assert!(
+            audio_button_rect(0).x >= 310.0,
+            "audio buttons crowd the cash readout"
         );
     }
 

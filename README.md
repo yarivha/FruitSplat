@@ -24,7 +24,8 @@ cargo run --release
 | Click **Upgrade** / **Sell** | Upgrade or sell that tower |
 | Right click | Cancel placement / close the panel |
 | `Space` | Send the next wave |
-| `M` | Mute / unmute |
+| Click the speaker button | Mute / unmute sound effects |
+| Click the note button | Mute / unmute music |
 
 Close the window to quit.
 
@@ -269,6 +270,23 @@ The boss burst is exempt from that cap and from the ducking. It is the payoff
 for a fight that ran most of a route, and it lands in exactly the crowded frame
 the cap exists to thin out — so the cap would swallow the one pop the player is
 waiting to hear.
+
+### Muting
+
+Two buttons sit in the top strip: a **speaker** for sound effects and a **note**
+for music. They silence their halves independently, because someone playing with
+the game in the background usually wants one or the other gone rather than both.
+A muted button greys out and takes a red slash, and the speaker drops its sound
+arcs — the conventional cue for silence, which a note has no equivalent of, so
+the note keeps its shape and leans on the slash.
+
+Both are drawn on every screen, not just during play: the menu and the end
+screens have music too, and a mute you can only reach mid-run is a mute you
+reach too late. They take a click before any screen sees it, so muting from the
+title screen doesn't also start a run.
+
+Unmuted music restarts from the top rather than resuming — macroquad gives no
+way to seek a playing sound.
 
 ## Layout
 

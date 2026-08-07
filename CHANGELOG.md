@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 87 unit tests covering path maths (corner traversal, end clamping,
+- 90 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
@@ -120,7 +120,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
-- `M` toggles mute, with the current state shown in the HUD strip.
+- Two audio toggles in the HUD strip — a speaker for sound effects and a note
+  for music — each silencing its half independently. Someone playing with the
+  game in the background usually wants one or the other gone, not both, which a
+  single switch can't express.
+  - They are drawn on every screen, not just during play. The menu and the end
+    screens have music too, and a mute you can only reach mid-run is a mute you
+    reach too late.
+  - They take a click before any screen sees it, so muting from the title screen
+    doesn't also start a run, and muting mid-wave doesn't try to place a tower
+    behind the button. The run keeps simulating either way: only the click is
+    spent, never a frame.
+  - Muted music resumes from the top rather than where it stopped — macroquad
+    gives no way to seek a playing sound.
 - Tower upgrades — every tower runs Lv1 → Lv3 along one linear track, each kind
   leaning into its existing role:
   - Seed Shooter ($70, $150): faster and longer-reaching, then splits its fire

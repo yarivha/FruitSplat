@@ -8,6 +8,8 @@
 // This module also owns the throttling that keeps a busy field from turning
 // into noise: pops are capped per frame and duck in volume, and the shared
 // shoot sound has a minimum gap so a row of Seed Shooters doesn't machine-gun.
+//
+// Effects and music mute separately, driven by the two buttons in the HUD.
 // =============================================================================
 
 use macroquad::audio::{load_sound_from_bytes, play_sound, stop_sound, PlaySoundParams, Sound};
@@ -68,7 +70,11 @@ pub struct Audio {
     music_game: Sound,
 
     playing: Option<Track>,
-    muted: bool,
+    /// Effects and music are silenced independently. Someone playing with the
+    /// game in the background almost always wants one or the other gone, not
+    /// both, and a single switch can't express that.
+    sfx_muted: bool,
+    music_muted: bool,
     pops_this_frame: u32,
     shoot_cooldown: f32,
     knife_cooldown: f32,
@@ -114,7 +120,8 @@ impl Audio {
             music_game: decode(include_bytes!("../assets/music_game.wav")).await,
 
             playing: None,
-            muted: false,
+            sfx_muted: false,
+            music_muted: false,
             pops_this_frame: 0,
             shoot_cooldown: 0.0,
             knife_cooldown: 0.0,
@@ -244,41 +251,58 @@ impl Audio {
         self.stop_music();
         self.playing = Some(track);
 
-        if !self.muted {
-            play_sound(
-                self.track_sound(track),
-                PlaySoundParams {
-                    looped: true,
-                    volume: MUSIC_VOLUME,
-                },
-            );
+        if !self.music_muted {
+            play_sound(self.track_sound(track), self.music_params());
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Mute or unmute everything. Music resumes from the top when unmuted, since
-    // macroquad gives no way to seek a playing sound.
+    // Silence the effects, or bring them back. Nothing to stop: effects are
+    // one-shots, so the next one simply isn't started.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn toggle_mute(&mut self) {
-        self.muted = !self.muted;
+    pub fn toggle_sfx(&mut self) {
+        self.sfx_muted = !self.sfx_muted;
+    }
 
-        if let Some(track) = self.playing {
-            if self.muted {
-                stop_sound(self.track_sound(track));
-            } else {
-                play_sound(
-                    self.track_sound(track),
-                    PlaySoundParams {
-                        looped: true,
-                        volume: MUSIC_VOLUME,
-                    },
-                );
-            }
+    // ─────────────────────────────────────────────────────────────────────────
+    // Silence the music, or bring it back. The loop resumes from the top rather
+    // than where it left off, since macroquad gives no way to seek a sound.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn toggle_music(&mut self) {
+        self.music_muted = !self.music_muted;
+
+        let Some(track) = self.playing else { return };
+        if self.music_muted {
+            stop_sound(self.track_sound(track));
+        } else {
+            play_sound(self.track_sound(track), self.music_params());
         }
     }
 
-    pub fn muted(&self) -> bool {
-        self.muted
+    // ─────────────────────────────────────────────────────────────────────────
+    // Silence everything at once. Only used by screenshot mode, which must not
+    // make noise on its way past.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn mute_all(&mut self) {
+        self.sfx_muted = true;
+        if !self.music_muted {
+            self.toggle_music();
+        }
+    }
+
+    pub fn sfx_muted(&self) -> bool {
+        self.sfx_muted
+    }
+
+    pub fn music_muted(&self) -> bool {
+        self.music_muted
+    }
+
+    fn music_params(&self) -> PlaySoundParams {
+        PlaySoundParams {
+            looped: true,
+            volume: MUSIC_VOLUME,
+        }
     }
 
     fn stop_music(&mut self) {
@@ -299,7 +323,7 @@ impl Audio {
     // Fire off a one-shot effect, unless the player has muted the game.
     // ─────────────────────────────────────────────────────────────────────────
     fn sfx(&self, sound: &Sound, volume: f32) {
-        if self.muted {
+        if self.sfx_muted {
             return;
         }
         play_sound(

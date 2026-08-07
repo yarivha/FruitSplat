@@ -183,22 +183,49 @@ impl Game {
     fn update(&mut self, dt: f32) {
         self.audio.begin_frame(dt);
 
-        // Mute works on every screen, not just during play.
-        if is_key_pressed(KeyCode::M) {
-            self.audio.toggle_mute();
-        }
+        // The audio toggles are on every screen, so they get first refusal on a
+        // click before anything screen-specific sees it. Without that, muting
+        // from the title screen would also start a run, and muting mid-play
+        // would try to place a tower behind the button.
+        let audio_click =
+            is_mouse_button_pressed(MouseButton::Left) && self.click_audio_buttons(mouse_vec());
 
         match self.state {
             // These all lead into route selection rather than straight into a
             // run, so a fresh route can be picked after finishing one.
             State::Menu | State::GameOver | State::Victory => {
-                if is_mouse_button_pressed(MouseButton::Left) || is_key_pressed(KeyCode::Space) {
+                if !audio_click
+                    && (is_mouse_button_pressed(MouseButton::Left)
+                        || is_key_pressed(KeyCode::Space))
+                {
                     self.state = State::TrackSelect;
                 }
             }
-            State::TrackSelect => self.update_track_select(),
-            State::Playing => self.update_play(dt),
+            State::TrackSelect => {
+                if !audio_click {
+                    self.update_track_select();
+                }
+            }
+            // The run keeps simulating either way — only the click is spent, so
+            // muting never costs the player a frame of the wave.
+            State::Playing => self.update_play(dt, audio_click),
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Route a click at the audio toggles. Returns true when one took it, so the
+    // click doesn't also land on whatever screen is underneath.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn click_audio_buttons(&mut self, m: Vec2) -> bool {
+        if render::audio_button_rect(0).contains(m) {
+            self.audio.toggle_sfx();
+            return true;
+        }
+        if render::audio_button_rect(1).contains(m) {
+            self.audio.toggle_music();
+            return true;
+        }
+        false
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -227,8 +254,8 @@ impl Game {
     // One frame of active play. Order matters: fruit move before towers aim, so
     // towers always fire at where fruit actually are this frame.
     // ─────────────────────────────────────────────────────────────────────────
-    fn update_play(&mut self, dt: f32) {
-        self.handle_input();
+    fn update_play(&mut self, dt: f32, audio_click: bool) {
+        self.handle_input(audio_click);
 
         if self.wave_active {
             self.spawn_from_queue(dt);
@@ -264,7 +291,7 @@ impl Game {
     // ─────────────────────────────────────────────────────────────────────────
     // Hotkeys, tower selection, placement, and sending the next wave.
     // ─────────────────────────────────────────────────────────────────────────
-    fn handle_input(&mut self) {
+    fn handle_input(&mut self, audio_click: bool) {
         for (i, key) in [
             KeyCode::Key1,
             KeyCode::Key2,
@@ -289,7 +316,7 @@ impl Game {
             self.start_wave();
         }
 
-        if is_mouse_button_pressed(MouseButton::Left) {
+        if is_mouse_button_pressed(MouseButton::Left) && !audio_click {
             let m = mouse_vec();
             if m.y >= PLAYFIELD_H {
                 self.click_shop(m);
@@ -844,7 +871,6 @@ impl Game {
                     self.wave,
                     self.total_waves(),
                     self.wave_active,
-                    self.audio.muted(),
                 );
                 render::draw_shop(self.selected, self.cash);
 
@@ -862,6 +888,10 @@ impl Game {
                 }
             }
         }
+
+        // Above everything, on every screen — matching the fact that they take
+        // a click before every screen does.
+        render::draw_audio_buttons(self.audio.sfx_muted(), self.audio.music_muted());
     }
 }
 
@@ -1074,7 +1104,7 @@ async fn main() {
     // Screenshot mode: stage a scene, let it settle, write a PNG and exit.
     let shot_path = std::env::var("FRUITSPLAT_SCREENSHOT").ok();
     if shot_path.is_some() {
-        game.audio.toggle_mute();
+        game.audio.mute_all();
         match std::env::var("FRUITSPLAT_SCREEN").as_deref() {
             Ok("select") => game.state = State::TrackSelect,
             Ok("menu") => game.state = State::Menu,
