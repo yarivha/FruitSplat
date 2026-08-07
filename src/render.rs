@@ -9,12 +9,13 @@
 use macroquad::prelude::*;
 
 use crate::fruit::{Fruit, FruitKind, Splat};
+use crate::mode::MODES;
 use crate::path::Path;
 use crate::projectile::{Projectile, ProjectileKind};
 use crate::scenery::{Palette, Prop, PropKind};
 use crate::tower::{Pulse, SpikePile, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
-use crate::PLAYFIELD_H;
+use crate::{PLAYFIELD_H, PLAYFIELD_W};
 
 /// Number of bands used to fake the grass gradient.
 const FIELD_BANDS: i32 = 40;
@@ -59,6 +60,14 @@ const CARD_GAP: f32 = 12.0;
 const CARD_Y: f32 = 296.0;
 /// Space left either side of the row of cards.
 const CARD_MARGIN: f32 = 14.0;
+
+/// Difficulty selector, sitting above the route cards on the same screen: the
+/// mode is a setting you carry into whichever route you then pick, so it reads
+/// better as a row above them than as a screen of its own in between.
+const MODE_BTN_W: f32 = 150.0;
+const MODE_BTN_H: f32 = 46.0;
+const MODE_BTN_GAP: f32 = 12.0;
+const MODE_BTN_Y: f32 = 226.0;
 /// The coordinate space routes are authored in, used to scale the previews.
 const AUTHOR_W: f32 = 1000.0;
 const AUTHOR_H: f32 = 650.0;
@@ -1008,7 +1017,14 @@ pub fn draw_splat(s: &Splat) {
 // Top-of-screen HUD: lives, cash, wave number, plus the send-wave prompt while
 // the player is between waves.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_hud(lives: u32, cash: u32, wave: u32, total_waves: u32, wave_active: bool) {
+pub fn draw_hud(
+    lives: u32,
+    cash: u32,
+    wave: u32,
+    total_waves: u32,
+    wave_active: bool,
+    mode: usize,
+) {
     // Dark strip so white text stays readable over the grass.
     draw_rectangle(
         0.0,
@@ -1025,6 +1041,17 @@ pub fn draw_hud(lives: u32, cash: u32, wave: u32, total_waves: u32, wave_active:
     };
     draw_text(format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
     draw_text(format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
+
+    // The difficulty a run is being played at, in the gap between the quit
+    // button and the wave counter. Worth carrying: the mode is chosen once and
+    // then decides how much slack every later decision has.
+    draw_text(
+        MODES[mode.min(MODES.len() - 1)].name,
+        560.0,
+        34.0,
+        22.0,
+        mode_color(mode.min(MODES.len() - 1)),
+    );
 
     // Progress through the route, not just the current wave number.
     let wave_txt = format!("WAVE {wave}/{total_waves}");
@@ -1530,11 +1557,14 @@ pub fn draw_menu() {
 // Rect of route card `i`, so main.rs can hit-test clicks against the same
 // layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
+// Centred against PLAYFIELD_W rather than screen_width(): the window is fixed
+// size, so they are the same number, but the constant is one a test can reach
+// and screen_width() needs a live graphics context.
 pub fn track_card_rect(i: usize) -> Rect {
     let w = card_width();
     let n = TRACKS.len() as f32;
     let total = n * w + (n - 1.0) * CARD_GAP;
-    let x0 = (screen_width() - total) * 0.5;
+    let x0 = (PLAYFIELD_W - total) * 0.5;
 
     Rect::new(x0 + i as f32 * (w + CARD_GAP), CARD_Y, w, CARD_H)
 }
@@ -1545,14 +1575,109 @@ pub fn track_card_rect(i: usize) -> Rect {
 // ─────────────────────────────────────────────────────────────────────────────
 fn card_width() -> f32 {
     let n = TRACKS.len() as f32;
-    (AUTHOR_W - 2.0 * CARD_MARGIN - (n - 1.0) * CARD_GAP) / n
+    (PLAYFIELD_W - 2.0 * CARD_MARGIN - (n - 1.0) * CARD_GAP) / n
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of difficulty button `i`, centred as a row above the route cards.
+// main.rs hit-tests clicks against this same layout.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn mode_button_rect(i: usize) -> Rect {
+    let n = MODES.len() as f32;
+    let total = n * MODE_BTN_W + (n - 1.0) * MODE_BTN_GAP;
+    let x0 = (PLAYFIELD_W - total) * 0.5;
+
+    Rect::new(
+        x0 + i as f32 * (MODE_BTN_W + MODE_BTN_GAP),
+        MODE_BTN_Y,
+        MODE_BTN_W,
+        MODE_BTN_H,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The difficulty row. `selected` is the mode a run would start at right now.
+//
+// The chosen one is filled and outlined rather than merely tinted: it has to be
+// obvious at a glance, because it is the one setting on this screen that is
+// still in force after the player has stopped looking at the screen.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_mode_buttons(selected: usize) {
+    let mouse = mouse_vec();
+
+    for (i, m) in MODES.iter().enumerate() {
+        let r = mode_button_rect(i);
+        let is_selected = i == selected;
+        let hovered = r.contains(mouse);
+
+        let accent = mode_color(i);
+        let bg = if is_selected {
+            Color::new(accent.r * 0.30, accent.g * 0.30, accent.b * 0.30, 1.0)
+        } else if hovered {
+            Color::new(0.22, 0.23, 0.28, 1.0)
+        } else {
+            Color::new(0.15, 0.16, 0.20, 1.0)
+        };
+
+        draw_rectangle(r.x, r.y, r.w, r.h, bg);
+        draw_rectangle_lines(
+            r.x,
+            r.y,
+            r.w,
+            r.h,
+            if is_selected { 3.0 } else { 1.5 },
+            if is_selected {
+                accent
+            } else {
+                Color::new(0.40, 0.42, 0.50, 1.0)
+            },
+        );
+
+        let label_color = if is_selected {
+            accent
+        } else {
+            Color::new(0.80, 0.80, 0.86, 1.0)
+        };
+        let dims = measure_text(m.name, None, 22, 1.0);
+        draw_text(
+            m.name,
+            r.x + (r.w - dims.width) * 0.5,
+            r.y + 24.0,
+            22.0,
+            label_color,
+        );
+
+        // What the mode actually changes, so the choice isn't three words with
+        // nothing behind them.
+        let detail = format!("${}  {} lives", m.start_cash, m.start_lives);
+        let dims = measure_text(&detail, None, 14, 1.0);
+        draw_text(
+            &detail,
+            r.x + (r.w - dims.width) * 0.5,
+            r.y + 40.0,
+            14.0,
+            Color::new(0.70, 0.70, 0.78, 1.0),
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Colour for a difficulty, by position in the row rather than by name, so the
+// ramp stays green-to-red however the modes are eventually labelled.
+// ─────────────────────────────────────────────────────────────────────────────
+fn mode_color(i: usize) -> Color {
+    match i {
+        0 => Color::new(0.55, 0.95, 0.60, 1.0),
+        1 => Color::new(1.0, 0.85, 0.45, 1.0),
+        _ => Color::new(1.0, 0.50, 0.45, 1.0),
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Route selection screen: one card per track, each showing a scaled preview of
 // the actual polyline the fruit will walk.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_track_select() {
+pub fn draw_track_select(selected_mode: usize) {
     draw_rectangle(
         0.0,
         0.0,
@@ -1561,13 +1686,24 @@ pub fn draw_track_select() {
         Color::new(0.0, 0.0, 0.0, 0.62),
     );
 
-    text_center("CHOOSE YOUR ROUTE", 150.0, 62.0, WHITE);
+    text_center("CHOOSE YOUR ROUTE", 138.0, 62.0, WHITE);
     text_center(
         "Longer routes give your towers more time to shoot",
-        200.0,
-        26.0,
+        182.0,
+        24.0,
         Color::new(1.0, 1.0, 1.0, 0.7),
     );
+    // Spells out that this applies to any route, because each card carries its
+    // own difficulty word too, and "Hard" would otherwise mean two things on one
+    // screen: how punishing the track is, versus how much you start with.
+    text_center(
+        "DIFFICULTY  -  what you start with, on any route",
+        214.0,
+        17.0,
+        Color::new(1.0, 1.0, 1.0, 0.55),
+    );
+
+    draw_mode_buttons(selected_mode);
 
     let mouse = {
         let (x, y) = mouse_position();
@@ -1754,7 +1890,7 @@ pub fn draw_game_over(wave: u32, total_waves: u32) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Shown when every wave on a route has been survived.
 // ─────────────────────────────────────────────────────────────────────────────
-pub fn draw_victory(route: &str, total_waves: u32, lives: u32) {
+pub fn draw_victory(route: &str, total_waves: u32, lives: u32, mode: usize) {
     let cy = screen_height() * 0.42;
     draw_rectangle(
         0.0,
@@ -1777,9 +1913,18 @@ pub fn draw_victory(route: &str, total_waves: u32, lives: u32) {
         28.0,
         Color::new(1.0, 1.0, 1.0, 0.75),
     );
+    // Which difficulty it was cleared on — the same route on Easy and on Hard
+    // are not the same achievement, and the screen should say which one this is.
+    let m = mode.min(MODES.len() - 1);
+    text_center(
+        &format!("on {}", MODES[m].name),
+        cy + 84.0,
+        26.0,
+        mode_color(m),
+    );
     text_center(
         "Click to pick another route",
-        cy + 118.0,
+        cy + 130.0,
         30.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );
@@ -1843,6 +1988,44 @@ mod tests {
     /// The dark strip along the top of the playfield, which the audio toggles
     /// have to stay inside to read against a backing rather than the grass.
     const HUD_STRIP_H: f32 = 52.0;
+
+    #[test]
+    fn the_mode_row_fits_the_window_and_does_not_overlap() {
+        let n = MODES.len();
+        for i in 0..n {
+            let r = mode_button_rect(i);
+            assert!(r.x >= 0.0 && r.x + r.w <= WINDOW_W, "mode {i} runs off");
+        }
+        for i in 1..n {
+            let (prev, cur) = (mode_button_rect(i - 1), mode_button_rect(i));
+            assert!(cur.x >= prev.x + prev.w, "mode buttons {} and {i} overlap", i - 1);
+        }
+    }
+
+    #[test]
+    fn the_mode_row_clears_the_route_cards_below_it() {
+        // The two are picked in sequence on one screen, so they must not share
+        // any pixels — a click has to belong unambiguously to one of them.
+        let row = mode_button_rect(0);
+        assert!(
+            row.y + row.h <= CARD_Y,
+            "the difficulty row overlaps the route cards"
+        );
+    }
+
+    #[test]
+    fn every_mode_label_fits_its_button() {
+        // Character budget rather than measure_text, which needs a graphics
+        // context. The detail line is the longer of the two at 14px.
+        for m in &MODES {
+            let detail = format!("${}  {} lives", m.start_cash, m.start_lives);
+            assert!(
+                detail.len() as f32 * 7.5 + 12.0 <= MODE_BTN_W,
+                "\"{detail}\" overflows the mode button"
+            );
+            assert!(m.name.len() as f32 * 12.0 + 12.0 <= MODE_BTN_W);
+        }
+    }
 
     #[test]
     fn the_audio_buttons_sit_inside_the_hud_strip() {

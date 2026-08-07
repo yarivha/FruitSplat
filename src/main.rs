@@ -13,6 +13,7 @@ use macroquad::rand::gen_range;
 
 mod audio;
 mod fruit;
+mod mode;
 mod path;
 mod projectile;
 mod render;
@@ -38,8 +39,6 @@ pub const PLAYFIELD_W: f32 = 1000.0;
 
 const WINDOW_W: i32 = PLAYFIELD_W as i32;
 const WINDOW_H: i32 = 740;
-const START_LIVES: u32 = 15;
-const START_CASH: u32 = 180;
 /// Cash earned for each fruit destroyed outright — that is, one that had no
 /// children left to split into.
 ///
@@ -49,6 +48,17 @@ const START_CASH: u32 = 180;
 /// for the bottom of the split ladder roughly halves late-game income while
 /// still rewarding bigger fruit, which are worth 16 blueberries apiece.
 const CASH_PER_FRUIT_CLEARED: u32 = 1;
+/// The number-row keys, shared by the two screens that use them: they arm tower
+/// types in play, and pick a route on the selection screen. One array so a sixth
+/// route or tower can't gain a card without gaining a key, which is exactly how
+/// route five ended up unreachable from the keyboard.
+const NUMBER_KEYS: [KeyCode; 5] = [
+    KeyCode::Key1,
+    KeyCode::Key2,
+    KeyCode::Key3,
+    KeyCode::Key4,
+    KeyCode::Key5,
+];
 /// How long the quit button stays armed waiting for its confirming click.
 /// Long enough to move the mouse back deliberately, short enough that it can't
 /// still be waiting by the time an unrelated click lands on it later.
@@ -117,6 +127,10 @@ struct Game {
     selected_tower: Option<usize>,
     /// Which entry of tracks::TRACKS the current run is being played on.
     track: usize,
+    /// Which entry of mode::MODES the run is being played at. Chosen on the
+    /// route screen and kept between runs, so picking Hard once doesn't have to
+    /// be picked again every time a route is chosen.
+    mode: usize,
     /// Backdrop for the current route: colours plus decorative props. Laid out
     /// once per run, since placement is rejection sampling and not cheap.
     palette: scenery::Palette,
@@ -152,11 +166,12 @@ impl Game {
             spawn_timer: 0.0,
             wave: 1,
             wave_active: false,
-            lives: START_LIVES,
-            cash: START_CASH,
+            lives: mode::mode(mode::DEFAULT_MODE).start_lives,
+            cash: mode::mode(mode::DEFAULT_MODE).start_cash,
             selected: None,
             selected_tower: None,
             track: 0,
+            mode: mode::DEFAULT_MODE,
             palette: scenery::palette(0),
             props: Vec::new(),
             next_tower_id: 0,
@@ -177,8 +192,12 @@ impl Game {
         self.clear_board();
         self.spawn_timer = 0.0;
         self.wave = 1;
-        self.lives = START_LIVES;
-        self.cash = START_CASH;
+        // The mode decides the opening hand. Nothing else about the run reads
+        // it, so a mode can never quietly rewrite the wave table underneath the
+        // balance report.
+        let m = mode::mode(self.mode);
+        self.lives = m.start_lives;
+        self.cash = m.start_cash;
         self.next_tower_id = 0;
         self.state = State::Playing;
         self.audio.play_music(Track::Game);
@@ -279,19 +298,31 @@ impl Game {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Route selection: click a card or press its number to start that run.
+    // Route selection: set a difficulty, then pick a route.
+    //
+    // The mode buttons only change the setting — it is choosing a route that
+    // starts the run, so the difficulty can be changed as many times as the
+    // player likes before committing to anything.
     // ─────────────────────────────────────────────────────────────────────────
     fn update_track_select(&mut self) {
+        let clicked = is_mouse_button_pressed(MouseButton::Left);
+        let m = mouse_vec();
+
+        // Difficulty is tested first, so a click on a mode button never also
+        // falls through and starts a run.
+        if clicked {
+            for i in 0..mode::MODES.len() {
+                if render::mode_button_rect(i).contains(m) {
+                    self.mode = i;
+                    self.audio.play_place();
+                    return;
+                }
+            }
+        }
+
         for i in 0..tracks::TRACKS.len() {
-            let picked_by_key = match i {
-                0 => is_key_pressed(KeyCode::Key1),
-                1 => is_key_pressed(KeyCode::Key2),
-                2 => is_key_pressed(KeyCode::Key3),
-                3 => is_key_pressed(KeyCode::Key4),
-                _ => false,
-            };
-            let picked_by_click = is_mouse_button_pressed(MouseButton::Left)
-                && render::track_card_rect(i).contains(mouse_vec());
+            let picked_by_key = NUMBER_KEYS.get(i).is_some_and(|&k| is_key_pressed(k));
+            let picked_by_click = clicked && render::track_card_rect(i).contains(m);
 
             if picked_by_key || picked_by_click {
                 self.start_run(i);
@@ -355,16 +386,7 @@ impl Game {
     // Hotkeys, tower selection, placement, and sending the next wave.
     // ─────────────────────────────────────────────────────────────────────────
     fn handle_input(&mut self, audio_click: bool) {
-        for (i, key) in [
-            KeyCode::Key1,
-            KeyCode::Key2,
-            KeyCode::Key3,
-            KeyCode::Key4,
-            KeyCode::Key5,
-        ]
-        .iter()
-        .enumerate()
-        {
+        for (i, key) in NUMBER_KEYS.iter().enumerate() {
             if is_key_pressed(*key) {
                 self.toggle_selection(TowerKind::ALL[i]);
             }
@@ -978,12 +1000,13 @@ impl Game {
 
         match self.state {
             State::Menu => render::draw_menu(),
-            State::TrackSelect => render::draw_track_select(),
+            State::TrackSelect => render::draw_track_select(self.mode),
             State::GameOver => render::draw_game_over(self.wave, self.total_waves()),
             State::Victory => render::draw_victory(
                 tracks::TRACKS[self.track].name,
                 self.total_waves(),
                 self.lives,
+                self.mode,
             ),
             State::Playing => {
                 render::draw_hud(
@@ -992,6 +1015,7 @@ impl Game {
                     self.wave,
                     self.total_waves(),
                     self.wave_active,
+                    self.mode,
                 );
                 render::draw_shop(self.selected, self.cash);
 

@@ -89,17 +89,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlapping another tower.
 - Wave system — a new fruit tier unlocks every third wave, spawn intervals
   tighten from 0.85s to a 0.30s floor, and clearing a wave pays a bonus.
-- Economy: 250 starting cash, $1 per pop, 20 starting lives; leaked fruit cost
-  lives equal to their tier (1 for a blueberry, 5 for a watermelon).
+- Economy: $1 per fruit destroyed outright plus a wave clear bonus; leaked fruit
+  cost lives equal to their tier (1 for a blueberry, 5 for a watermelon, 6 for a
+  Durian). What a run opens with is set by its difficulty mode.
 - Shop bar with 1/2/3 hotkeys, click-to-place, and right-click to cancel.
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 103 unit tests covering path maths (corner traversal, end clamping,
+- 111 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
-  charge accounting and where a Spike Layer drops its next pile, lane isolation
+  charge accounting and where a Spike Layer drops its next pile, difficulty
+  modes ordering on both dials at once, lane isolation
   (a pile never reaching another lane, spacing staying per-lane, targeting
   ranking by lane fraction), validation that every authored lane enters and exits
   off-screen, leaves room for towers beside it, runs long enough to meet the boss
@@ -123,6 +125,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **Three difficulty modes** — Easy, Medium and Hard — picked from a row above
+  the route cards before choosing a route. The setting carries between runs, the
+  HUD names it during play, and the victory screen records which one a route was
+  cleared on.
+  - A mode changes only **what you start with**: cash ($300 / $180 / $120) and
+    lives (25 / 15 / 8). It never touches what a wave sends. The wave table, the
+    speed ramp and the per-fruit payout are tuned together against
+    `balance_report`, and a mode that quietly rewrote them would make that whole
+    curve a fiction on two runs out of three.
+  - The two dials do different jobs at different times, which `balance_report`
+    now shows by printing a table per mode. Cash is the opening hand and only
+    that: the affordability ratio spreads 2.9 to 6.6 at wave 1 and has converged
+    to 0.9-1.0 by wave 15, because cumulative income dwarfs anything you started
+    with. Lives carry the rest — 25 absorbs four leaked Durians, 8 does not
+    survive two leaked watermelons — and that is what keeps the modes apart once
+    the money has evened out. Cash alone would have left Easy and Hard genuinely
+    indistinguishable from the midpoint on.
+  - Medium is the tuned baseline, asserted against the numbers the balance work
+    was done at, so it cannot drift off them without a test failing.
 - **Lanes.** A route is now one or more polylines rather than exactly one, and
   every fruit and spike pile carries the index of the lane it belongs to. Lanes
   stay independent for their whole length even where they converge on screen: a

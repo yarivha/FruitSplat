@@ -197,27 +197,45 @@ mod tests {
     #[test]
     #[ignore]
     fn balance_report() {
-        const SEED_SHOOTER_COST: f32 = 90.0;
-        const SEED_SHOOTER_DPS: f32 = 1.0 / 0.45;
-
         // Modelled on the longest route, which is the one that sees every boss
         // wave the schedule produces.
         const TOTAL: u32 = 25;
 
-        let mut cash = 180.0_f32; // starting cash
+        // One table per difficulty. Only the opening cash differs — a mode
+        // changes what the player starts with, never what a wave sends — so the
+        // three tables show the same curve shifted, and the shift is exactly
+        // what fades out as cumulative income takes over.
+        for m in &crate::mode::MODES {
+            println!(
+                "\n=== {} — ${} start, {} lives ===",
+                m.name, m.start_cash, m.start_lives
+            );
+            balance_table(TOTAL, m.start_cash as f32);
+        }
+        println!();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // One difficulty's curve, printed as a table.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn balance_table(total: u32, start_cash: f32) {
+        const SEED_SHOOTER_COST: f32 = 90.0;
+        const SEED_SHOOTER_DPS: f32 = 1.0 / 0.45;
+
+        let mut cash = start_cash;
         println!(
-            "\n{:>4} {:>6} {:>5} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
+            "{:>4} {:>6} {:>5} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
             "wave", "fruit", "boss", "hits", "wave $", "cum $", "speed", "need/s", "afford",
             "ratio"
         );
 
-        for wave in 1..=TOTAL {
-            let queue = build_wave(wave, TOTAL);
+        for wave in 1..=total {
+            let queue = build_wave(wave, total);
             let hits: u32 = queue.iter().copied().map(subtree_hits).sum();
             let payout: u32 = queue.iter().copied().map(subtree_payout).sum();
             let seconds = queue.len() as f32 * spawn_interval(wave);
             let speed = speed_multiplier(wave);
-            let bosses = boss_count(wave, TOTAL);
+            let bosses = boss_count(wave, total);
 
             let income = payout as f32 + clear_bonus(wave) as f32;
             cash += income;

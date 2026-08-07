@@ -16,7 +16,8 @@ cargo run --release
 
 | Input | Action |
 |---|---|
-| `1`–`5` on the route screen | Pick a route |
+| Click **Easy** / **Medium** / **Hard** | Set the difficulty |
+| `1`–`5` on the route screen | Pick a route and start |
 | `1`–`5` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower |
@@ -29,6 +30,47 @@ cargo run --release
 | Click **QUIT RUN**, then **SURE?** | Abandon the run, back to the title screen |
 
 Close the window to quit.
+
+## Difficulty
+
+Before picking a route you pick a **mode**, from a row of three above the route
+cards. It carries over between runs, and the HUD shows which one you're on.
+
+| Mode | Starting cash | Starting lives |
+|---|---|---|
+| Easy | $300 | 25 |
+| Medium | $180 | 15 |
+| Hard | $120 | 8 |
+
+A mode only changes **what you start with**. It never touches what a wave sends
+— the wave table, the speed ramp and the per-fruit payout are tuned together
+against `balance_report`, and a mode that quietly rewrote them would make that
+whole curve a fiction on two runs out of three.
+
+The two numbers do different jobs at different times, and it's worth knowing
+which:
+
+**Cash is the opening hand, and only the opening hand.** The report prints all
+three modes, and the affordability ratios say how fast it stops mattering:
+
+| Wave | 1 | 5 | 10 | 15 | 25 |
+|---|---|---|---|---|---|
+| Easy | 6.6 | 3.6 | 1.3 | 1.0 | 1.2 |
+| Medium | 4.1 | 2.6 | 1.1 | 0.9 | 1.2 |
+| Hard | 2.9 | 2.2 | 1.0 | 0.9 | 1.1 |
+
+A 2.3× spread at wave 1 is gone by wave 15. Cumulative income dwarfs anything
+you began with — and it has to, because the alternative is a mode that scales
+income, which compounds and would tear the economy curve apart by the late
+waves.
+
+**Lives are what carry the rest of the run.** Leaks cost by tier, so 25 lives
+absorbs four leaked Durians while 8 doesn't survive two leaked watermelons.
+That question is as sharp on the last wave as on the first — and the table above
+can't see it at all, because the report models cash and not lives.
+
+So: Easy and Hard feel very different for the first ten waves because of the
+money, and stay different after that because of the margin for error.
 
 ## Routes
 
@@ -214,7 +256,7 @@ Because it is armoured, the towers sort themselves into roles against it:
 A new tier unlocks every third wave, so watermelons first appear on wave 13 —
 every route runs long enough to see them. Spawn intervals tighten from 0.85s
 toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9×.
-You start with 15 lives and $180.
+What you start with is set by the difficulty mode — $180 and 15 lives on Medium.
 
 ### Boss waves
 
@@ -253,7 +295,8 @@ than the threat for difficulty to hold steady.
 cargo test balance_report -- --ignored --nocapture
 ```
 
-Prints the difficulty and economy curves per wave: fruit sent, bosses among
+Prints one table per difficulty mode, each showing the economy curve per
+wave: fruit sent, bosses among
 them, hits required, income, the speed ramp, the hits per second needed to keep
 up, and how much firepower the cumulative income could buy. The last column is
 the ratio — 1.0 means you can afford exactly enough, below 1.0 means the wave
@@ -338,6 +381,7 @@ way to seek a playing sound.
 | `src/tower.rs` | Tower stats, spike piles, the Freezer pulse effect |
 | `src/projectile.rs` | Shots in flight, their splash radii and pierce |
 | `src/tracks.rs` | The five selectable routes and their lanes |
+| `src/mode.rs` | The three difficulty modes |
 | `src/scenery.rs` | Per-route palettes and decorative prop layout |
 | `src/wave.rs` | Wave composition and pacing |
 | `src/render.rs` | All drawing — procedural, no image assets |
