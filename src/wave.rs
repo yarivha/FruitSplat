@@ -112,10 +112,7 @@ fn add_bosses(queue: &mut Vec<FruitKind>, count: u32) {
 
     for k in (0..count).rev() {
         let target = final_len * (k + 1) / (count * 3);
-        queue.insert(
-            target.saturating_sub(k).min(queue.len()),
-            FruitKind::Durian,
-        );
+        queue.insert(target.saturating_sub(k).min(queue.len()), FruitKind::Durian);
     }
 }
 
@@ -233,7 +230,15 @@ mod tests {
         let mut cash = m.start_cash as f32;
         println!(
             "{:>4} {:>6} {:>5} {:>6} {:>7} {:>8} {:>6} {:>7} {:>7} {:>7}",
-            "wave", "fruit", "boss", "hits", "wave $", "cum $", "speed", "need/s", "afford",
+            "wave",
+            "fruit",
+            "boss",
+            "hits",
+            "wave $",
+            "cum $",
+            "speed",
+            "need/s",
+            "afford",
             "ratio"
         );
 
@@ -288,7 +293,11 @@ mod tests {
         // reach it — bosses are placed by boss_count, never drifted into. Both
         // waves here are deliberately not boss waves.
         for w in [59u32, 501] {
-            assert_eq!(boss_count(w, LONG_ROUTE), 0, "picked a boss wave by accident");
+            assert_eq!(
+                boss_count(w, LONG_ROUTE),
+                0,
+                "picked a boss wave by accident"
+            );
             assert_eq!(top_tier(w, LONG_ROUTE), 4);
         }
     }
@@ -403,7 +412,12 @@ mod tests {
     #[test]
     fn the_speed_ramp_starts_at_one_and_only_climbs() {
         for m in &crate::mode::MODES {
-            assert_eq!(speed_multiplier(1, m), 1.0, "{} must open at base speed", m.name);
+            assert_eq!(
+                speed_multiplier(1, m),
+                1.0,
+                "{} must open at base speed",
+                m.name
+            );
 
             let mut prev = 0.0;
             for w in 1..=60 {
@@ -419,7 +433,11 @@ mod tests {
         // Uncapped, late waves would outrun the projectiles entirely.
         for m in &crate::mode::MODES {
             for w in [30u32, 100, 10_000, u32::MAX] {
-                assert!(speed_multiplier(w, m) <= m.max_speed, "{} blew its cap", m.name);
+                assert!(
+                    speed_multiplier(w, m) <= m.max_speed,
+                    "{} blew its cap",
+                    m.name
+                );
             }
         }
     }

@@ -26,9 +26,7 @@ use audio::{Audio, Track};
 use fruit::{Fruit, FruitKind, Splat};
 use path::Path;
 use projectile::{Projectile, ProjectileKind};
-use tower::{
-    Pulse, SpikePile, Tower, TowerKind, PATH_CLEARANCE, SPIKE_SPACING, TOWER_RADIUS,
-};
+use tower::{Pulse, SpikePile, Tower, TowerKind, PATH_CLEARANCE, SPIKE_SPACING, TOWER_RADIUS};
 
 /// Height of the playable field; the shop bar occupies the strip below it.
 pub const PLAYFIELD_H: f32 = 650.0;
@@ -784,13 +782,7 @@ impl Game {
                 .filter(|f| f.pos.distance(t.pos) <= range)
                 .map(|f| {
                     let path = self.paths.get(f.lane).unwrap_or(&self.paths[0]);
-                    (
-                        f.progress(path),
-                        f.pos,
-                        f.current_speed(),
-                        f.lane,
-                        f.dist,
-                    )
+                    (f.progress(path), f.pos, f.current_speed(), f.lane, f.dist)
                 })
                 .collect();
 
@@ -1562,8 +1554,8 @@ mod tests {
             .map(|i| pile_on(0, 480.0 + i as f32 * SPIKE_SPACING * 0.5, 4, 0))
             .collect();
 
-        let (lane, _, _) = pick_spike_spot(&paths, tower, 120.0, &existing)
-            .expect("lane 1 was still wide open");
+        let (lane, _, _) =
+            pick_spike_spot(&paths, tower, 120.0, &existing).expect("lane 1 was still wide open");
         assert_eq!(lane, 1, "a full lane 0 should push the drop onto lane 1");
     }
 
@@ -1653,12 +1645,18 @@ mod tests {
             fruits[0].take_hit();
         }
 
-        assert!(piles[0].spent(), "four spikes should be gone in four frames");
+        assert!(
+            piles[0].spent(),
+            "four spikes should be gone in four frames"
+        );
         assert!(
             run_over_spikes(&mut piles, &fruits).is_empty(),
             "a spent pile kept hitting"
         );
-        assert!(fruits[0].hp > 0, "four spikes must not break the boss outright");
+        assert!(
+            fruits[0].hp > 0,
+            "four spikes must not break the boss outright"
+        );
     }
 
     #[test]
@@ -1666,7 +1664,11 @@ mod tests {
         let path = straight_path();
         let mut piles = vec![pile_at(500.0, 4, 7)];
         let r = FruitKind::Lime.radius();
-        let fruits = vec![fruit_at(FruitKind::Lime, 500.0 + r + SPIKE_RADIUS - 0.1, &path)];
+        let fruits = vec![fruit_at(
+            FruitKind::Lime,
+            500.0 + r + SPIKE_RADIUS - 0.1,
+            &path,
+        )];
 
         assert_eq!(run_over_spikes(&mut piles, &fruits).len(), 1);
     }

@@ -199,7 +199,10 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
     let c = prop.pos;
     let s = prop.scale;
     // Per-prop jitter keeps a stand of trees from looking stamped out.
-    let leaf = tint(shade(palette.foliage, 1.0 - prop.shade), prop.shade.max(0.0));
+    let leaf = tint(
+        shade(palette.foliage, 1.0 - prop.shade),
+        prop.shade.max(0.0),
+    );
 
     match prop.kind {
         PropKind::Tree => {
@@ -221,8 +224,18 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
             // Canopy: three overlapping blobs read as foliage more than one
             // circle does.
             let top = vec2(c.x, c.y - h * 0.62);
-            draw_circle(top.x - 9.0 * s, top.y + 5.0 * s, 12.5 * s, shade(leaf, 0.82));
-            draw_circle(top.x + 9.0 * s, top.y + 4.0 * s, 11.5 * s, shade(leaf, 0.88));
+            draw_circle(
+                top.x - 9.0 * s,
+                top.y + 5.0 * s,
+                12.5 * s,
+                shade(leaf, 0.82),
+            );
+            draw_circle(
+                top.x + 9.0 * s,
+                top.y + 4.0 * s,
+                11.5 * s,
+                shade(leaf, 0.88),
+            );
             draw_circle(top.x, top.y - 2.0 * s, 14.5 * s, leaf);
             draw_circle(top.x - 4.0 * s, top.y - 6.0 * s, 8.0 * s, tint(leaf, 0.16));
         }
@@ -238,7 +251,14 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
         PropKind::Rock => {
             soft_shadow(vec2(c.x + 2.0 * s, c.y + 4.0 * s), 9.0 * s, 3.5 * s);
             let stone = Color::new(0.55, 0.54, 0.52, 1.0);
-            draw_poly(c.x, c.y, 6, 9.0 * s, prop.angle.to_degrees(), shade(stone, 0.78));
+            draw_poly(
+                c.x,
+                c.y,
+                6,
+                9.0 * s,
+                prop.angle.to_degrees(),
+                shade(stone, 0.78),
+            );
             draw_poly(
                 c.x - 1.5 * s,
                 c.y - 2.0 * s,
@@ -261,7 +281,14 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
             for i in 0..3 {
                 let dx = (i as f32 - 1.0) * 6.0 * s;
                 let top = c.y - 8.0 * s - (i % 2) as f32 * 3.0 * s;
-                draw_line(c.x + dx, c.y + 3.0 * s, c.x + dx, top, 1.6 * s, shade(leaf, 1.1));
+                draw_line(
+                    c.x + dx,
+                    c.y + 3.0 * s,
+                    c.x + dx,
+                    top,
+                    1.6 * s,
+                    shade(leaf, 1.1),
+                );
                 draw_circle(c.x + dx, top, 3.2 * s, petal);
                 draw_circle(c.x + dx, top, 1.3 * s, tint(petal, 0.55));
             }
@@ -290,7 +317,14 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
                 1.6 * s,
                 shade(wood, 0.70),
             );
-            draw_line(c.x, c.y - h * 0.5, c.x, c.y + h * 0.5, 1.6 * s, shade(wood, 0.70));
+            draw_line(
+                c.x,
+                c.y - h * 0.5,
+                c.x,
+                c.y + h * 0.5,
+                1.6 * s,
+                shade(wood, 0.70),
+            );
         }
 
         PropKind::Fence => {
@@ -305,7 +339,14 @@ fn draw_prop(prop: &Prop, palette: &Palette) {
             }
             for post in 0..3 {
                 let px = c.x - span * 0.5 + post as f32 * span * 0.5;
-                draw_line(px, c.y + 5.0 * s, px, c.y - 12.0 * s, 3.2 * s, shade(wood, 0.82));
+                draw_line(
+                    px,
+                    c.y + 5.0 * s,
+                    px,
+                    c.y - 12.0 * s,
+                    3.2 * s,
+                    shade(wood, 0.82),
+                );
             }
         }
 
@@ -543,7 +584,12 @@ pub fn draw_fruit(f: &Fruit) {
                 );
             }
 
-            draw_circle(c.x, c.y - r * 0.84, r * 0.13, Color::new(0.40, 0.28, 0.15, 1.0));
+            draw_circle(
+                c.x,
+                c.y - r * 0.84,
+                r * 0.13,
+                Color::new(0.40, 0.28, 0.15, 1.0),
+            );
             draw_leaf(vec2(c.x + r * 0.30, c.y - r * 0.86), r * 0.52, rot);
         }
 
@@ -756,9 +802,30 @@ fn draw_tower_body(kind: TowerKind, pos: Vec2, angle: f32, r: f32) {
     let (x, y) = (pos.x, pos.y);
 
     // Stone footing, so a tower reads as standing on the ground.
-    draw_ellipse(x, y + r * 0.44, r * 1.04, r * 0.48, 0.0, Color::new(0.26, 0.25, 0.23, 1.0));
-    draw_ellipse(x, y + r * 0.36, r * 1.00, r * 0.46, 0.0, Color::new(0.47, 0.45, 0.42, 1.0));
-    draw_ellipse(x, y + r * 0.30, r * 0.92, r * 0.40, 0.0, Color::new(0.58, 0.56, 0.52, 1.0));
+    draw_ellipse(
+        x,
+        y + r * 0.44,
+        r * 1.04,
+        r * 0.48,
+        0.0,
+        Color::new(0.26, 0.25, 0.23, 1.0),
+    );
+    draw_ellipse(
+        x,
+        y + r * 0.36,
+        r * 1.00,
+        r * 0.46,
+        0.0,
+        Color::new(0.47, 0.45, 0.42, 1.0),
+    );
+    draw_ellipse(
+        x,
+        y + r * 0.30,
+        r * 0.92,
+        r * 0.40,
+        0.0,
+        Color::new(0.58, 0.56, 0.52, 1.0),
+    );
 
     shaded_ball(pos, r, c);
 
@@ -912,12 +979,7 @@ fn draw_level_pips(t: &Tower) {
 pub fn draw_tower_selection(t: &Tower) {
     let accent = Color::new(1.0, 0.92, 0.55, 1.0);
 
-    draw_circle(
-        t.pos.x,
-        t.pos.y,
-        t.range(),
-        Color::new(1.0, 1.0, 1.0, 0.08),
-    );
+    draw_circle(t.pos.x, t.pos.y, t.range(), Color::new(1.0, 1.0, 1.0, 0.08));
     draw_circle_lines(t.pos.x, t.pos.y, t.range(), 2.0, accent);
     draw_circle_lines(t.pos.x, t.pos.y, TOWER_RADIUS + 5.0, 2.5, accent);
 }
@@ -1075,7 +1137,13 @@ pub fn draw_hud(h: &HudState) {
         WHITE
     };
     draw_text(format!("LIVES {lives}"), 20.0, 35.0, 30.0, lives_color);
-    draw_text(format!("${cash}"), 200.0, 35.0, 30.0, Color::new(1.0, 0.88, 0.45, 1.0));
+    draw_text(
+        format!("${cash}"),
+        200.0,
+        35.0,
+        30.0,
+        Color::new(1.0, 0.88, 0.45, 1.0),
+    );
 
     // The difficulty a run is being played at, in the gap between the quit
     // button and the wave counter. Worth carrying: the mode is chosen once and
@@ -1432,7 +1500,13 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
     let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
     draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 14.0, dim);
     draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 14.0, dim);
-    draw_text("click a tower for stats", hint_x, PLAYFIELD_H + 74.0, 14.0, dim);
+    draw_text(
+        "click a tower for stats",
+        hint_x,
+        PLAYFIELD_H + 74.0,
+        14.0,
+        dim,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1598,7 +1672,13 @@ fn draw_upgrade_button(t: &Tower, panel: Rect, cash: u32, mouse: Vec2) {
     draw_rectangle(b.x, b.y, b.w, b.h, bg);
     draw_rectangle_lines(b.x, b.y, b.w, b.h, 2.0, accent);
 
-    draw_text(format!("Upgrade ${cost}"), b.x + 10.0, b.y + 21.0, 18.0, accent);
+    draw_text(
+        format!("Upgrade ${cost}"),
+        b.x + 10.0,
+        b.y + 21.0,
+        18.0,
+        accent,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2024,7 +2104,12 @@ pub fn draw_victory(route: &str, total_waves: u32, lives: u32, mode: usize) {
         Color::new(0.0, 0.10, 0.03, 0.58),
     );
 
-    text_center("ROUTE CLEARED", cy - 60.0, 72.0, Color::new(0.72, 1.0, 0.72, 1.0));
+    text_center(
+        "ROUTE CLEARED",
+        cy - 60.0,
+        72.0,
+        Color::new(0.72, 1.0, 0.72, 1.0),
+    );
     text_center(
         &format!("{route} survived, all {total_waves} waves"),
         cy + 6.0,
@@ -2122,7 +2207,11 @@ mod tests {
         }
         for i in 1..n {
             let (prev, cur) = (mode_button_rect(i - 1), mode_button_rect(i));
-            assert!(cur.x >= prev.x + prev.w, "mode buttons {} and {i} overlap", i - 1);
+            assert!(
+                cur.x >= prev.x + prev.w,
+                "mode buttons {} and {i} overlap",
+                i - 1
+            );
         }
     }
 
@@ -2159,7 +2248,10 @@ mod tests {
     fn the_audio_buttons_sit_inside_the_hud_strip() {
         for i in 0..2 {
             let r = audio_button_rect(i);
-            assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "button {i} overhangs");
+            assert!(
+                r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H,
+                "button {i} overhangs"
+            );
             assert!(r.x >= 0.0 && r.x + r.w <= WINDOW_W, "button {i} runs off");
         }
     }
@@ -2187,7 +2279,10 @@ mod tests {
         let music = audio_button_rect(1);
         let quit = quit_button_rect();
 
-        assert!(quit.x >= music.x + music.w, "quit overlaps the audio toggles");
+        assert!(
+            quit.x >= music.x + music.w,
+            "quit overlaps the audio toggles"
+        );
         assert!(quit.x - (music.x + music.w) >= 8.0, "quit crowds them");
     }
 

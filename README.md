@@ -424,6 +424,54 @@ way to seek a playing sound.
 | `tools/gen_sounds.py` | Sound effect generator |
 | `tools/gen_music.py` | Music loop generator |
 
+## Builds
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) builds Linux, macOS,
+Windows and web on every push and pull request, and attaches all four to a GitHub
+release when a `v*` tag is pushed. The suite has to pass first — binaries from a
+tree that fails its own tests are worse than no binaries.
+
+| Target | Produced |
+|---|---|
+| Linux | `fruit-splat-linux-x86_64.tar.gz` |
+| macOS | `fruit-splat-macos-universal.tar.gz` — Intel and Apple Silicon in one binary |
+| Windows | `fruit-splat-windows-x86_64.zip` |
+| Web | `fruit-splat-web.zip` |
+
+Because the game embeds its assets with `include_bytes!`, each desktop archive is
+just the executable — there's no asset directory to install beside it.
+
+### Building for the web yourself
+
+```sh
+cargo build --release --target wasm32-unknown-unknown
+```
+
+A macroquad wasm build needs three files served together: the `.wasm`,
+macroquad's JS bundle, and a page that calls `load()` on the module. The page is
+[`web/index.html`](web/index.html); the bundle ships inside the macroquad crate.
+
+```sh
+mkdir -p dist
+cp web/index.html dist/
+cp target/wasm32-unknown-unknown/release/fruit-splat.wasm dist/
+cp ~/.cargo/registry/src/*/macroquad-0.4.16/js/mq_js_bundle.js dist/
+python3 -m http.server -d dist 8080
+```
+
+It has to be served over HTTP — opening `index.html` from the filesystem fails,
+because browsers won't instantiate wasm from a `file://` origin.
+
+The page pins the canvas to its authored **1200 × 740** and scales it to the
+window with a CSS transform, rather than sizing it with CSS width and height.
+That matters: miniquad resizes its drawing buffer to whatever the CSS box is, so
+sizing it that way changes `screen_width()`, and the HUD, shop bar and route-card
+row are all laid out against a fixed 1200. They would all drift.
+
+The `.wasm` is about 5.7 MB, of which 5.1 MB is the embedded audio — the WAVs are
+uncompressed PCM. Stripping barely dents it; shrinking it means shorter loops or
+a lower sample rate.
+
 ## Test
 
 ```sh

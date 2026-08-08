@@ -411,7 +411,11 @@ impl Splat {
                 vel: vec2(angle.cos() * speed, angle.sin() * speed),
                 radius: gen_range(2.5, 6.0) * (kind.radius() / 24.0).clamp(0.6, 1.5),
                 // Mostly flesh, with some rind mixed in for contrast.
-                color: if i % 3 == 0 { kind.body() } else { kind.flesh() },
+                color: if i % 3 == 0 {
+                    kind.body()
+                } else {
+                    kind.flesh()
+                },
                 life,
                 max_life: life,
             });

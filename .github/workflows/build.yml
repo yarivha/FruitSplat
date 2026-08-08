@@ -1,0 +1,196 @@
+name: build
+
+# Builds Fruit Splat for Linux, macOS, Windows and the web.
+#
+# Every push and PR produces downloadable artifacts. Pushing a v* tag also
+# publishes them as a GitHub release.
+#
+# The game embeds its assets with include_bytes!, so every archive here is the
+# executable and nothing else — there is no asset directory to ship alongside it.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Fail on warnings in CI only; a warning is not worth blocking local work.
+  RUSTFLAGS: -D warnings
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Gate the builds on the suite passing. Shipping binaries from a tree that
+  # fails its own tests is worse than shipping nothing.
+  # ───────────────────────────────────────────────────────────────────────────
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install macroquad's Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets
+      - run: cargo test
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Linux. macroquad links against X11, GL and ALSA, so the runner needs their
+  # headers — the audio feature is enabled, which is what pulls in ALSA.
+  # ───────────────────────────────────────────────────────────────────────────
+  linux:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      - run: cargo build --release
+      - name: Package
+        run: |
+          mkdir -p dist/fruit-splat
+          cp target/release/fruit-splat dist/fruit-splat/
+          cp README.md LICENSE dist/fruit-splat/
+          tar -C dist -czf fruit-splat-linux-x86_64.tar.gz fruit-splat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fruit-splat-linux-x86_64
+          path: fruit-splat-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # macOS, as a universal binary. The runners are Apple Silicon, so an arm64
+  # build alone would not start on an Intel Mac; lipo glues both slices into one
+  # file that runs on either.
+  # ───────────────────────────────────────────────────────────────────────────
+  macos:
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: cargo build --release --target aarch64-apple-darwin
+      - run: cargo build --release --target x86_64-apple-darwin
+      - name: Package
+        run: |
+          mkdir -p dist/fruit-splat
+          lipo -create -output dist/fruit-splat/fruit-splat \
+            target/aarch64-apple-darwin/release/fruit-splat \
+            target/x86_64-apple-darwin/release/fruit-splat
+          lipo -info dist/fruit-splat/fruit-splat
+          cp README.md LICENSE dist/fruit-splat/
+          tar -C dist -czf fruit-splat-macos-universal.tar.gz fruit-splat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fruit-splat-macos-universal
+          path: fruit-splat-macos-universal.tar.gz
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Windows, MSVC toolchain. No extra system packages: miniquad talks to Win32
+  # and OpenGL directly, both of which the runner already has.
+  # ───────────────────────────────────────────────────────────────────────────
+  windows:
+    needs: check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/fruit-splat | Out-Null
+          Copy-Item target/release/fruit-splat.exe dist/fruit-splat/
+          Copy-Item README.md, LICENSE dist/fruit-splat/
+          Compress-Archive -Path dist/fruit-splat -DestinationPath fruit-splat-windows-x86_64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fruit-splat-windows-x86_64
+          path: fruit-splat-windows-x86_64.zip
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Web. A macroquad wasm build needs three files served together: the .wasm,
+  # macroquad's own JS bundle, and a page that calls load() on the module.
+  #
+  # The JS bundle is taken from the macroquad source already unpacked in the
+  # cargo registry, pinned to the version in Cargo.lock, so the glue can never
+  # drift from the library it is gluing.
+  # ───────────────────────────────────────────────────────────────────────────
+  web:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo build --release --target wasm32-unknown-unknown
+      - name: Assemble the page
+        run: |
+          set -euo pipefail
+          mkdir -p dist/fruit-splat-web
+
+          version=$(awk '/^name = "macroquad"$/{found=1; next} found && /^version = /{gsub(/"/,"",$3); print $3; exit}' Cargo.lock)
+          echo "macroquad $version"
+          bundle=$(find ~/.cargo/registry/src -path "*/macroquad-$version/js/mq_js_bundle.js" | head -n1)
+          if [ -z "$bundle" ]; then
+            echo "::error::mq_js_bundle.js not found for macroquad $version" >&2
+            exit 1
+          fi
+
+          cp "$bundle" dist/fruit-splat-web/
+          cp web/index.html dist/fruit-splat-web/
+          cp target/wasm32-unknown-unknown/release/fruit-splat.wasm dist/fruit-splat-web/
+
+          # A page that is missing any one of the three is a black screen with no
+          # error, so check before publishing rather than after someone opens it.
+          for f in index.html mq_js_bundle.js fruit-splat.wasm; do
+            test -s "dist/fruit-splat-web/$f" || { echo "::error::$f missing or empty" >&2; exit 1; }
+          done
+          ls -lh dist/fruit-splat-web
+
+          cd dist && zip -r ../fruit-splat-web.zip fruit-splat-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fruit-splat-web
+          path: fruit-splat-web.zip
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Publish everything as a release, but only for a v* tag.
+  # ───────────────────────────────────────────────────────────────────────────
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, macos, windows, web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          find artifacts -type f -print
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Fruit Splat ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            $(find artifacts -type f | sort)

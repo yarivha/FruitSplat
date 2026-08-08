@@ -533,7 +533,11 @@ mod tests {
     fn only_the_knife_thrower_pierces() {
         for level in 1..=MAX_LEVEL {
             assert!(TowerKind::KnifeThrower.pierce(level) > 1);
-            for kind in [TowerKind::SeedShooter, TowerKind::Blender, TowerKind::Freezer] {
+            for kind in [
+                TowerKind::SeedShooter,
+                TowerKind::Blender,
+                TowerKind::Freezer,
+            ] {
                 assert_eq!(kind.pierce(level), 1, "{} should not pierce", kind.name());
             }
         }

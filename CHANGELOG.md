@@ -125,6 +125,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- **GitHub Actions workflow** building Linux, macOS, Windows and web on every
+  push and pull request, and attaching all four to a release on a `v*` tag.
+  - macOS is a universal binary. The runners are Apple Silicon, so an arm64
+    build alone would not start on an Intel Mac; both slices are built and
+    joined with `lipo`.
+  - Linux installs the X11, GL and ALSA headers macroquad links against — ALSA
+    because the audio feature is enabled.
+  - The web job takes macroquad's JS bundle from the crate source already
+    unpacked in the cargo registry, pinned to the version in `Cargo.lock`, so
+    the glue can never drift from the library it is gluing. It then checks all
+    three files are present and non-empty before publishing, because a page
+    missing any one of them is a black screen with no error in the console.
+  - Builds are gated on `cargo fmt --check`, `cargo clippy` and `cargo test`.
+    The tree did not pass rustfmt, so it was formatted — the gate is worth
+    having only if it is true.
+- `web/index.html`, the page a wasm build is served from. It pins the canvas to
+  the authored 1200x740 and scales it to the window with a CSS transform rather
+  than sizing it with CSS width and height: miniquad resizes its drawing buffer
+  to whatever the CSS box is, which changes `screen_width()`, and the HUD, shop
+  bar and route-card row are all laid out against a fixed 1200.
 - **Wider window: 1200 x 740, up from 1000 x 740.** Every route ran off the
   right edge with its last stretch still to come, so the approach to the exit
   could not be seen and fruit vanished mid-field while still shootable.

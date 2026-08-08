@@ -83,7 +83,11 @@ impl Projectile {
         // Guard against a zero-length direction if the fruit is exactly on top
         // of the tower, which would produce a NaN velocity.
         let dir = (target - origin).normalize_or_zero();
-        let dir = if dir == Vec2::ZERO { vec2(1.0, 0.0) } else { dir };
+        let dir = if dir == Vec2::ZERO {
+            vec2(1.0, 0.0)
+        } else {
+            dir
+        };
 
         Projectile {
             pos: origin,

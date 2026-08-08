@@ -248,7 +248,11 @@ mod tests {
         for t in &TRACKS {
             assert!(!t.lanes.is_empty(), "{} has no lanes", t.name);
             for lane in t.lanes {
-                assert!(lane.len() >= 2, "{} has a lane with too few waypoints", t.name);
+                assert!(
+                    lane.len() >= 2,
+                    "{} has a lane with too few waypoints",
+                    t.name
+                );
             }
             assert!(t.length() > 0.0, "{} has zero length", t.name);
         }
@@ -316,7 +320,11 @@ mod tests {
                     let (ax, ay) = a[0];
                     let (bx, by) = b[0];
                     let gap = ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt();
-                    assert!(gap > 200.0, "{} has two gates only {gap:.0}px apart", t.name);
+                    assert!(
+                        gap > 200.0,
+                        "{} has two gates only {gap:.0}px apart",
+                        t.name
+                    );
                 }
             }
         }
@@ -374,7 +382,11 @@ mod tests {
         let gentle = TRACKS.iter().find(|t| t.difficulty == "Gentle").unwrap();
 
         for t in &TRACKS {
-            assert!(hard.length() <= t.length(), "{} is shorter than Hard", t.name);
+            assert!(
+                hard.length() <= t.length(),
+                "{} is shorter than Hard",
+                t.name
+            );
             assert!(
                 gentle.length() >= t.length(),
                 "{} is longer than Gentle",
@@ -431,8 +443,8 @@ mod tests {
     #[test]
     fn built_paths_match_the_computed_average_length() {
         for t in &TRACKS {
-            let built: f32 = t.paths().iter().map(|p| p.total()).sum::<f32>()
-                / t.lanes.len() as f32;
+            let built: f32 =
+                t.paths().iter().map(|p| p.total()).sum::<f32>() / t.lanes.len() as f32;
             assert!((built - t.length()).abs() < 0.01, "{}", t.name);
         }
     }
@@ -447,6 +459,14 @@ mod tests {
             .map(|t| t.name)
             .collect();
         assert_eq!(multi, vec!["Twin Gates"]);
-        assert_eq!(TRACKS.iter().find(|t| t.name == "Twin Gates").unwrap().lanes.len(), 2);
+        assert_eq!(
+            TRACKS
+                .iter()
+                .find(|t| t.name == "Twin Gates")
+                .unwrap()
+                .lanes
+                .len(),
+            2
+        );
     }
 }

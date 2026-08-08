@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fruit Splat</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #14161a;
+    overflow: hidden;
+  }
+  /* The canvas keeps its authored 1200x740 *layout* size and is scaled to the
+     window with a transform. Sizing it with CSS width/height instead lets
+     miniquad resize its backing buffer to whatever the box happens to be, which
+     changes screen_width() — and this game's HUD, shop bar and route-card rows
+     are all laid out against a fixed 1200, so every one of them would drift. */
+  #glcanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1200px;
+    height: 740px;
+    transform-origin: top left;
+    outline: none;
+  }
+</style>
+</head>
+<body>
+  <canvas id="glcanvas" width="1200" height="740" tabindex="1"></canvas>
+  <script>
+    // Letterbox the fixed playfield into whatever window it is given.
+    const FIELD_W = 1200, FIELD_H = 740;
+    function fit() {
+      const c = document.getElementById("glcanvas");
+      const s = Math.min(innerWidth / FIELD_W, innerHeight / FIELD_H);
+      c.style.transform =
+        `translate(${(innerWidth - FIELD_W * s) / 2}px, ${(innerHeight - FIELD_H * s) / 2}px) scale(${s})`;
+    }
+    addEventListener("resize", fit);
+    fit();
+  </script>
+  <script src="mq_js_bundle.js"></script>
+  <script>
+    // macroquad finds the canvas by this id and drives it from the wasm module.
+    load("fruit-splat.wasm");
+  </script>
+</body>
+</html>
