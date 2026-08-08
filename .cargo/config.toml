@@ -1,0 +1,19 @@
+# Building this game for the web needs one linker flag.
+#
+# quad-snd talks to the Web Audio API through `extern "C"` declarations —
+# audio_init, audio_play_buffer, audio_source_stop and friends — which nothing
+# in the Rust build provides. They are supplied at runtime by macroquad's
+# mq_js_bundle.js, so on wasm they must link as *imports* rather than resolve to
+# a definition.
+#
+# Whether wasm-ld does that on its own depends on the toolchain: it linked
+# without complaint locally and failed on the CI runner with
+# "undefined symbol: audio_init". Saying so explicitly makes the build behave
+# the same everywhere instead of depending on which linker default is in force.
+#
+# This lives here rather than in the workflow so a local `cargo build --target
+# wasm32-unknown-unknown` gets it too. Note that setting the RUSTFLAGS
+# environment variable replaces these entirely — the workflow deliberately does
+# not set it for that reason.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--allow-undefined"]

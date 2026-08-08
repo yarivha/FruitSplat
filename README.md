@@ -462,6 +462,18 @@ python3 -m http.server -d dist 8080
 It has to be served over HTTP — opening `index.html` from the filesystem fails,
 because browsers won't instantiate wasm from a `file://` origin.
 
+[`.cargo/config.toml`](.cargo/config.toml) passes `--allow-undefined` to the
+linker for this target. quad-snd reaches the Web Audio API through `extern "C"`
+declarations that nothing in the Rust build defines — the JS bundle supplies them
+at runtime — so on wasm they have to link as *imports*. Whether wasm-ld does that
+unprompted depends on the toolchain, and a runner that doesn't fails the link with
+`undefined symbol: audio_init`.
+
+Careful with `RUSTFLAGS`: setting it in the environment **replaces** the flags in
+that file rather than adding to them, which silently drops `--allow-undefined` and
+breaks the web build. That is why the workflow sets no global `RUSTFLAGS` and
+passes `-D warnings` to clippy directly.
+
 The page pins the canvas to its authored **1200 × 740** and scales it to the
 window with a CSS transform, rather than sizing it with CSS width and height.
 That matters: miniquad resizes its drawing buffer to whatever the CSS box is, so

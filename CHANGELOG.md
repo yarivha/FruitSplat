@@ -125,6 +125,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio throttling so a busy field stays readable: pops are capped at 3 per
   frame and each successive one ducks 22%, and the shoot sound is rate-limited
   to one per 55ms across all towers.
+- `.cargo/config.toml` passing `--allow-undefined` to the linker for
+  `wasm32-unknown-unknown`. quad-snd reaches the Web Audio API through
+  `extern "C"` declarations that nothing in the Rust build defines — the JS
+  bundle supplies them at runtime — so on wasm they have to link as imports.
+  Whether wasm-ld does that unprompted turns out to depend on the toolchain: it
+  linked without complaint locally and failed the CI runner with
+  `undefined symbol: audio_init`. It lives in cargo config rather than the
+  workflow so a local wasm build gets it too.
+  - The workflow's global `RUSTFLAGS: -D warnings` had to go with it. Setting
+    `RUSTFLAGS` in the environment *replaces* the rustflags in cargo config
+    rather than adding to them, so it would have silently dropped the new flag
+    and broken the web job again, with an error pointing nowhere near either
+    file. `-D warnings` is passed to clippy directly instead.
 - **GitHub Actions workflow** building Linux, macOS, Windows and web on every
   push and pull request, and attaching all four to a release on a `v*` tag.
   - macOS is a universal binary. The runners are Apple Silicon, so an arm64
