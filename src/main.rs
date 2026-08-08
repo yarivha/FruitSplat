@@ -594,8 +594,17 @@ impl Game {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Place the armed tower if the spot is legal. Selection is kept so several
-    // towers of one type can be placed in a row.
+    // Place the armed tower if the spot is legal, and disarm afterwards.
+    //
+    // Keeping the type armed let several of one kind go down in a row, but it
+    // made the common case worse: while anything is armed a click on the field
+    // *places*, so a placed tower could not be clicked to open its panel, and a
+    // stray click bought another tower. Cancelling first meant a right click,
+    // which on the web build the browser takes for its own context menu.
+    //
+    // Re-arming is one click on the shop button or one number key, so placing a
+    // row of them costs a keypress each; not being able to touch anything on the
+    // field until you disarm cost more.
     // ─────────────────────────────────────────────────────────────────────────
     fn try_place(&mut self, p: Vec2) {
         let Some(kind) = self.selected else { return };
@@ -607,6 +616,7 @@ impl Game {
         self.cash -= kind.cost();
         self.towers.push(Tower::new(kind, p, self.next_tower_id));
         self.next_tower_id += 1;
+        self.selected = None;
         self.audio.play_place();
     }
 

@@ -47,6 +47,13 @@
 </head>
 <body>
   <canvas id="glcanvas" width="1200" height="740" tabindex="1"></canvas>
+  <script>
+    // Right click is a game input — it cancels a placement and closes the tower
+    // panel. Without this the browser opens its own context menu over the
+    // canvas instead, and the game never sees the click at all.
+    document.getElementById("glcanvas")
+      .addEventListener("contextmenu", e => e.preventDefault());
+  </script>
   <script src="mq_js_bundle.js"></script>
   <script>
     // macroquad finds the canvas by this id and drives it from the wasm module.

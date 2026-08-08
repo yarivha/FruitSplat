@@ -20,7 +20,7 @@ cargo run --release
 | `1`–`5` on the route screen | Pick a route and start |
 | `1`–`5` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
-| Left click on field | Place the armed tower |
+| Left click on field | Place the armed tower, then disarm |
 | Left click a placed tower | Open its stats panel (nothing armed) |
 | Click **Upgrade** / **Sell** | Upgrade or sell that tower |
 | Right click | Cancel placement / close the panel |
@@ -186,6 +186,12 @@ by how close it is in pixels. Two stretches of track can run within a few dozen
 pixels of each other, either as a switchback on one lane or as the two lanes of
 Twin Gates converging, and a pile must only touch the fruit actually walking
 over it.
+
+Placing a tower **disarms the shop selection**. While a type is armed a field
+click always places, so a placed tower can't be clicked to open its panel and a
+stray click buys another one. Re-arming is one click on the shop button or one
+number key, which is cheaper than not being able to touch the field until you
+cancel. Right click still cancels an armed tower you decide against.
 
 Towers use "first" targeting — they shoot whichever fruit in range is furthest
 along its lane, measured as a **fraction** of that lane rather than in pixels, so

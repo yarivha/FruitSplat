@@ -93,6 +93,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cost lives equal to their tier (1 for a blueberry, 5 for a watermelon, 6 for a
   Durian). What a run opens with is set by its difficulty mode.
 - Shop bar with 1/2/3 hotkeys, click-to-place, and right-click to cancel.
+  - Placing a tower disarms the selection. Keeping the type armed let several of
+    one kind go down in a row, but while anything is armed a field click always
+    *places* — so a placed tower could not be clicked to open its panel, and a
+    stray click bought another tower. Clearing that needed a right click, which
+    on the web build the browser took for its own context menu. Re-arming is one
+    click or one number key; being unable to touch the field until you cancelled
+    cost more.
+  - The web page suppresses the browser context menu over the canvas, so right
+    click reaches the game as the cancel it is meant to be.
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
