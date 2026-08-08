@@ -8,6 +8,13 @@ you buy towers and place them along the route. Pop a fruit and it bursts into tw
 smaller, faster ones, so a watermelon you failed to handle early arrives as a
 swarm of blueberries later.
 
+![Fruit Splat on The Long Orchard](docs/screenshot.png)
+
+*Every tower and every fruit tier at once, including the armoured Durian on the
+right — staged with the [screenshot mode](#screenshots) rather than caught
+mid-wave, so nothing here is hidden behind something else. All of it is drawn
+from macroquad primitives; the game ships with no image assets.*
+
 ## Play
 
 ```sh
@@ -528,7 +535,8 @@ cargo test
 ## Screenshots
 
 Setting `FRUITSPLAT_SCREENSHOT` stages a scene, renders a few frames, writes a
-PNG and exits. Handy for reviewing artwork without playing to the right moment.
+PNG and exits. Handy for reviewing artwork without playing to the right moment —
+the image at the top of this file was produced with it.
 
 ```sh
 FRUITSPLAT_SCREENSHOT=/tmp/shot.png cargo run --release
