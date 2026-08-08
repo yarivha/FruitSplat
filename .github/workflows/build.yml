@@ -2,8 +2,14 @@ name: build
 
 # Builds Fruit Splat for Linux, macOS, Windows and the web.
 #
-# Every push and PR produces downloadable artifacts. Pushing a v* tag also
-# publishes them as a GitHub release.
+# The four builds run for a v* tag and nothing else, so exactly one run ever
+# produces artifacts and it is the one that publishes the release. Pushing a
+# branch runs the checks alone — pushing a commit and then tagging it used to
+# build the identical commit twice, once per ref, because GitHub starts a run
+# per ref rather than per commit.
+#
+# `workflow_dispatch` also builds, as an escape hatch for getting artifacts out
+# of a branch without spending a version number on it.
 #
 # The game embeds its assets with include_bytes!, so every archive here is the
 # executable and nothing else — there is no asset directory to ship alongside it.
@@ -50,6 +56,7 @@ jobs:
   # headers — the audio feature is enabled, which is what pulls in ALSA.
   # ───────────────────────────────────────────────────────────────────────────
   linux:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ubuntu-latest
     steps:
@@ -79,6 +86,7 @@ jobs:
   # file that runs on either.
   # ───────────────────────────────────────────────────────────────────────────
   macos:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: macos-latest
     steps:
@@ -107,6 +115,7 @@ jobs:
   # and OpenGL directly, both of which the runner already has.
   # ───────────────────────────────────────────────────────────────────────────
   windows:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: windows-latest
     steps:
@@ -135,6 +144,7 @@ jobs:
   # drift from the library it is gluing.
   # ───────────────────────────────────────────────────────────────────────────
   web:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: ubuntu-latest
     steps:

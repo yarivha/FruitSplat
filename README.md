@@ -427,9 +427,17 @@ way to seek a playing sound.
 ## Builds
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) builds Linux, macOS,
-Windows and web on every push and pull request, and attaches all four to a GitHub
-release when a `v*` tag is pushed. The suite has to pass first — binaries from a
-tree that fails its own tests are worse than no binaries.
+Windows and web **for a `v*` tag**, and attaches all four to a GitHub release.
+The suite has to pass first — binaries from a tree that fails its own tests are
+worse than no binaries.
+
+Pushing a branch runs the checks alone, no builds. GitHub starts a run per *ref*
+rather than per commit, so pushing a commit and then tagging it would otherwise
+build the identical commit twice. This way exactly one run produces artifacts,
+and it is the one that publishes the release.
+
+`workflow_dispatch` builds too, as an escape hatch for getting artifacts out of a
+branch without spending a version number on it.
 
 | Target | Produced |
 |---|---|

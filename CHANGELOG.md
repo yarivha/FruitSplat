@@ -138,8 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     rather than adding to them, so it would have silently dropped the new flag
     and broken the web job again, with an error pointing nowhere near either
     file. `-D warnings` is passed to clippy directly instead.
-- **GitHub Actions workflow** building Linux, macOS, Windows and web on every
-  push and pull request, and attaching all four to a release on a `v*` tag.
+- **GitHub Actions workflow** building Linux, macOS, Windows and web for a `v*`
+  tag, and attaching all four to a release. Branch pushes run the checks alone.
+  - GitHub starts a run per *ref*, not per commit, so pushing a commit and then
+    tagging it built the identical commit twice — once for `refs/heads/main` and
+    once for `refs/tags/v*`. Gating the four build jobs on the tag means exactly
+    one run ever produces artifacts, and it is the one that publishes the
+    release. `workflow_dispatch` still builds, as an escape hatch for pulling
+    artifacts off a branch without spending a version number.
   - macOS is a universal binary. The runners are Apple Silicon, so an arm64
     build alone would not start on an Intel Mac; both slices are built and
     joined with `lipo`.
