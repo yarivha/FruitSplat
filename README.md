@@ -474,11 +474,24 @@ that file rather than adding to them, which silently drops `--allow-undefined` a
 breaks the web build. That is why the workflow sets no global `RUSTFLAGS` and
 passes `-D warnings` to clippy directly.
 
-The page pins the canvas to its authored **1200 × 740** and scales it to the
-window with a CSS transform, rather than sizing it with CSS width and height.
-That matters: miniquad resizes its drawing buffer to whatever the CSS box is, so
-sizing it that way changes `screen_width()`, and the HUD, shop bar and route-card
-row are all laid out against a fixed 1200. They would all drift.
+The page leaves the canvas at its authored **1200 × 740** and does not scale it
+at all. That is deliberate, and macroquad's JS bundle is the reason — it uses two
+different measurements:
+
+```js
+resize():                  canvas.clientWidth * dpi_scale()            // ignores CSS transforms
+mouse_relative_position():  (clientX - getBoundingClientRect().left)   // does not
+```
+
+Size the canvas with a CSS `transform` and those disagree by exactly the scale
+factor: the game still renders at 1200 × 740, but every click arrives compressed
+toward the top-left, and below a scale of 0.88 the shop bar is out of reach so no
+tower can be armed at all. Size it with CSS width and height instead and they
+agree, but the drawing buffer then follows the window and `screen_width()` stops
+being 1200 — which the HUD, shop bar and route-card row are all laid out against.
+
+So the canvas is left alone. On a screen too small for it, **browser zoom** is
+the way to fit — it scales layout and hit-testing together, so it stays correct.
 
 The `.wasm` is about 5.7 MB, of which 5.1 MB is the embedded audio — the WAVs are
 uncompressed PCM. Stripping barely dents it; shrinking it means shorter loops or

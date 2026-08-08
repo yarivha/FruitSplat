@@ -153,11 +153,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Builds are gated on `cargo fmt --check`, `cargo clippy` and `cargo test`.
     The tree did not pass rustfmt, so it was formatted — the gate is worth
     having only if it is true.
-- `web/index.html`, the page a wasm build is served from. It pins the canvas to
-  the authored 1200x740 and scales it to the window with a CSS transform rather
-  than sizing it with CSS width and height: miniquad resizes its drawing buffer
-  to whatever the CSS box is, which changes `screen_width()`, and the HUD, shop
-  bar and route-card row are all laid out against a fixed 1200.
+- `web/index.html`, the page a wasm build is served from. The canvas is left at
+  its authored 1200x740 and deliberately not scaled, because macroquad's JS
+  bundle measures it two different ways: the drawing buffer comes from
+  `clientWidth`, which ignores CSS transforms, while mouse input is mapped
+  through `getBoundingClientRect()`, which does not. Scaling with a transform
+  makes those disagree by exactly the scale factor — the game renders correctly
+  but every click lands compressed toward the top-left, and below a scale of
+  0.88 the shop bar is unreachable and no tower can be armed. Sizing with CSS
+  width and height keeps them in agreement but lets the buffer follow the
+  window, so `screen_width()` stops being the 1200 the HUD, shop bar and
+  route-card row are laid out against. Browser zoom is the way to fit a smaller
+  screen; it scales layout and hit-testing together.
 - **Wider window: 1200 x 740, up from 1000 x 740.** Every route ran off the
   right edge with its last stretch still to come, so the approach to the exit
   could not be seen and fruit vanished mid-field while still shootable.

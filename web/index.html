@@ -8,40 +8,45 @@
   html, body {
     margin: 0;
     padding: 0;
-    height: 100%;
     background: #14161a;
-    overflow: hidden;
   }
-  /* The canvas keeps its authored 1200x740 *layout* size and is scaled to the
-     window with a transform. Sizing it with CSS width/height instead lets
-     miniquad resize its backing buffer to whatever the box happens to be, which
-     changes screen_width() — and this game's HUD, shop bar and route-card rows
-     are all laid out against a fixed 1200, so every one of them would drift. */
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* The canvas is left at its authored 1200x740 and is NOT scaled by CSS.
+     That is deliberate, and the two lines below from macroquad's JS bundle are
+     the reason:
+
+         resize():                 canvas.clientWidth  * dpi_scale()
+         mouse_relative_position(): (clientX - canvas.getBoundingClientRect().left) * dpi_scale()
+
+     The drawing buffer is sized from clientWidth, which ignores CSS transforms.
+     Mouse input is mapped through getBoundingClientRect(), which does not. Scale
+     the canvas with `transform` and those two disagree by exactly the scale
+     factor: the game still renders at 1200x740, but every click arrives
+     compressed toward the top-left. At any scale below 0.88 the shop bar drops
+     out of reach altogether and no tower can be armed at all.
+
+     Sizing with CSS width/height instead keeps them in agreement, but then the
+     drawing buffer follows the window and screen_width() stops being 1200 —
+     which the HUD, the shop bar and the route-card row are all laid out against.
+
+     So: no scaling. Browser zoom is the way to fit a smaller screen, and it
+     works correctly because it scales layout and hit-testing together. */
   #glcanvas {
-    position: absolute;
-    top: 0;
-    left: 0;
+    display: block;
+    flex: 0 0 auto;
     width: 1200px;
     height: 740px;
-    transform-origin: top left;
     outline: none;
   }
 </style>
 </head>
 <body>
   <canvas id="glcanvas" width="1200" height="740" tabindex="1"></canvas>
-  <script>
-    // Letterbox the fixed playfield into whatever window it is given.
-    const FIELD_W = 1200, FIELD_H = 740;
-    function fit() {
-      const c = document.getElementById("glcanvas");
-      const s = Math.min(innerWidth / FIELD_W, innerHeight / FIELD_H);
-      c.style.transform =
-        `translate(${(innerWidth - FIELD_W * s) / 2}px, ${(innerHeight - FIELD_H * s) / 2}px) scale(${s})`;
-    }
-    addEventListener("resize", fit);
-    fit();
-  </script>
   <script src="mq_js_bundle.js"></script>
   <script>
     // macroquad finds the canvas by this id and drives it from the wasm module.
