@@ -2,21 +2,28 @@ name: build
 
 # Builds Fruit Splat for Linux, macOS, Windows and the web.
 #
-# The four builds run for a v* tag and nothing else, so exactly one run ever
-# produces artifacts and it is the one that publishes the release. Pushing a
-# branch runs the checks alone — pushing a commit and then tagging it used to
-# build the identical commit twice, once per ref, because GitHub starts a run
-# per ref rather than per commit.
+# This runs for a v* tag and nothing else, so pushing a commit and then tagging
+# it produces exactly one run: the one that builds the four targets and
+# publishes the release.
 #
-# `workflow_dispatch` also builds, as an escape hatch for getting artifacts out
-# of a branch without spending a version number on it.
+# There is deliberately no trigger on branch pushes. GitHub starts a run per
+# *ref* rather than per commit, so `branches: [main]` meant a second run for
+# every tagged release — first building the same commit twice, then, once the
+# builds were gated, still showing up as a second entry doing the checks.
+#
+# The cost is that a push to main runs nothing at all. The checks still gate the
+# release from inside the tag run, so a broken tree fails the release rather
+# than shipping a bad one — but it is found at tag time, not at push time.
+#
+# `pull_request` runs the checks. `workflow_dispatch` builds as well, as an
+# escape hatch for getting artifacts off a branch without spending a version
+# number on it.
 #
 # The game embeds its assets with include_bytes!, so every archive here is the
 # executable and nothing else — there is no asset directory to ship alongside it.
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:

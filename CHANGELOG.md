@@ -140,12 +140,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     file. `-D warnings` is passed to clippy directly instead.
 - **GitHub Actions workflow** building Linux, macOS, Windows and web for a `v*`
   tag, and attaching all four to a release. Branch pushes run the checks alone.
-  - GitHub starts a run per *ref*, not per commit, so pushing a commit and then
-    tagging it built the identical commit twice — once for `refs/heads/main` and
-    once for `refs/tags/v*`. Gating the four build jobs on the tag means exactly
-    one run ever produces artifacts, and it is the one that publishes the
-    release. `workflow_dispatch` still builds, as an escape hatch for pulling
-    artifacts off a branch without spending a version number.
+  - There is no trigger on branch pushes, so a tagged release is exactly one
+    run. GitHub starts a run per *ref* rather than per commit, so triggering on
+    `main` as well meant two runs for every release — first building the same
+    commit twice, then, once the builds were gated on the tag, still appearing
+    as a second entry running the checks.
+  - The cost is that a push to main runs nothing. The checks still gate the
+    release from inside the tag run, so a broken tree fails the release rather
+    than shipping a bad one, but it is caught at tag time rather than push time.
+    `workflow_dispatch` runs the checks and builds on demand, without spending a
+    version number.
   - macOS is a universal binary. The runners are Apple Silicon, so an arm64
     build alone would not start on an Intel Mac; both slices are built and
     joined with `lipo`.

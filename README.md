@@ -431,13 +431,16 @@ Windows and web **for a `v*` tag**, and attaches all four to a GitHub release.
 The suite has to pass first — binaries from a tree that fails its own tests are
 worse than no binaries.
 
-Pushing a branch runs the checks alone, no builds. GitHub starts a run per *ref*
-rather than per commit, so pushing a commit and then tagging it would otherwise
-build the identical commit twice. This way exactly one run produces artifacts,
-and it is the one that publishes the release.
+**A branch push runs nothing.** GitHub starts a run per *ref* rather than per
+commit, so a trigger on `main` meant every tagged release showed up as two runs —
+one for `refs/heads/main`, one for `refs/tags/v*`. With the branch trigger gone,
+pushing a commit and then tagging it produces exactly one run.
 
-`workflow_dispatch` builds too, as an escape hatch for getting artifacts out of a
-branch without spending a version number on it.
+The trade-off is real: nothing is checked until you tag. The checks still gate
+the release from inside the tag run, so a broken tree fails the release rather
+than shipping a bad one — but you find out at tag time, not at push time. Run
+`cargo test` locally, or use `workflow_dispatch`, which runs the checks and
+builds without spending a version number.
 
 | Target | Produced |
 |---|---|
