@@ -67,6 +67,13 @@ const CARD_Y: f32 = 296.0;
 /// Space left either side of the row of cards.
 const CARD_MARGIN: f32 = 14.0;
 
+/// The running build's version, shown in the corner of the title screen.
+///
+/// Taken from CARGO_PKG_VERSION rather than written out by hand. A hand-kept
+/// string is exactly the kind that ends up disagreeing with the release it
+/// shipped in — which is the one question this exists to answer.
+const VERSION_LABEL: &str = concat!("v", env!("CARGO_PKG_VERSION"));
+
 /// Difficulty selector, sitting above the route cards on the same screen: the
 /// mode is a setting you carry into whichever route you then pick, so it reads
 /// better as a row above them than as a screen of its own in between.
@@ -1745,6 +1752,17 @@ pub fn draw_menu() {
         32.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );
+
+    // Tucked into the bottom right: out of the way of everything, but there
+    // when you need to know which build you are actually running.
+    let dims = measure_text(VERSION_LABEL, None, 16, 1.0);
+    draw_text(
+        VERSION_LABEL,
+        screen_width() - dims.width - 14.0,
+        screen_height() - 14.0,
+        16.0,
+        Color::new(1.0, 1.0, 1.0, 0.38),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2292,6 +2310,22 @@ mod tests {
         assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "quit overhangs");
         // The wave counter is right-aligned; leave it its half of the strip.
         assert!(r.x + r.w <= WINDOW_W * 0.6, "quit crowds the wave counter");
+    }
+
+    #[test]
+    fn the_version_label_looks_like_a_version() {
+        // It is read from the package version, so this is really asserting that
+        // the corner of the title screen says something a person can act on
+        // rather than an empty string.
+        assert!(VERSION_LABEL.starts_with('v'), "{VERSION_LABEL}");
+        let parts: Vec<&str> = VERSION_LABEL[1..].split('.').collect();
+        assert_eq!(parts.len(), 3, "expected v<major>.<minor>.<patch>");
+        for p in parts {
+            assert!(
+                !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()),
+                "\"{VERSION_LABEL}\" has a non-numeric component"
+            );
+        }
     }
 
     #[test]

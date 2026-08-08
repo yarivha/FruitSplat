@@ -102,6 +102,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cost more.
   - The web page suppresses the browser context menu over the canvas, so right
     click reaches the game as the cancel it is meant to be.
+- The build's version in the bottom right corner of the title screen, dim enough
+  to ignore and readable when looked for. Read from `CARGO_PKG_VERSION` rather
+  than written out: a hand-kept string is exactly the kind that ends up
+  disagreeing with the release it shipped in, which is the one question this
+  answers.
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.

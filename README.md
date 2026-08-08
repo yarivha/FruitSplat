@@ -32,6 +32,11 @@ cargo run --release
 
 Close the window to quit.
 
+The title screen carries the build's version in its bottom right corner. It comes
+from `CARGO_PKG_VERSION`, so it is whatever the binary was actually compiled at —
+which is the point, since the question it answers is "which build is this?" and a
+hand-maintained string would eventually answer it wrongly.
+
 ## Difficulty
 
 Before picking a route you pick a **mode**, from a row of three above the route
