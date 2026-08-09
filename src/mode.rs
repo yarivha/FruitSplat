@@ -14,7 +14,7 @@
 //
 //   Lives is what carries the rest of the run, and it is the reason the modes
 //         still differ once the cash has evened out. Leaks cost by tier — five
-//         for a watermelon, six for a Durian — so 25 lives absorbs four leaked
+//         for a watermelon, six for a Durian — so 30 lives absorbs five leaked
 //         bosses and 8 does not survive two leaked watermelons. That question is
 //         as sharp on the last wave as on the first, and the report above cannot
 //         see it at all.
@@ -25,17 +25,17 @@
 //         one. `balance_report` prints all three modes; the affordability ratio
 //         is what the dials add up to:
 //
-//             wave     1     5    10    13    15    20    25
-//             Easy   8.6   4.8   1.7   1.2   1.3   1.5   1.6
-//             Medium 4.1   2.6   1.1   0.9   0.9   1.1   1.2
-//             Hard   2.9   2.2   1.0   0.8   0.9   1.1   1.1
+//             wave      1     5    10    13    15    20    25
+//             Easy   11.7   6.1   1.9   1.4   1.3   1.6   1.7
+//             Medium  6.6   3.6   1.3   1.0   1.0   1.2   1.2
+//             Hard    4.5   2.8   1.1   0.9   0.9   1.1   1.2
 //
-//         Below 1.0 means the wave outruns what the player can afford. Easy
-//         never goes there; Medium and Hard both do, at wave 13 and again at
-//         the first boss wave. That gap is the whole point, and it was cash and
-//         lives alone that could not hold it open — on those two the modes had
-//         converged on the same fight by wave 13, which is exactly how it
-//         played.
+//         Below 1.0 means the wave outruns what the player can afford. Only
+//         Hard goes there now, at wave 13 and the first boss wave; raising the
+//         opening hands lifted cumulative cash at every wave after them too,
+//         which was enough to take Medium's wave-13 dip out. The modes still
+//         separate — but by how much slack they leave, not by whether the
+//         maths says you are behind.
 //
 // Speed is the one thing here that changes what a wave *does* rather than what
 // the player brings to it, and that is a line worth drawing carefully: a mode
@@ -47,7 +47,7 @@
 /// One difficulty setting.
 ///
 /// Deliberately just a name and numbers. The button prints them rather than a
-/// flavour line, because "$400, 30 lives" tells the player what they are
+/// flavour line, because "$550, 30 lives" tells the player what they are
 /// choosing and "room to learn" does not.
 pub struct Mode {
     pub name: &'static str,
@@ -62,16 +62,23 @@ pub struct Mode {
 /// Cash and lives the game's balance was actually tuned against. Medium is
 /// these numbers exactly, and `wave::balance_report` models this mode — the
 /// other two are that curve shifted, not a curve of their own.
-pub const TUNED_CASH: u32 = 180;
+///
+/// Cash was raised from 180 to open the game up: two Seed Shooters was a thin
+/// hand to meet wave 1 with, and it left the Triple Seeder ($260) unbuyable
+/// until well into a run, so a sixth tower existed that the opening never saw.
+/// Safe to move, because the affordability tables show the opening hand is
+/// swamped by income within about ten waves — this changes the start and
+/// nothing after it.
+pub const TUNED_CASH: u32 = 300;
 pub const TUNED_LIVES: u32 = 15;
 
 /// Easiest first, so the row reads left to right the way the labels do.
 pub const MODES: [Mode; 3] = [
     Mode {
         name: "Easy",
-        // Four towers up before the first wave, and enough lives to leak five
-        // Durians and still be standing.
-        start_cash: 400,
+        // Room to open with a Triple Seeder and still have change, and enough
+        // lives to leak five Durians and still be standing.
+        start_cash: 550,
         start_lives: 30,
         // The dial that carries. Fruit still speed up, but reach x1.35 by the
         // end of a long route where Medium reaches x1.90 — so a tower lands
@@ -89,9 +96,9 @@ pub const MODES: [Mode; 3] = [
     },
     Mode {
         name: "Hard",
-        // One tower and change to open with, and a life count where a single
-        // leaked Durian takes most of what you have.
-        start_cash: 120,
+        // Two cheap towers to open with, and a life count where a single leaked
+        // Durian takes most of what you have.
+        start_cash: 200,
         start_lives: 8,
         // Deliberately the tuned ramp, not a steeper one. Hard is meant to be
         // the balanced fight with no slack, and nobody asked for it to get

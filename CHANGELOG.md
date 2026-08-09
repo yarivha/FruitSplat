@@ -15,6 +15,12 @@ commit message and in the comments around the code it touched.
 - Release notes are lifted from this file's matching version section instead of
   a generated commit list. A tag with no section here fails the release.
 
+- Starting cash raised across all three modes — Easy $400 to $550, Medium $180
+  to $300, Hard $120 to $200 — so the opening is not two Seed Shooters and a
+  hope, and the Triple Seeder is buyable before the late game. Affects the start
+  only, since income swamps the opening hand within ten waves, though it does
+  take Medium's wave-13 dip below 1.0 out with it.
+
 ### Fixed
 
 - Multi-shot towers fired one shot per fruit in range, so a Triple Seeder facing

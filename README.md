@@ -52,9 +52,9 @@ cards. It carries over between runs, and the HUD shows which one you're on.
 
 | Mode | Starting cash | Starting lives | Fruit speed by the end |
 |---|---|---|---|
-| Easy | $400 | 30 | +35% |
-| Medium | $180 | 15 | +90% |
-| Hard | $120 | 8 | +90% |
+| Easy | $550 | 30 | +35% |
+| Medium | $300 | 15 | +90% |
+| Hard | $200 | 8 | +90% |
 
 A mode never changes what a wave **sends**. The fruit, their count, their order,
 the boss schedule and every payout are identical on all three — the economy is
@@ -76,17 +76,19 @@ the three dials add up to:
 
 | Wave | 1 | 5 | 10 | 13 | 15 | 20 | 25 |
 |---|---|---|---|---|---|---|---|
-| Easy | 8.6 | 4.8 | 1.7 | **1.2** | **1.3** | 1.5 | 1.6 |
-| Medium | 4.1 | 2.6 | 1.1 | **0.9** | **0.9** | 1.1 | 1.2 |
-| Hard | 2.9 | 2.2 | 1.0 | **0.8** | **0.9** | 1.1 | 1.1 |
+| Easy | 11.7 | 6.1 | 1.9 | 1.4 | 1.3 | 1.6 | 1.7 |
+| Medium | 6.6 | 3.6 | 1.3 | 1.0 | 1.0 | 1.2 | 1.2 |
+| Hard | 4.5 | 2.8 | 1.1 | **0.9** | **0.9** | 1.1 | 1.2 |
 
-Below 1.0 means the wave outruns what you can afford. Easy never goes there;
-Medium and Hard both do, at wave 13 and again at the first boss wave.
+Below 1.0 means the wave outruns what you can afford. Only Hard goes there, at
+wave 13 and again at the first boss wave — raising the opening hands lifted
+cumulative cash at every later wave too, which took Medium's wave-13 dip out with
+it. The modes still separate, but by how much slack they leave rather than by
+whether the maths says you're behind.
 
-That gap is the point, and cash and lives alone could not hold it open. On those
-two dials the modes had converged on the same fight by wave 13 — Easy was merely
-*rich early*, not easy. The speed ramp is what makes it easy all the way
-through.
+Cash and lives alone could not hold that gap open: on those two dials the modes
+converged on the same fight by wave 13, and Easy was merely *rich early*. The
+speed ramp is what makes it easy all the way through.
 
 ## Routes
 
