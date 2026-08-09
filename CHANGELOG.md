@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-09
+
+The interface release: the shop moves off the bottom of the window and into a
+column down the right, which is what made room for a sixth tower, and the route
+picker grows to two rows to make room for a sixth route and a random pick.
+
 ### Added
 
 - Rust + macroquad project scaffold (`Cargo.toml`, `src/` modules, release
