@@ -1,6 +1,6 @@
 [package]
 name = "fruit-splat"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 description = "Fruit Splat — a balloon-pop arcade game reskinned with fruit"
 license = "MIT"

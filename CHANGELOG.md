@@ -10,6 +10,11 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-09
+
+A seventh tower, a title made of fruit, and a game that finally fits a
+phone screen. Hard also stops being Medium with fewer lives.
+
 ### Added
 
 - **Bomb Lobber** ($320), a seventh tower. It lobs a slow shell that takes
