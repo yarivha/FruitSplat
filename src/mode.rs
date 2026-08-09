@@ -22,20 +22,28 @@
 //   Speed is the ramp fruit accelerate along as the waves go by, and it is the
 //         only dial that never fades. Speed divides how much every tower gets
 //         done on every wave, so a gentler ramp is still being felt on the last
-//         one. `balance_report` prints all three modes; the affordability ratio
-//         is what the dials add up to:
+//         one. It is also the dial that separates the modes from each other:
+//         Medium and Hard once shared it exactly, which made them one game with
+//         two life counts once income had swamped the opening hands.
+//
+//             fruit speed     wave 1     10     15     25
+//             Easy              1.00   1.13   1.21   1.35
+//             Medium            1.00   1.32   1.49   1.84
+//             Hard              1.00   1.45   1.70   2.20
+//
+//         `balance_report` prints all three; the affordability ratio is what the
+//         dials add up to:
 //
 //             wave      1     5    10    13    15    20    25
 //             Easy   11.7   6.1   1.9   1.4   1.3   1.6   1.7
 //             Medium  6.6   3.6   1.3   1.0   1.0   1.2   1.2
-//             Hard    4.5   2.8   1.1   0.9   0.9   1.1   1.2
+//             Hard    4.5   2.7   1.0   0.8   0.8   1.0   1.0
 //
 //         Below 1.0 means the wave outruns what the player can afford. Only
-//         Hard goes there now, at wave 13 and the first boss wave; raising the
-//         opening hands lifted cumulative cash at every wave after them too,
-//         which was enough to take Medium's wave-13 dip out. The modes still
-//         separate — but by how much slack they leave, not by whether the
-//         maths says you are behind.
+//         Hard goes there, dipping at wave 13 and the first boss wave and then
+//         running level at 1.0 rather than pulling clear the way the other two
+//         do. Medium keeps a 1.0 floor at its worst and 1.2 by the end, which is
+//         the difference between a fight with no slack and one with a little.
 //
 // Speed is the one thing here that changes what a wave *does* rather than what
 // the player brings to it, and that is a line worth drawing carefully: a mode
@@ -81,9 +89,9 @@ pub const MODES: [Mode; 3] = [
         start_cash: 550,
         start_lives: 30,
         // The dial that carries. Fruit still speed up, but reach x1.35 by the
-        // end of a long route where Medium reaches x1.90 — so a tower lands
-        // roughly 40% more shots on each fruit at wave 25, every wave, rather
-        // than only while the opening cash lasts.
+        // end of a long route where Medium reaches x1.84 and Hard x2.20 — so a
+        // tower lands roughly 40% more shots on each fruit at wave 25 than on
+        // Medium, every wave, rather than only while the opening cash lasts.
         speed_ramp: 0.015,
         max_speed: 1.35,
     },
@@ -100,11 +108,20 @@ pub const MODES: [Mode; 3] = [
         // Durian takes most of what you have.
         start_cash: 200,
         start_lives: 8,
-        // Deliberately the tuned ramp, not a steeper one. Hard is meant to be
-        // the balanced fight with no slack, and nobody asked for it to get
-        // faster as well.
-        speed_ramp: crate::wave::TUNED_SPEED_RAMP,
-        max_speed: crate::wave::TUNED_MAX_SPEED,
+        // Steeper than the tuned ramp, and this used to be the tuned ramp
+        // exactly — which left Medium and Hard the same game. Speed is the only
+        // dial that does not fade, so sharing it meant that once income had
+        // swamped the opening hands, around wave 10, the two modes differed by
+        // a life count and nothing else: identical fruit at identical speeds,
+        // both ending a long route at x1.84.
+        //
+        // 0.050 puts the three ramps at 0.015 / 0.035 / 0.050, so each step is
+        // a real one, and takes a long route to x2.20 against Medium's x1.84.
+        // Not the 0.055 that would space them evenly: that holds Hard under 1.0
+        // from wave 13 to the finish, which is not a hard game but an
+        // arithmetically lost one.
+        speed_ramp: 0.050,
+        max_speed: 2.20,
     },
 ];
 
@@ -126,18 +143,19 @@ mod tests {
     fn modes_get_steadily_harder() {
         // The row is authored easiest first, and every dial must agree with that
         // order — a mode with more cash but fewer lives than its neighbour would
-        // not be "easier" in any way a player could act on. Speed is compared
-        // non-strictly because Medium and Hard deliberately share the tuned ramp.
+        // not be "easier" in any way a player could act on. Every comparison is
+        // strict: two neighbours that tie on a dial are, on that dial, the same
+        // difficulty, which is exactly how Medium and Hard came to be one game.
         for w in MODES.windows(2) {
             assert!(
-                w[0].speed_ramp <= w[1].speed_ramp,
-                "{} ramps up faster than {}",
+                w[0].speed_ramp < w[1].speed_ramp,
+                "{} does not ramp up slower than {}",
                 w[0].name,
                 w[1].name
             );
             assert!(
-                w[0].max_speed <= w[1].max_speed,
-                "{} tops out faster than {}",
+                w[0].max_speed < w[1].max_speed,
+                "{} does not top out slower than {}",
                 w[0].name,
                 w[1].name
             );
@@ -157,10 +175,42 @@ mod tests {
     }
 
     #[test]
-    fn no_mode_is_harsher_than_the_tuned_baseline() {
-        // Medium is the balanced fight. Nothing should out-accelerate it — Hard
-        // is meant to be that fight with no slack, not a faster one.
-        for m in &MODES {
+    fn medium_sits_between_easy_and_hard_on_every_dial() {
+        // The whole job of a middle setting, and it was not doing it. Medium
+        // shared Hard's ramp and ceiling exactly, so once income had swamped the
+        // opening hands — around wave 10 — the two were the same game bar the
+        // life count, both running a long route out at x1.84. Medium played as
+        // Hard with a cushion rather than as a step between two things.
+        let (easy, medium, hard) = (mode(0), mode(1), mode(2));
+
+        for (dial, e, m, h) in [
+            (
+                "speed ramp",
+                easy.speed_ramp,
+                medium.speed_ramp,
+                hard.speed_ramp,
+            ),
+            (
+                "top speed",
+                easy.max_speed,
+                medium.max_speed,
+                hard.max_speed,
+            ),
+        ] {
+            assert!(e < m && m < h, "Medium does not sit between on {dial}");
+        }
+
+        // Cash and lives run the other way: more of them is easier.
+        assert!(easy.start_cash > medium.start_cash && medium.start_cash > hard.start_cash);
+        assert!(easy.start_lives > medium.start_lives && medium.start_lives > hard.start_lives);
+    }
+
+    #[test]
+    fn only_hard_outruns_the_tuned_baseline() {
+        // Medium is the balanced fight and Easy is gentler than it; the report
+        // models that curve, so neither may drift above it. Hard is the one mode
+        // allowed to be a harder fight rather than the same one with less slack.
+        for m in &MODES[..2] {
             assert!(m.speed_ramp <= crate::wave::TUNED_SPEED_RAMP, "{}", m.name);
             assert!(m.max_speed <= crate::wave::TUNED_MAX_SPEED, "{}", m.name);
         }

@@ -10,6 +10,17 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Changed
+
+- Hard gets a speed ramp of its own — 0.050 to a x2.20 ceiling, against the
+  tuned 0.035 and x1.90 it used to share with Medium. Speed is the only
+  difficulty dial that does not fade, so sharing it left Medium and Hard the
+  same game once income had swamped the opening hands around wave 10: identical
+  fruit at identical speeds, separated by a life count. Medium now sits between
+  its neighbours on every dial, and the mode buttons read +35% / +90% / +120%
+  where two of them used to read the same. Medium itself is unchanged — it is
+  still the baseline `balance_report` models.
+
 ### Added
 
 - The web build scales to the screen instead of overflowing it. The page sizes
