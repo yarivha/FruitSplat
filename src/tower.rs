@@ -175,7 +175,7 @@ impl TowerKind {
             // covered inside the first third of a wave and then had nowhere
             // left to lay, which made the timer meaningless and the upgrades
             // along with it. At this pace the stock builds over the whole wave.
-            TowerKind::SpikeLayer => [4.50, 3.40, 2.60],
+            TowerKind::SpikeLayer => [3.60, 2.80, 2.20],
             // The same cadence as a Seed Shooter, so the volley is simply
             // three of its shots where it fires one. A longer cooldown was
             // cancelling the triple out: at Lv3 the sustained rate came to

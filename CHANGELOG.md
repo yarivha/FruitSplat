@@ -10,6 +10,28 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Changed
+
+- **The game is easier.** Four dials moved together, after the balance report
+  showed Medium bottoming out at exactly 1.0 affordability on waves 13 and 15 —
+  break-even in a model that spends every dollar perfectly, lands every shot and
+  never leaves a tower idle, so a real player at 1.0 is behind. Worst-wave
+  affordability now runs Easy 1.7, Medium 1.2, Hard 1.0, up from 1.3 / 1.0 / 0.8.
+  - A freshly unlocked fruit tier no longer arrives in force. Its debut count
+    scaled with the wave number, so the later a tier arrived the bigger its
+    first appearance — and the toughest tier arrives last, which opened wave 13
+    with nine watermelons and 279 of that wave's 443 hits. Wave 13 now asks for
+    345 hits and sits at 1.4 instead of 1.0.
+  - The wave-clear bonus goes from 15+2w to 25+4w, which compounds into every
+    later wave. Income and wave composition are shared by all three modes, so
+    this lifts the whole curve and leaves the modes as far apart as they were.
+  - More lives: Easy 30 → 36, Medium 15 → 20, Hard 8 → 10. Changes nothing in
+    the affordability maths, only what one mistake costs.
+  - The Spike Layer lays at 3.60 / 2.80 / 2.20s, down from 4.50 / 3.40 / 2.60.
+    Sweeping its piles at the end of a wave took away the head start it used to
+    carry into the next one, and the slower rate compounded that; this gives
+    back some of the opening without touching either rule.
+
 ## [0.3.0] - 2026-08-09
 
 A seventh tower, a title made of fruit, and a game that finally fits a

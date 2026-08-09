@@ -5,6 +5,12 @@
 // unlocks every third wave; the freshly unlocked tier arrives in small numbers
 // while the tiers below it bulk the wave out, so difficulty climbs by both
 // toughness and volume.
+//
+// That last part is load-bearing and was not always true. The debut count used
+// to scale with the wave number, which meant the *later* a tier arrived the
+// bigger its first appearance — and since the toughest tier arrives last, wave
+// 13 opened with nine watermelons. It is near-flat now, and the tiers below
+// carry the volume instead.
 // =============================================================================
 
 use macroquad::rand::gen_range;
@@ -40,9 +46,16 @@ pub fn build_wave(wave: u32, total_waves: u32) -> Vec<FruitKind> {
         // How many waves ago this tier unlocked: 0 means it's new this wave.
         let age = top - tier;
         let count = match age {
-            0 => 3 + w / 2,
-            1 => 4 + w / 3,
-            _ => 2 + w / 5,
+            // The tier that just unlocked. Deliberately near-flat in the wave
+            // number, where this used to be 3 + w/2: a debut that scales with
+            // the wave means the *last* tier to arrive gets the biggest one, so
+            // wave 13 opened with nine watermelons at 31 hits apiece — 279 of
+            // that wave's 443, and the sharpest cliff in the game. The tiers
+            // below carry the volume instead, which is what the comment at the
+            // top of this file always claimed happened.
+            0 => 3 + w / 6,
+            1 => 5 + w / 3,
+            _ => 3 + w / 5,
         };
         for _ in 0..count.max(1) {
             queue.push(FruitKind::from_tier(tier as u8));
@@ -127,7 +140,7 @@ pub fn spawn_interval(wave: u32) -> f32 {
 // Cash awarded for clearing `wave`, on top of the per-fruit income.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn clear_bonus(wave: u32) -> u32 {
-    15 + wave * 2
+    25 + wave * 4
 }
 
 /// How much faster fruit move each wave, and the ceiling on that, for the

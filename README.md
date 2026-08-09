@@ -25,7 +25,7 @@ cargo run --release
 |---|---|
 | Click **Easy** / **Medium** / **Hard** | Set the difficulty |
 | `1`–`7` on the route screen | Pick a route (7 is random) and start |
-| `1`–`6` in play | Arm a tower type |
+| `1`–`7` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower, then disarm |
 | Left click a placed tower | Open its stats panel (nothing armed) |
@@ -58,9 +58,9 @@ cards. It carries over between runs, and the HUD shows which one you're on.
 
 | Mode | Starting cash | Starting lives | Fruit speed by the end |
 |---|---|---|---|
-| Easy | $550 | 30 | +35% |
-| Medium | $300 | 15 | +84% |
-| Hard | $200 | 8 | +120% |
+| Easy | $550 | 36 | +35% |
+| Medium | $300 | 20 | +84% |
+| Hard | $200 | 10 | +120% |
 
 A mode never changes what a wave **sends**. The fruit, their count, their order,
 the boss schedule and every payout are identical on all three — the economy is
@@ -72,8 +72,8 @@ The three dials do different jobs at different times:
 swamps it within about ten waves, and it has to — the alternative is a mode that
 scales income, which compounds and would tear the economy curve apart late.
 
-**Lives are the margin for error.** Leaks cost by tier, so 30 lives absorbs five
-leaked Durians while 8 doesn't survive two leaked watermelons.
+**Lives are the margin for error.** Leaks cost by tier, so 36 lives absorbs six
+leaked Durians while 10 dies to the second leaked watermelon.
 
 **Speed is the only dial that never fades.** It divides how much every tower
 gets done on every wave, so a gentler ramp is still being felt on the last one.
@@ -82,14 +82,15 @@ the three dials add up to:
 
 | Wave | 1 | 5 | 10 | 13 | 15 | 20 | 25 |
 |---|---|---|---|---|---|---|---|
-| Easy | 11.7 | 6.1 | 1.9 | 1.4 | 1.3 | 1.6 | 1.7 |
-| Medium | 6.6 | 3.6 | 1.3 | 1.0 | 1.0 | 1.2 | 1.2 |
-| Hard | 4.5 | 2.7 | 1.0 | **0.8** | **0.8** | 1.0 | 1.0 |
+| Easy | 11.9 | 8.1 | 2.9 | 1.9 | 1.7 | 1.8 | 1.8 |
+| Medium | 6.8 | 5.0 | 2.0 | 1.4 | 1.2 | 1.3 | 1.2 |
+| Hard | 4.8 | 3.9 | 1.6 | 1.1 | 1.0 | 1.1 | 1.0 |
 
-Below 1.0 means the wave outruns what you can afford. Only Hard goes there,
-dipping at wave 13 and again at the first boss wave, then running level at 1.0
-where the other two pull clear. Medium's worst is 1.0 and it ends at 1.2 — the
-difference between a fight with no slack and one with a little.
+Below 1.0 means the wave outruns what you can afford, and nothing goes there.
+Be careful reading 1.0 as "fair", though: the model spends every dollar on Seed
+Shooters, lands every shot and never leaves a tower idle, so a real player at 1.0
+is behind. Hard sits on that line at its worst on purpose. Medium keeps 1.2 under
+it and Easy 1.7.
 
 Cash and lives alone could not hold that gap open: on those two dials the modes
 converge on the same fight by wave 13, and Easy would be merely *rich early*. The
@@ -205,7 +206,7 @@ where they meet.
 | Triple Seeder | $260 | 150 px | 0.45s | Three seeds every volley, spread over up to three fruit |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
-| Spike Layer | $150 | 120 px | 4.50s | Lays spike piles onto the track all wave long |
+| Spike Layer | $150 | 120 px | 3.60s | Lays spike piles onto the track all wave long |
 | Bomb Lobber | $320 | 125 px | 2.60s | A 110px blast that clears a whole cluster |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
 
@@ -237,7 +238,7 @@ wears away. Against everything except the boss a hit is a pop, so that reads as
 one fruit per spike. It's especially good against splits: children spawn where
 their parent died, right on top of the same pile.
 
-It lays on a timer — one pile every 4.50s at Lv1, down to 2.60s at Lv3 — and it
+It lays on a timer — one pile every 3.60s at Lv1, down to 2.20s at Lv3 — and it
 keeps laying for the **whole wave**, from the moment the wave is sent until the
 last fruit is off the track. Each pile lands at a random free spot on the track
 it covers, so coverage builds up scattered rather than filing in from one end. On
@@ -318,7 +319,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 | Triple Seeder | $160 — a fourth seed, faster | $280 — a fifth seed, faster |
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
 | Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
-| Spike Layer | $130 — 6 spikes/pile, lays every 3.40s | $260 — 9 spikes/pile, every 2.60s |
+| Spike Layer | $130 — 6 spikes/pile, lays every 2.80s | $260 — 9 spikes/pile, every 2.20s |
 | Bomb Lobber | $200 — blast 110 → 135 px, faster | $340 — blast 165 px, faster |
 | Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
 
@@ -377,9 +378,16 @@ Because it is armoured, the towers sort themselves into roles against it:
 
 A new tier unlocks every third wave, so watermelons first appear on wave 13 —
 every route runs long enough to see them. Spawn intervals tighten from 0.85s
-toward a 0.30s floor, and fruit get **3.5% faster each wave**, capped at 1.9× —
-both on Medium and Hard; Easy ramps at 1.5% to a 1.35× cap. What you start with
-is set by the difficulty mode too.
+toward a 0.30s floor, and fruit get **3.5% faster each wave** on Medium, capped
+at 1.9×; Easy ramps at 1.5% to 1.35×, Hard at 5% to 2.2×. What you start with is
+set by the difficulty mode too.
+
+A freshly unlocked tier arrives in **small numbers** while the tiers below it
+bulk the wave out. That is what keeps the ladder from being a cliff: the debut
+count used to scale with the wave number, which meant the later a tier arrived
+the bigger its first appearance — and since the toughest tier arrives last, wave
+13 opened with nine watermelons at 31 hits each. It was comfortably the hardest
+wave in the game and the point most runs ended.
 
 ### Boss waves
 

@@ -14,8 +14,8 @@
 //
 //   Lives is what carries the rest of the run, and it is the reason the modes
 //         still differ once the cash has evened out. Leaks cost by tier — five
-//         for a watermelon, six for a Durian — so 30 lives absorbs five leaked
-//         bosses and 8 does not survive two leaked watermelons. That question is
+//         for a watermelon, six for a Durian — so 36 lives absorbs six leaked
+//         bosses and 10 dies to the second leaked watermelon. That question is
 //         as sharp on the last wave as on the first, and the report above cannot
 //         see it at all.
 //
@@ -35,15 +35,16 @@
 //         dials add up to:
 //
 //             wave      1     5    10    13    15    20    25
-//             Easy   11.7   6.1   1.9   1.4   1.3   1.6   1.7
-//             Medium  6.6   3.6   1.3   1.0   1.0   1.2   1.2
-//             Hard    4.5   2.7   1.0   0.8   0.8   1.0   1.0
+//             Easy   11.9   8.1   2.9   1.9   1.7   1.8   1.8
+//             Medium  6.8   5.0   2.0   1.4   1.2   1.3   1.2
+//             Hard    4.8   3.9   1.6   1.1   1.0   1.1   1.0
 //
-//         Below 1.0 means the wave outruns what the player can afford. Only
-//         Hard goes there, dipping at wave 13 and the first boss wave and then
-//         running level at 1.0 rather than pulling clear the way the other two
-//         do. Medium keeps a 1.0 floor at its worst and 1.2 by the end, which is
-//         the difference between a fight with no slack and one with a little.
+//         Below 1.0 means the wave outruns what the player can afford, and
+//         nothing goes there now. It is worth being clear about what 1.0 means
+//         though: the model spends every dollar on Seed Shooters, lands every
+//         shot and never leaves a tower idle, so a real player at 1.0 is behind.
+//         Hard sits on that line at its worst by design; Medium keeps 1.2 under
+//         it and Easy 1.7.
 //
 // Speed is the one thing here that changes what a wave *does* rather than what
 // the player brings to it, and that is a line worth drawing carefully: a mode
@@ -78,7 +79,7 @@ pub struct Mode {
 /// swamped by income within about ten waves — this changes the start and
 /// nothing after it.
 pub const TUNED_CASH: u32 = 300;
-pub const TUNED_LIVES: u32 = 15;
+pub const TUNED_LIVES: u32 = 20;
 
 /// Easiest first, so the row reads left to right the way the labels do.
 pub const MODES: [Mode; 3] = [
@@ -87,7 +88,7 @@ pub const MODES: [Mode; 3] = [
         // Room to open with a Triple Seeder and still have change, and enough
         // lives to leak five Durians and still be standing.
         start_cash: 550,
-        start_lives: 30,
+        start_lives: 36,
         // The dial that carries. Fruit still speed up, but reach x1.35 by the
         // end of a long route where Medium reaches x1.84 and Hard x2.20 — so a
         // tower lands roughly 40% more shots on each fruit at wave 25 than on
@@ -107,7 +108,7 @@ pub const MODES: [Mode; 3] = [
         // Two cheap towers to open with, and a life count where a single leaked
         // Durian takes most of what you have.
         start_cash: 200,
-        start_lives: 8,
+        start_lives: 10,
         // Steeper than the tuned ramp, and this used to be the tuned ramp
         // exactly — which left Medium and Hard the same game. Speed is the only
         // dial that does not fade, so sharing it meant that once income had
