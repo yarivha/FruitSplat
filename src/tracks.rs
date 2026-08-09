@@ -83,7 +83,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Orchard Snake",
         blurb: "a steady weave",
         difficulty: "Medium",
-        waves: 20,
+        waves: 58,
         lanes: &[&[
             (-40.0, 180.0),
             (260.0, 180.0),
@@ -101,7 +101,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Market Run",
         blurb: "short and direct",
         difficulty: "Hard",
-        waves: 15,
+        waves: 50,
         lanes: &[&[
             (-40.0, 370.0),
             (300.0, 370.0),
@@ -115,7 +115,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "The Long Orchard",
         blurb: "plenty of time to shoot",
         difficulty: "Gentle",
-        waves: 25,
+        waves: 64,
         lanes: &[&[
             (-40.0, 150.0),
             (180.0, 150.0),
@@ -137,7 +137,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Zigzag Grove",
         blurb: "tight lanes, wide cover",
         difficulty: "Medium",
-        waves: 20,
+        waves: 58,
         lanes: &[&[
             (-40.0, 210.0),
             (150.0, 210.0),
@@ -171,7 +171,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Twin Gates",
         blurb: "two ways in, one out",
         difficulty: "Tricky",
-        waves: 18,
+        waves: 54,
         lanes: &[
             // The high road.
             &[
@@ -209,7 +209,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Meander",
         blurb: "the long way round",
         difficulty: "Gentle",
-        waves: 25,
+        waves: 70,
         lanes: &[&[
             (-40.0, 130.0),
             (150.0, 130.0),
@@ -444,17 +444,27 @@ mod tests {
     }
 
     #[test]
-    fn every_route_runs_long_enough_to_reach_the_top_fruit_tier() {
+    fn every_route_is_a_long_run_that_still_reaches_the_top_tier() {
         // A new tier unlocks every third wave, so watermelons first appear on
-        // wave 13. A route shorter than that could never show them.
+        // wave 13 — the floor below is far above that anyway.
+        //
+        // Routes used to run 15 to 25 waves, and this test capped them at 40 on
+        // the grounds that more would outstay their welcome. That was true of
+        // the game as it escalated then: the speed ramp topped out at wave 26
+        // and the spawn interval at 28, after which waves grew longer rather
+        // than harder while income compounded, so a fiftieth wave really would
+        // have been a victory lap. Both dials keep working now, which is what
+        // makes a run this length worth playing to the end.
         for t in &TRACKS {
             assert!(
-                t.waves >= 13,
-                "{} ends at wave {}, before watermelons appear",
+                t.waves >= 50,
+                "{} ends at wave {}, short of a full run",
                 t.name,
                 t.waves
             );
-            assert!(t.waves <= 40, "{} would outstay its welcome", t.name);
+            // Not a design judgement, just a guard against a typo turning a
+            // route into a thousand waves.
+            assert!(t.waves <= 100, "{} runs implausibly long", t.name);
         }
     }
 

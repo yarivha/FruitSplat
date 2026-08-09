@@ -12,6 +12,27 @@ commit message and in the comments around the code it touched.
 
 ### Changed
 
+- **Routes run 50 to 70 waves**, up from 15 to 25. Market Run 50, Twin Gates 54,
+  Orchard Snake and Zigzag Grove 58, The Long Orchard 64, Meander 70.
+  - Making the runs longer meant making them keep escalating. Past wave ~30 the
+    game got steadily *easier*: the speed ramp topped out at wave 26 and the
+    spawn interval at 28, after which a wave's demand per second was fixed by
+    the fruit mix while cumulative income carried on compounding. Medium's
+    affordability climbed from 1.3 at wave 30 to 4.9 by wave 70 — the last
+    twenty waves were a victory lap.
+  - Speed ceilings raised to 1.85 / 2.80 / 3.00 from 1.35 / 1.90 / 2.20, so the
+    ramp is still working at the end of a long route rather than finished at
+    wave 26.
+  - Spawn intervals now fall on two slopes: as before to 0.30s by wave 28, then
+    gently to a 0.16s floor by wave 56. Arriving faster raises the pressure
+    without handing the player any more money, which no other dial does.
+  - The lower tiers stop growing, so late waves concentrate on the top of the
+    ladder instead of padding themselves with blueberries that add length and
+    income but no difficulty. The top tier grows faster from wave 20 on to
+    carry the escalation once nothing tougher is left to unlock.
+  - Affordability now runs roughly flat from wave 13 to the finish: Easy 1.7–2.2,
+    Medium 1.1–1.5, Hard 1.0–1.4.
+
 - **The game is easier.** Four dials moved together, after the balance report
   showed Medium bottoming out at exactly 1.0 affordability on waves 13 and 15 —
   break-even in a model that spends every dollar perfectly, lands every shot and

@@ -26,25 +26,34 @@
 //         Medium and Hard once shared it exactly, which made them one game with
 //         two life counts once income had swamped the opening hands.
 //
-//             fruit speed     wave 1     10     15     25
-//             Easy              1.00   1.13   1.21   1.35
-//             Medium            1.00   1.32   1.49   1.84
-//             Hard              1.00   1.45   1.70   2.20
+//             fruit speed    wave 1    13    25    40    50    70
+//             Easy             1.00  1.18  1.36  1.59  1.73  1.85
+//             Medium           1.00  1.42  1.84  2.37  2.72  2.80
+//             Hard             1.00  1.60  2.20  2.95  3.00  3.00
+//
+//         The ceilings are high because routes now run 50 to 70 waves. They used
+//         to be 1.35/1.90/2.20, reached by wave 26, after which the ramp stopped
+//         doing anything at all and a long run drifted toward the player.
 //
 //         `balance_report` prints all three; the affordability ratio is what the
 //         dials add up to:
 //
-//             wave      1     5    10    13    15    20    25
-//             Easy   11.9   8.1   2.9   1.9   1.7   1.8   1.8
-//             Medium  6.8   5.0   2.0   1.4   1.2   1.3   1.2
-//             Hard    4.8   3.9   1.6   1.1   1.0   1.1   1.0
+//             wave      1    13    25    40    50    70
+//             Easy   11.9   1.9   1.8   1.9   1.8   2.2
+//             Medium  6.8   1.4   1.2   1.2   1.1   1.5
+//             Hard    4.8   1.1   1.0   1.0   1.0   1.4
 //
 //         Below 1.0 means the wave outruns what the player can afford, and
-//         nothing goes there now. It is worth being clear about what 1.0 means
-//         though: the model spends every dollar on Seed Shooters, lands every
-//         shot and never leaves a tower idle, so a real player at 1.0 is behind.
-//         Hard sits on that line at its worst by design; Medium keeps 1.2 under
-//         it and Easy 1.7.
+//         nothing goes there. Be careful reading 1.0 as "fair" though: the model
+//         spends every dollar on Seed Shooters, lands every shot and never
+//         leaves a tower idle, so a real player at 1.0 is behind. Hard sits on
+//         that line for most of a run by design; Medium keeps 1.1 under it and
+//         Easy 1.7.
+//
+//         The point of the table is that those rows are now roughly flat from
+//         wave 13 to the end. They used to climb away — past wave 30 the game
+//         got steadily easier, because a wave's demand is bounded and a player's
+//         bank is not.
 //
 // Speed is the one thing here that changes what a wave *does* rather than what
 // the player brings to it, and that is a line worth drawing carefully: a mode
@@ -94,7 +103,7 @@ pub const MODES: [Mode; 3] = [
         // tower lands roughly 40% more shots on each fruit at wave 25 than on
         // Medium, every wave, rather than only while the opening cash lasts.
         speed_ramp: 0.015,
-        max_speed: 1.35,
+        max_speed: 1.85,
     },
     Mode {
         name: "Medium",
@@ -122,7 +131,7 @@ pub const MODES: [Mode; 3] = [
         // from wave 13 to the finish, which is not a hard game but an
         // arithmetically lost one.
         speed_ramp: 0.050,
-        max_speed: 2.20,
+        max_speed: 3.00,
     },
 ];
 

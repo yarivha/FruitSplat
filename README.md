@@ -58,9 +58,9 @@ cards. It carries over between runs, and the HUD shows which one you're on.
 
 | Mode | Starting cash | Starting lives | Fruit speed by the end |
 |---|---|---|---|
-| Easy | $550 | 36 | +35% |
-| Medium | $300 | 20 | +84% |
-| Hard | $200 | 10 | +120% |
+| Easy | $550 | 36 | +85% |
+| Medium | $300 | 20 | +180% |
+| Hard | $200 | 10 | +200% |
 
 A mode never changes what a wave **sends**. The fruit, their count, their order,
 the boss schedule and every payout are identical on all three — the economy is
@@ -80,17 +80,22 @@ gets done on every wave, so a gentler ramp is still being felt on the last one.
 `balance_report` prints a table per mode, and the affordability ratio is what
 the three dials add up to:
 
-| Wave | 1 | 5 | 10 | 13 | 15 | 20 | 25 |
-|---|---|---|---|---|---|---|---|
-| Easy | 11.9 | 8.1 | 2.9 | 1.9 | 1.7 | 1.8 | 1.8 |
-| Medium | 6.8 | 5.0 | 2.0 | 1.4 | 1.2 | 1.3 | 1.2 |
-| Hard | 4.8 | 3.9 | 1.6 | 1.1 | 1.0 | 1.1 | 1.0 |
+| Wave | 1 | 13 | 25 | 40 | 50 | 70 |
+|---|---|---|---|---|---|---|
+| Easy | 11.9 | 1.9 | 1.8 | 1.9 | 1.8 | 2.2 |
+| Medium | 6.8 | 1.4 | 1.2 | 1.2 | 1.1 | 1.5 |
+| Hard | 4.8 | 1.1 | 1.0 | 1.0 | 1.0 | 1.4 |
 
 Below 1.0 means the wave outruns what you can afford, and nothing goes there.
 Be careful reading 1.0 as "fair", though: the model spends every dollar on Seed
 Shooters, lands every shot and never leaves a tower idle, so a real player at 1.0
-is behind. Hard sits on that line at its worst on purpose. Medium keeps 1.2 under
-it and Easy 1.7.
+is behind. Hard sits on that line for most of a run on purpose. Medium keeps 1.1
+under it and Easy 1.7.
+
+The point of those rows is that they stay **flat** from wave 13 to the end. They
+used to climb away: past wave 30 the game got steadily easier, because a wave's
+demand per second is bounded — the tier ladder tops out at the watermelon and the
+spawn interval used to floor at 0.30s — while your bank is not.
 
 Cash and lives alone could not hold that gap open: on those two dials the modes
 converge on the same fight by wave 13, and Easy would be merely *rich early*. The
@@ -107,12 +112,12 @@ lanes at once.
 
 | Route | Difficulty | Waves | Length | Character | Backdrop |
 |---|---|---|---|---|---|
-| Market Run | Hard | 15 | 1700 px | Short and direct | Dusty market of crates and fences |
-| Twin Gates | Tricky | 18 | 1775 px avg | **Two entrances**, one exit | Cold rocky highland |
-| Orchard Snake | Medium | 20 | 2570 px | A steady weave | Temperate orchard |
-| Zigzag Grove | Medium | 20 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
-| The Long Orchard | Gentle | 25 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
-| Meander | Gentle | 25 | 3710 px | The long way round — the gentlest | Bright open meadow |
+| Market Run | Hard | 50 | 1700 px | Short and direct | Dusty market of crates and fences |
+| Twin Gates | Tricky | 54 | 1775 px avg | **Two entrances**, one exit | Cold rocky highland |
+| Orchard Snake | Medium | 58 | 2570 px | A steady weave | Temperate orchard |
+| Zigzag Grove | Medium | 58 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
+| The Long Orchard | Gentle | 64 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
+| Meander | Gentle | 70 | 3710 px | The long way round — the gentlest | Bright open meadow |
 
 The cards sit in two rows of four. A seventh, **Surprise Me**, starts a run on
 one of the six picked at random.
@@ -376,11 +381,22 @@ Because it is armoured, the towers sort themselves into roles against it:
 
 ## Waves
 
-A new tier unlocks every third wave, so watermelons first appear on wave 13 —
-every route runs long enough to see them. Spawn intervals tighten from 0.85s
-toward a 0.30s floor, and fruit get **3.5% faster each wave** on Medium, capped
-at 1.9×; Easy ramps at 1.5% to 1.35×, Hard at 5% to 2.2×. What you start with is
-set by the difficulty mode too.
+A route runs **50 to 70 waves**. A new tier unlocks every third wave, so
+watermelons first appear on wave 13. Fruit get **3.5% faster each wave** on
+Medium, capped at 2.8×; Easy ramps at 1.5% to 1.85×, Hard at 5% to 3.0×. What you
+start with is set by the difficulty mode too.
+
+Spawn intervals tighten on **two slopes**: quickly from 0.85s to 0.30s by wave 28,
+then gently on to a 0.16s floor around wave 56. The second slope is what makes a
+long run work. A wave's pressure is hits per second, and once the interval stops
+falling that is fixed by the fruit mix alone — so every extra fruit past wave 28
+made a wave *longer* rather than harder while its income compounded, and the run
+drifted toward the player. Arriving faster costs you nothing in cash and
+everything in the time each tower has to work.
+
+For the same reason the lower tiers stop growing. Padding a late wave with more
+blueberries adds length and income but no pressure, so the chaff thins out as the
+run goes on and the top of the ladder takes over.
 
 A freshly unlocked tier arrives in **small numbers** while the tiers below it
 bulk the wave out. That is what keeps the ladder from being a cliff: the debut

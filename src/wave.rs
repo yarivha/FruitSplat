@@ -53,9 +53,22 @@ pub fn build_wave(wave: u32, total_waves: u32) -> Vec<FruitKind> {
             // that wave's 443, and the sharpest cliff in the game. The tiers
             // below carry the volume instead, which is what the comment at the
             // top of this file always claimed happened.
-            0 => 3 + w / 6,
-            1 => 5 + w / 3,
-            _ => 3 + w / 5,
+            // Once the ladder has topped out there is no tougher tier coming,
+            // so the top one carries the escalation alone. It keeps the gentle
+            // debut — that is what took the wave-13 cliff out — and then grows
+            // faster from wave 20 on. Without the second term a long run's
+            // non-boss waves flatten into a stroll between bosses: wave 47 sat
+            // at four times the firepower the player could afford.
+            0 => 3 + w / 6 + (w - 20).max(0) / 3,
+            // The tiers below stop growing, which is what keeps a long run from
+            // going soft. A wave's pressure is hits per *second*, and once the
+            // spawn interval is on its 0.30s floor that is just the average
+            // toughness of a fruit — so padding a late wave with more
+            // blueberries makes it longer without making it harder, while the
+            // income from them keeps compounding. Capped, the chaff thins out
+            // as the run goes on and the top of the ladder takes over.
+            1 => (5 + w / 3).min(18),
+            _ => (3 + w / 5).min(8),
         };
         for _ in 0..count.max(1) {
             queue.push(FruitKind::from_tier(tier as u8));
@@ -133,7 +146,17 @@ fn add_bosses(queue: &mut Vec<FruitKind>, count: u32) {
 // Seconds between spawns during `wave`. Tightens as waves go on.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn spawn_interval(wave: u32) -> f32 {
-    (0.85 - wave as f32 * 0.02).max(0.30)
+    let w = wave as f32;
+    // Two slopes, not one. The first tightens quickly to 0.30s by wave 28; the
+    // second keeps going, gently, to a 0.16s floor around wave 56.
+    //
+    // The second slope is what makes a long run work at all. A wave's pressure
+    // is hits per second, and once the interval stops falling that is fixed by
+    // the fruit mix alone — so past wave 28 every extra fruit made a wave
+    // longer rather than harder while its income compounded, and the run drifted
+    // toward the player. Arriving faster costs the player nothing in cash and
+    // everything in the time each tower has to work.
+    (0.85 - w * 0.02).max((0.44 - w * 0.005).max(0.16))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +170,7 @@ pub fn clear_bonus(wave: u32) -> u32 {
 /// difficulty the game is balanced around. Modes may soften these; Medium is
 /// these numbers exactly.
 pub const TUNED_SPEED_RAMP: f32 = 0.035;
-pub const TUNED_MAX_SPEED: f32 = 1.90;
+pub const TUNED_MAX_SPEED: f32 = 2.80;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Speed multiplier applied to every fruit spawned during `wave`.
@@ -217,7 +240,7 @@ mod tests {
     fn balance_report() {
         // Modelled on the longest route, which is the one that sees every boss
         // wave the schedule produces.
-        const TOTAL: u32 = 25;
+        const TOTAL: u32 = 70;
 
         // One table per difficulty. Only the opening cash differs — a mode
         // changes what the player starts with, never what a wave sends — so the
@@ -466,7 +489,10 @@ mod tests {
     #[test]
     fn spawn_interval_never_drops_below_its_floor() {
         for w in 1..=500 {
-            assert!(spawn_interval(w) >= 0.30);
+            assert!(
+                spawn_interval(w) >= 0.16,
+                "wave {w} spawns faster than the floor"
+            );
         }
     }
 }
