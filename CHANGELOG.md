@@ -10,6 +10,29 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Spike Layer laid its spikes once and then went quiet: capped at a fixed
+  allowance of piles (3 at Lv1) that it emptied in seconds, laying on the build
+  screen as well as during a wave so the allowance was spent before the wave was
+  sent, and always choosing the point furthest along its stretch. It now lays
+  purely on its level's timer, for the full length of a wave and only during
+  one, each pile at a random free spot across the track it covers. The pile
+  allowance is gone; `SPIKE_SPACING` and how much track a tower reaches now
+  bound it. Its info panel reports the lay interval in place of the allowance.
+
+### Changed
+
+- Spike piles are swept when a wave is cleared instead of being carried into the
+  next one. With the tower only laying while a wave runs, every wave now starts
+  on bare track.
+- The Spike Layer lays at 4.50s / 3.40s / 2.60s per pile, up from
+  2.20s / 1.70s / 1.30s. Its piles stay on the track until fruit wear them away,
+  so what the tower is worth is the stock of spikes standing on its stretch, not
+  the rate it lays them — at the old pace it saturated everything it covered
+  inside the first third of a wave and then had nowhere left to lay. The stock
+  now builds across the whole wave.
+
 ## [0.2.2] - 2026-08-09
 
 ### Changed

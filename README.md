@@ -198,7 +198,7 @@ where they meet.
 | Triple Seeder | $260 | 150 px | 0.45s | Three seeds every volley, spread over up to three fruit |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
-| Spike Layer | $150 | 120 px | 2.20s | Drops spike piles onto the track itself |
+| Spike Layer | $150 | 120 px | 4.50s | Lays spike piles onto the track all wave long |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
 
 The Blender and the Knife Thrower both beat crowds, but differently: splash hits
@@ -206,16 +206,32 @@ a **blob** of fruit around one point, while pierce hits a **line** of them along
 the shot's path. That makes the Knife Thrower strongest on the switchback
 routes, where fruit queue up single file down a lane.
 
-The Spike Layer is the odd one out — it doesn't shoot. It drops piles of spikes
+The Spike Layer is the odd one out — it doesn't shoot. It lays piles of spikes
 directly onto the track, and each pile is worth **one hit per spike** before it
 wears away. Against everything except the boss a hit is a pop, so that reads as
-one fruit per spike. Spikes never miss, so the limits are the pile size and how
-many piles a tower may have out at once (3 at Lv1). It's especially good against
-splits: children spawn where their parent died, right on top of the same pile.
+one fruit per spike. It's especially good against splits: children spawn where
+their parent died, right on top of the same pile.
 
-A fruit costs exactly one spike however many piles it happens to be standing on.
-Piles sit 34px apart and each reaches `radius + 14px` along the track, so overlap
-is the norm — a watermelon is wide enough to sit on three at once.
+It lays on a timer — one pile every 4.50s at Lv1, down to 2.60s at Lv3 — and it
+keeps laying for the **whole wave**, from the moment the wave is sent until the
+last fruit is off the track. Each pile lands at a random free spot on the track
+it covers, so coverage builds up scattered rather than filing in from one end. On
+Twin Gates, a tower reaching both lanes feeds each in proportion to how much of it
+it actually covers.
+
+Spikes are a **within-wave** resource. Nothing is laid on the build screen between
+waves — the timer runs there, so the first pile goes down the instant the wave
+starts — and whatever is still standing when the field clears is swept away rather
+than carried over. Every wave begins on bare track, so what a Spike Layer is worth
+is what it can build during the wave.
+
+Spikes never miss, so what limits the tower is how fast it lays, how big its piles
+are, and how much track it covers. A fruit costs exactly one spike however many
+piles it happens to be standing on. Piles sit 34px apart and each reaches
+`radius + 14px` along the track, so overlap is the norm — a watermelon is wide
+enough to sit on three at once. That 34px spacing is also the ceiling: once the
+track a tower covers is packed that densely it has nowhere left to lay, and waits
+for the fruit to chew a gap open.
 
 A pile is tested against fruit by **lane, and distance along that lane** — never
 by how close it is in pixels. Two stretches of track can run within a few dozen
@@ -260,7 +276,7 @@ what that specific tower has actually done:
 | Seed Shooter | Range, rate, shots fired, kills |
 | Blender | Range, splash, shots fired, kills |
 | Knife Thrower | Range, pierce, knives thrown, kills |
-| Spike Layer | Spikes per pile, max piles, piles dropped, kills |
+| Spike Layer | Spikes per pile, seconds between piles, piles laid, kills |
 | Freezer | Range, chill strength, pulses, fruit chilled |
 
 Kills are credited to the tower whose shot landed, so a Blender's splash banks
@@ -276,7 +292,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 | Triple Seeder | $160 — a fourth seed, faster | $280 — a fifth seed, faster |
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
 | Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
-| Spike Layer | $130 — 6 spikes/pile, 4 piles, faster | $260 — 9 spikes/pile, 5 piles |
+| Spike Layer | $130 — 6 spikes/pile, lays every 3.40s | $260 — 9 spikes/pile, every 2.60s |
 | Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
 
 Overlapping Freezers stack by keeping the strongest chill and the longest

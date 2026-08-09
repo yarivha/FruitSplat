@@ -148,8 +148,17 @@ impl TowerKind {
             TowerKind::Blender => [1.10, 0.88, 0.70],
             TowerKind::Freezer => [1.40, 1.15, 0.95],
             TowerKind::KnifeThrower => [0.75, 0.60, 0.46],
-            // For the Spike Layer this is the gap between dropping piles.
-            TowerKind::SpikeLayer => [2.20, 1.70, 1.30],
+            // For the Spike Layer this is the gap between laying piles: it lays
+            // one on this timer for the whole length of a wave.
+            //
+            // Slower than every other tower's cadence by design. A pile is not
+            // a shot — it stays on the track until fruit wear it away, so the
+            // tower's output is the *stock* of spikes standing on its stretch,
+            // not the rate it lays them. At 2.20s it saturated everything it
+            // covered inside the first third of a wave and then had nowhere
+            // left to lay, which made the timer meaningless and the upgrades
+            // along with it. At this pace the stock builds over the whole wave.
+            TowerKind::SpikeLayer => [4.50, 3.40, 2.60],
             // The same cadence as a Seed Shooter, so the volley is simply
             // three of its shots where it fires one. A longer cooldown was
             // cancelling the triple out: at Lv3 the sustained rate came to
@@ -165,18 +174,6 @@ impl TowerKind {
     pub fn spike_charges(&self, level: u8) -> u32 {
         match self {
             TowerKind::SpikeLayer => [4, 6, 9][level_index(level)],
-            _ => 0,
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // How many of its piles may be on the track at once. This is the real
-    // limiter on the Spike Layer: without it, a tower left alone between waves
-    // would carpet the whole route.
-    // ─────────────────────────────────────────────────────────────────────────
-    pub fn max_piles(&self, level: u8) -> u32 {
-        match self {
-            TowerKind::SpikeLayer => [3, 4, 5][level_index(level)],
             _ => 0,
         }
     }
@@ -327,10 +324,6 @@ impl Tower {
         self.kind.spike_charges(self.level)
     }
 
-    pub fn max_piles(&self) -> u32 {
-        self.kind.max_piles(self.level)
-    }
-
     pub fn slow_factor(&self) -> f32 {
         self.kind.slow_factor(self.level)
     }
@@ -378,6 +371,11 @@ impl Tower {
 pub const SPIKE_RADIUS: f32 = 14.0;
 /// Minimum gap along the track between two piles, so a tower spreads its
 /// spikes out instead of stacking them all on one spot.
+///
+/// This is also what bounds a Spike Layer, now that it lays on a timer for the
+/// whole wave rather than up to a fixed allowance: a tower can only fill the
+/// lanes it reaches this densely, and then has nowhere left to lay until the
+/// fruit chew a gap open.
 pub const SPIKE_SPACING: f32 = 34.0;
 
 /// A pile of spikes sitting on the track.
@@ -491,10 +489,6 @@ mod tests {
                     kind.spike_charges(hi) >= kind.spike_charges(lo),
                     "spike charges regressed"
                 );
-                assert!(
-                    kind.max_piles(hi) >= kind.max_piles(lo),
-                    "pile allowance regressed"
-                );
             }
         }
     }
@@ -510,12 +504,6 @@ mod tests {
                     kind.spike_charges(level) > 0,
                     lays,
                     "{} spike charges at Lv{level}",
-                    kind.name()
-                );
-                assert_eq!(
-                    kind.max_piles(level) > 0,
-                    lays,
-                    "{} pile allowance at Lv{level}",
                     kind.name()
                 );
             }

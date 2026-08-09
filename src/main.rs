@@ -781,29 +781,35 @@ impl Game {
             let range = t.range();
 
             if t.kind == TowerKind::SpikeLayer {
-                // Hold off once this tower's allowance of piles is already out
-                // on the track; the cooldown isn't spent, so it drops again as
-                // soon as one is chewed through.
-                let live = self.spikes.iter().filter(|s| s.owner == t.id).count() as u32;
-                if live >= t.max_piles() {
+                // A Spike Layer lays for as long as the wave runs, and only
+                // then. Its timer still ticks on the build screen, so the first
+                // pile goes down the instant the wave starts, but nothing is
+                // laid before that: a tower left alone between waves would
+                // otherwise carpet its stretch before a fruit ever walked it.
+                if !self.wave_active {
                     continue;
                 }
 
-                if let Some((lane, dist, pos)) =
-                    pick_spike_spot(&self.paths, t.pos, range, &self.spikes)
-                {
-                    self.spikes.push(SpikePile::new(
-                        pos,
-                        lane,
-                        dist,
-                        t.spike_charges(),
-                        t.id,
-                        gen_range(0.0, 360.0),
-                    ));
-                    t.cooldown = t.fire_cooldown();
-                    t.shots_fired += 1;
-                    self.audio.play_spikes();
+                let spots = spike_spots(&self.paths, t.pos, range, &self.spikes);
+                if spots.is_empty() {
+                    // Every lane it reaches is already packed as densely as
+                    // SPIKE_SPACING allows. The cooldown isn't spent, so it lays
+                    // again the moment the fruit chew a gap open.
+                    continue;
                 }
+
+                let (lane, dist, pos) = spots[gen_range(0, spots.len() as u32) as usize];
+                self.spikes.push(SpikePile::new(
+                    pos,
+                    lane,
+                    dist,
+                    t.spike_charges(),
+                    t.id,
+                    gen_range(0.0, 360.0),
+                ));
+                t.cooldown = t.fire_cooldown();
+                t.shots_fired += 1;
+                self.audio.play_spikes();
                 continue;
             }
 
@@ -1058,6 +1064,14 @@ impl Game {
         self.cash += wave::clear_bonus(self.wave);
         self.wave_active = false;
 
+        // Spikes are a within-wave resource: whatever a Spike Layer still has
+        // standing when the field clears is swept, rather than banked toward the
+        // next wave. Paired with the tower only laying while a wave runs, that
+        // makes every wave start on bare track, so what a Spike Layer is worth
+        // is what it can build during the wave — not how long it was left alone
+        // beforehand.
+        self.spikes.clear();
+
         // That was the final wave, so the route is cleared.
         if self.wave >= self.total_waves() {
             self.state = State::Victory;
@@ -1247,32 +1261,34 @@ fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pick which lane and where along it a Spike Layer should drop its next pile.
-// Returns (lane, distance along that lane, world position).
+// Every spot where a Spike Layer at `tower` could lay its next pile, as
+// (lane, distance along that lane, world position).
 //
-// Walks every lane looking for points inside the tower's range that aren't
-// already too close to an existing pile on that same lane, and takes the one
-// furthest along. Dropping at the far edge of coverage first, then working
-// backwards as those spots fill, spreads a tower's piles across its whole
-// stretch of track.
+// Walks every lane collecting the points inside the tower's range that aren't
+// already too close to an existing pile on that same lane. The caller picks one
+// at random, so piles land scattered across everything the tower covers rather
+// than filing in from one end — which is what taking the spot furthest along,
+// as this used to, produced: the same tower laid the same handful of piles in
+// the same places every wave.
 //
-// Candidates are ranked by *fraction* of the lane covered so far, so a tower
-// that reaches both gates of a two-entrance route treats them evenly instead of
-// emptying its allowance into whichever lane happens to be longer. Spacing is
-// only checked against piles on the same lane: two lanes running close together
-// near the shared exit are still different track, and a pile on one does not
-// block the other.
+// Pooling every lane's spots into one list also keeps a tower that reaches both
+// gates of a two-entrance route even-handed. Each lane is represented in
+// proportion to how much of it the tower actually covers, instead of one lane
+// swallowing the drops because it happens to be longer.
+//
+// Spacing is only checked against piles on the same lane: two lanes running
+// close together near the shared exit are still different track, and a pile on
+// one does not block the other.
 // ─────────────────────────────────────────────────────────────────────────────
-fn pick_spike_spot(
+fn spike_spots(
     paths: &[Path],
     tower: Vec2,
     range: f32,
     existing: &[SpikePile],
-) -> Option<(usize, f32, Vec2)> {
+) -> Vec<(usize, f32, Vec2)> {
     const STEP: f32 = 12.0;
 
-    let mut best: Option<(usize, f32, Vec2)> = None;
-    let mut best_progress = f32::NEG_INFINITY;
+    let mut spots = Vec::new();
 
     for (lane, path) in paths.iter().enumerate() {
         let total = path.total();
@@ -1285,17 +1301,13 @@ fn pick_spike_spot(
                 .all(|s| s.lane != lane || (s.dist - d).abs() >= SPIKE_SPACING);
 
             if p.distance(tower) <= range && clear {
-                let progress = if total > 0.0 { d / total } else { 0.0 };
-                if progress >= best_progress {
-                    best_progress = progress;
-                    best = Some((lane, d, p));
-                }
+                spots.push((lane, d, p));
             }
             d += STEP;
         }
     }
 
-    best
+    spots
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1562,22 +1574,45 @@ mod tests {
     }
 
     #[test]
-    fn a_spike_spot_is_inside_range_and_clear_of_the_piles_already_down() {
+    fn every_spike_spot_is_inside_range_and_clear_of_the_piles_already_down() {
         let paths = vec![straight_path()];
         let tower = vec2(600.0, 0.0);
         let existing = vec![pile_at(640.0, 4, 0)];
 
-        let (lane, dist, pos) = pick_spike_spot(&paths, tower, 120.0, &existing).unwrap();
-
-        assert_eq!(lane, 0, "only one lane to choose from");
-        assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+        let spots = spike_spots(&paths, tower, 120.0, &existing);
         assert!(
-            (dist - existing[0].dist).abs() >= SPIKE_SPACING,
-            "spot crowded a pile already on the track"
+            !spots.is_empty(),
+            "a tower over open track has somewhere to lay"
         );
-        // Coverage runs to the far edge of range, then works backwards as spots
-        // fill, so a tower spreads its piles over its whole stretch.
-        assert!(dist > tower.x, "should favour the far end of the coverage");
+
+        for (lane, dist, pos) in &spots {
+            assert_eq!(*lane, 0, "only one lane to choose from");
+            assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+            assert!(
+                (dist - existing[0].dist).abs() >= SPIKE_SPACING,
+                "spot crowded a pile already on the track"
+            );
+        }
+
+        // Both sides of the tower are offered, so the random pick can scatter
+        // piles across the whole stretch instead of filing in from one end.
+        assert!(spots.iter().any(|(_, d, _)| *d < tower.x));
+        assert!(spots.iter().any(|(_, d, _)| *d > tower.x));
+    }
+
+    #[test]
+    fn a_spike_layer_whose_stretch_is_packed_has_nowhere_left_to_lay() {
+        // The natural ceiling now that the pile allowance is gone: spots run out
+        // once the covered track is full at SPIKE_SPACING, and the tower simply
+        // waits for the fruit to chew a gap open.
+        let paths = vec![straight_path()];
+        let tower = vec2(600.0, 0.0);
+
+        let existing: Vec<SpikePile> = (0..40)
+            .map(|i| pile_at(600.0 - 130.0 + i as f32 * SPIKE_SPACING * 0.5, 4, 0))
+            .collect();
+
+        assert!(spike_spots(&paths, tower, 120.0, &existing).is_empty());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1612,23 +1647,27 @@ mod tests {
     }
 
     #[test]
-    fn a_spike_layer_covering_both_lanes_can_drop_on_either() {
-        // A tower between the two lanes reaches both. Which lane it picks is not
-        // fixed, but it must be a lane it can actually reach.
+    fn a_spike_layer_covering_both_lanes_can_lay_on_either() {
+        // A tower between the two lanes reaches both, so both must be on offer —
+        // otherwise the random pick could only ever feed one of them.
         let paths = two_lanes();
         let tower = vec2(600.0, 30.0);
 
-        let (lane, _, pos) = pick_spike_spot(&paths, tower, 120.0, &[]).unwrap();
+        let spots = spike_spots(&paths, tower, 120.0, &[]);
 
-        assert!(lane < paths.len(), "picked a lane that does not exist");
-        assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+        for (lane, _, pos) in &spots {
+            assert!(*lane < paths.len(), "offered a lane that does not exist");
+            assert!(pos.distance(tower) <= 120.0, "spot fell outside the range");
+        }
+        assert!(spots.iter().any(|(lane, _, _)| *lane == 0));
+        assert!(spots.iter().any(|(lane, _, _)| *lane == 1));
     }
 
     #[test]
     fn a_pile_on_one_lane_does_not_block_a_spot_on_the_other() {
         // Spacing is a per-lane rule. Two lanes that run close together near the
         // shared exit are still different track, so a pile on one must not stop
-        // a Spike Layer dropping at the same point along the other.
+        // a Spike Layer laying at the same point along the other.
         let paths = two_lanes();
         let tower = vec2(600.0, 30.0);
 
@@ -1637,9 +1676,13 @@ mod tests {
             .map(|i| pile_on(0, 480.0 + i as f32 * SPIKE_SPACING * 0.5, 4, 0))
             .collect();
 
-        let (lane, _, _) =
-            pick_spike_spot(&paths, tower, 120.0, &existing).expect("lane 1 was still wide open");
-        assert_eq!(lane, 1, "a full lane 0 should push the drop onto lane 1");
+        let spots = spike_spots(&paths, tower, 120.0, &existing);
+
+        assert!(!spots.is_empty(), "lane 1 was still wide open");
+        assert!(
+            spots.iter().all(|(lane, _, _)| *lane == 1),
+            "a full lane 0 should leave only lane 1 on offer"
+        );
     }
 
     #[test]

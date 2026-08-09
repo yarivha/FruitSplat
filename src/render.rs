@@ -1806,8 +1806,8 @@ fn draw_tower_stats(t: &Tower, panel: Rect) {
         ],
         TowerKind::SpikeLayer => [
             ("Spikes/pile", t.spike_charges().to_string()),
-            ("Max piles", t.max_piles().to_string()),
-            ("Dropped", t.shots_fired.to_string()),
+            ("Every", format!("{:.2}s", t.fire_cooldown())),
+            ("Laid", t.shots_fired.to_string()),
             ("Kills", t.kills.to_string()),
         ],
         TowerKind::TripleSeeder => [
