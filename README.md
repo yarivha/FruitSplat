@@ -24,14 +24,15 @@ cargo run --release
 | Input | Action |
 |---|---|
 | Click **Easy** / **Medium** / **Hard** | Set the difficulty |
-| `1`–`5` on the route screen | Pick a route and start |
-| `1`–`5` in play | Arm a tower type |
+| `1`–`7` on the route screen | Pick a route (7 is random) and start |
+| `1`–`6` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower, then disarm |
 | Left click a placed tower | Open its stats panel (nothing armed) |
 | Click **Upgrade** / **Sell** | Upgrade or sell that tower |
 | Right click | Cancel placement / close the panel |
 | `Space` | Send the next wave now |
+| Click **PAUSE** | Hold the wave; building stays live |
 | Click **AUTO** | Waves send themselves, three seconds apart |
 | Click the speaker button | Mute / unmute sound effects |
 | Click the note button | Mute / unmute music |
@@ -89,7 +90,7 @@ through.
 
 ## Routes
 
-Each run starts by picking one of five routes. Length is the main difficulty
+Each run starts by picking one of six routes. Length is the main difficulty
 dial — a longer route means more seconds under fire before a fruit reaches the
 exit. Turn count matters too: tight switchbacks let one tower cover several
 lanes at once.
@@ -101,6 +102,10 @@ lanes at once.
 | Orchard Snake | Medium | 20 | 2570 px | A steady weave | Temperate orchard |
 | Zigzag Grove | Medium | 20 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
 | The Long Orchard | Gentle | 25 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
+| Meander | Gentle | 25 | 3710 px | The long way round — the gentlest | Bright open meadow |
+
+The cards sit in two rows of four. A seventh, **Surprise Me**, starts a run on
+one of the six picked at random.
 
 ### Twin Gates, and lanes
 
@@ -130,13 +135,19 @@ Two things had to change to make lanes work at all:
   lane happened to be longer.
 - **Tower placement must clear every lane**, and so must scenery.
 
-You can walk away from a run at any point with the **QUIT RUN** button in the top
-strip. It asks before it acts: the first click turns it into **SURE?** and the
-second confirms, and it stands itself down after three seconds or on a right
-click. It sits a dozen pixels from the audio toggles, so one stray click there
-throwing away a twenty-five wave run would be unforgivable — the button does the
-asking rather than a dialog, so nothing has to interrupt the wave to ask it.
-Quitting sweeps the board and drops the music back to the menu loop.
+**PAUSE** holds the wave. Input keeps running while it does — towers can be
+bought, upgraded and sold with everything standing still, which is the point of
+pausing rather than a side effect. Nothing else advances: not the spawn clock,
+not cooldowns, not the auto-send timer. The overlay dims the field only, leaving
+the shop column lit so its buttons still read as live.
+
+You can walk away from a run at any point with the **QUIT RUN** button at the
+foot of the shop column. It asks before it acts: the first click turns it into
+**SURE?** and the second confirms, and it stands itself down after three seconds
+or on a right click. It shares that block with the buttons you press most, so one
+stray click throwing away a twenty-five wave run would be unforgivable — the
+button does the asking rather than a dialog, so nothing has to interrupt the wave
+to ask it. Quitting sweeps the board and drops the music back to the menu loop.
 
 A run is finite: survive every wave on the route and it's cleared. Harder routes
 run **shorter**, so they're a sharper challenge rather than simply a longer one.
@@ -154,8 +165,18 @@ underneath the track so foliage can't obscure the route.
 
 ### The field
 
-The window is a fixed **1200 × 740** — 1200 × 650 of playfield with the shop bar
-below it. Routes are authored in that space and deliberately overhang it at both
+The window is a fixed **1420 × 740**: 1200 × 740 of playfield, with a 220px shop
+column down the right.
+
+The shop used to be a bar along the bottom, which ran out of window at five
+buttons. A column has room for a good many more, and the audio toggles, pause,
+auto and quit moved into a block at its foot rather than competing with the wave
+counter for space in the top strip. That block is anchored to the bottom of the
+window rather than flowing after the towers, so adding a tower grows the column
+downward into empty space instead of pushing the controls off screen.
+
+Losing the bottom bar gave the field the full window height, 650 to 740, so every
+route moved down 30px to sit centred in it — shapes and lengths untouched. Routes are authored in that space and deliberately overhang it at both
 ends, by 40px, so fruit walk on and off the screen rather than blinking into
 existence at the border.
 
@@ -172,6 +193,7 @@ where they meet.
 | Tower | Cost | Range | Rate | Role |
 |---|---|---|---|---|
 | Seed Shooter | $90 | 135 px | 0.45s | Single target, cheap sustained damage |
+| Triple Seeder | $260 | 150 px | 0.70s | Three seeds at three separate fruit, every volley |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
 | Spike Layer | $150 | 120 px | 2.20s | Drops spike piles onto the track itself |
@@ -210,6 +232,11 @@ along its lane, measured as a **fraction** of that lane rather than in pixels, s
 that lanes of different lengths compare fairly. Shots don't home, but towers
 **lead** their targets: they aim at where the fruit will be once the shot
 arrives, which is what keeps them useful against the late-wave speed ramp.
+
+The **Triple Seeder** is the dearest thing in the shop, and deliberately so. It
+engages three separate fruit at once — four fully upgraded — which is answering a
+crowd on its own, and the Blender and the Knife Thrower each do half of that.
+Being able to buy it early would flatten the reason those two differ.
 
 ### Stats and upgrades
 

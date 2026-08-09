@@ -72,6 +72,17 @@ const CARD_GAP: f32 = 14.0;
 const CARD_Y: f32 = 248.0;
 /// Space left either side of a row of cards.
 const CARD_MARGIN: f32 = 20.0;
+/// The picker's heading block, top to bottom: title, subtitle, then the caption
+/// above the difficulty row. Named because the layout below them is computed and
+/// has to be checked against them — two rows of cards leave far less slack above
+/// them than one row did, and each of these overlapped something at least once
+/// while that was being fitted.
+const PICK_TITLE_Y: f32 = 88.0;
+const PICK_SUBTITLE_Y: f32 = 126.0;
+const PICK_CAPTION_Y: f32 = 156.0;
+const _: () = assert!(PICK_SUBTITLE_Y - PICK_TITLE_Y >= 30.0);
+const _: () = assert!(PICK_CAPTION_Y - PICK_SUBTITLE_Y >= 20.0);
+
 /// Cards per row. Two rows rather than one: a single row of seven left each card
 /// too narrow to read its own name, and the window is wide but not that wide.
 const CARDS_PER_ROW: usize = 4;
@@ -2111,10 +2122,10 @@ pub fn draw_track_select(selected_mode: usize) {
     // caption, the difficulty row at MODE_BTN_Y, then the card rows at CARD_Y.
     // Set explicitly rather than nudged, because two rows of cards leave far
     // less slack above them than one did.
-    text_center("CHOOSE YOUR ROUTE", 88.0, 56.0, WHITE);
+    text_center("CHOOSE YOUR ROUTE", PICK_TITLE_Y, 56.0, WHITE);
     text_center(
         "Longer routes give your towers more time to shoot",
-        126.0,
+        PICK_SUBTITLE_Y,
         23.0,
         Color::new(1.0, 1.0, 1.0, 0.7),
     );
@@ -2123,7 +2134,7 @@ pub fn draw_track_select(selected_mode: usize) {
     // screen: how punishing the track is, versus how much you start with.
     text_center(
         "DIFFICULTY  -  applies to whichever route you pick",
-        156.0,
+        PICK_CAPTION_Y,
         17.0,
         Color::new(1.0, 1.0, 1.0, 0.55),
     );
@@ -2634,25 +2645,12 @@ mod tests {
     }
 
     #[test]
-    fn the_picker_heading_block_does_not_collide() {
-        // Three lines of heading, then the difficulty row, then two rows of
-        // cards. Two rows leave far less slack above them than one did, and
-        // every one of these overlapped something at least once while the
-        // layout was being moved.
-        const TITLE_BASELINE: f32 = 88.0;
-        const SUBTITLE_BASELINE: f32 = 126.0;
-        const CAPTION_BASELINE: f32 = 156.0;
-
+    fn the_heading_block_clears_the_difficulty_row() {
+        // The heading baselines are fixed and the difficulty row is computed, so
+        // this is the join where they can actually drift apart — and did, twice,
+        // while two rows of cards were being fitted above the fold.
         assert!(
-            SUBTITLE_BASELINE > TITLE_BASELINE,
-            "subtitle sits on the title"
-        );
-        assert!(
-            CAPTION_BASELINE > SUBTITLE_BASELINE,
-            "the difficulty caption sits on the subtitle"
-        );
-        assert!(
-            mode_button_rect(0).y >= CAPTION_BASELINE,
+            mode_button_rect(0).y >= PICK_CAPTION_Y,
             "the difficulty row sits on its own caption"
         );
     }

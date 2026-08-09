@@ -52,6 +52,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     in a run before the boss existed — and leaves waves 20 and 25 at 1.1 and
     1.2 against 1.5 and 1.8 for their neighbours, so each boss wave is a real
     dip and the finale is the hardest thing in a run.
+- **The shop is a column down the right of the window**, not a bar along the
+  bottom. The bar ran out of window at five buttons; the column has room for
+  several more than there are. The window grows to 1420 x 740 to pay for it, so
+  the field keeps its full 1200 width and no route had to be redrawn.
+  - Losing the bottom bar gave the field the whole window height, 650 to 740.
+    Every route moved down 30px to sit centred in the taller field; shapes and
+    lengths are untouched, confirmed by re-measuring all of them after.
+  - The audio toggles, auto and quit moved out of the top strip and into a block
+    at the foot of the column, which is what the strip was running out of room
+    for. That block is anchored to the bottom of the window rather than flowing
+    after the towers, so adding a tower grows the column downward into empty
+    space instead of pushing the controls off screen.
+- **Pause**, in that same block. Input keeps running while the game is held:
+  towers can be bought, upgraded and sold with the wave standing still, which is
+  the point of pausing rather than a side effect. Nothing else advances — not the
+  spawn clock, not cooldowns, not the auto-send timer. The overlay dims the field
+  only, leaving the column lit so its buttons still read as live.
+- **Triple Seeder** ($260), a sixth tower that throws at three separate fruit a
+  volley, four once maxed. The dearest thing in the shop on purpose: answering a
+  crowd on its own is what the Blender and the Knife Thrower each do half of, and
+  being able to buy that early would flatten the reason those two differ. Three
+  barrels fanned around its aim, so what it does is legible from the board rather
+  than only from its stats panel.
+- **"Meander"**, a sixth route and the longest at 3710px, so also the gentlest —
+  length does all the work, which is what makes it the one to learn on. Bright
+  open meadow backdrop, the lightest of the six.
+- **Route cards in two rows of four**, plus a seventh card, **Surprise Me**, that
+  starts a run on one of the six picked at random. At seven cards a single row
+  left each one 185px wide, too narrow to read its own name; two rows make them
+  279px. The random card draws every route's outline layered faintly on itself.
+  - It sits last so adding a route never shifts it out from under the player's
+    finger, and it needed a seventh number key. That left more keys than towers,
+    and the tower hotkey loop indexed `TowerKind::ALL` by key position, so it
+    zips instead of indexing and can no longer run off the end.
+  - The cards centre on the field rather than the window, because the audio
+    toggles are drawn on every screen at their column position and are
+    hit-tested before anything else — a card reaching under one lost its clicks
+    to it.
 - Five towers — Seed Shooter ($90, fast single target), Blender ($170, 58px
   splash), Knife Thrower ($130, knives pierce 3 fruit), Spike Layer ($150,
   spikes on the track), and Freezer ($140, no damage, chills fruit in range to
@@ -110,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 116 unit tests covering path maths (corner traversal, end clamping,
+- 126 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
