@@ -1716,18 +1716,26 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Where the floating tower panel sits for a tower at `tower_pos`.
 //
-// Prefers the right of the tower and flips to the left when that would run off
-// the window, then clamps vertically so it always stays inside the playfield.
+// Prefers the right of the tower and flips to the left when that would run past
+// the playfield, then clamps vertically so it always stays inside it.
 // main.rs hit-tests clicks against this same rect.
+//
+// Every edge here is PLAYFIELD_W, not screen_width(). The shop column starts at
+// PLAYFIELD_W and main.rs gives it any click past that line before the panel is
+// consulted at all, so a panel overhanging the column is drawn but dead: it took
+// the towers between x 950 and 1126 — a quarter of the map — and left them
+// impossible to upgrade or sell, since their buttons were the part hanging over.
+// Fitting the panel inside the playfield settles it in one place rather than
+// leaving two owners arguing over the same pixels.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn tower_panel_rect(tower_pos: Vec2) -> Rect {
     let gap = TOWER_RADIUS + 14.0;
 
     let mut x = tower_pos.x + gap;
-    if x + PANEL_W > screen_width() - 10.0 {
+    if x + PANEL_W > PLAYFIELD_W - 10.0 {
         x = tower_pos.x - gap - PANEL_W;
     }
-    x = x.clamp(10.0, (screen_width() - PANEL_W - 10.0).max(10.0));
+    x = x.clamp(10.0, (PLAYFIELD_W - PANEL_W - 10.0).max(10.0));
 
     let y = (tower_pos.y - PANEL_H * 0.5).clamp(10.0, PLAYFIELD_H - PANEL_H - 10.0);
 
@@ -2665,6 +2673,43 @@ mod tests {
     /// Everything drawn in the shop column has to stay inside it.
     fn inside_panel(r: Rect) -> bool {
         r.x >= PLAYFIELD_W && r.x + r.w <= PLAYFIELD_W + SHOP_PANEL_W
+    }
+
+    #[test]
+    fn a_tower_panel_and_its_buttons_stay_out_of_the_shop_column() {
+        // main.rs hands every click at x >= PLAYFIELD_W to the shop before it
+        // ever asks the panel, so any part of a panel past that line is drawn
+        // but cannot be clicked. That is invisible to look at — the panel is on
+        // top and appears perfectly normal — and it silently cost the towers on
+        // the right quarter of the map their upgrade and sell buttons.
+        let mut x = 0.0;
+        while x <= PLAYFIELD_W {
+            let mut y = 0.0;
+            while y <= PLAYFIELD_H {
+                let panel = tower_panel_rect(vec2(x, y));
+
+                for (what, r) in [
+                    ("panel", panel),
+                    ("upgrade button", panel_upgrade_button(panel)),
+                    ("sell button", panel_sell_button(panel)),
+                ] {
+                    assert!(
+                        r.x >= 0.0 && r.x + r.w <= PLAYFIELD_W,
+                        "{what} for a tower at ({x}, {y}) reaches into the shop \
+                         column: {}..{}",
+                        r.x,
+                        r.x + r.w
+                    );
+                    assert!(
+                        r.y >= 0.0 && r.y + r.h <= PLAYFIELD_H,
+                        "{what} for a tower at ({x}, {y}) leaves the playfield"
+                    );
+                }
+
+                y += 25.0;
+            }
+            x += 25.0;
+        }
     }
 
     #[test]

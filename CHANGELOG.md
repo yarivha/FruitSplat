@@ -10,6 +10,15 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Fixed
+
+- Towers on the right quarter of the map could not be upgraded or sold. Their
+  floating panel was positioned against the window rather than the playfield, so
+  it overhung the shop column — and clicks there go to the shop, which is tested
+  first, leaving the overhanging part of the panel drawn but dead. For a tower at
+  x 1126 that was all but 28px of its upgrade button. The panel now stays inside
+  the playfield, and a test sweeps every tower position to keep it there.
+
 ### Added
 
 - The menu title is spelled out in fruit instead of set in the text font. Each
