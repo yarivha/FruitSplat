@@ -10,6 +10,8 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-09
+
 ### Fixed
 
 - The web build showed no shop. Its canvas is a fixed size written into
