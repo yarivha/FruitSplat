@@ -21,6 +21,9 @@ name: build
 #
 # The game embeds its assets with include_bytes!, so every archive here is the
 # executable and nothing else — there is no asset directory to ship alongside it.
+#
+# A release's notes are lifted from the matching CHANGELOG.md section, so a tag
+# whose version has no entry there fails rather than publishing an empty body.
 
 on:
   push:
@@ -210,7 +213,27 @@ jobs:
         run: |
           set -euo pipefail
           find artifacts -type f -print
+
+          # Release notes are the changelog's own entry for this version, not
+          # GitHub's generated commit list. The changelog says what changed and
+          # why; a list of commit subjects says neither, and a link to the file
+          # makes the reader go and find it.
+          version="${GITHUB_REF_NAME#v}"
+          awk -v ver="$version" '
+            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > notes.md
+
+          # An empty body would publish silently, so a tag with no changelog
+          # entry is a failure rather than a release nobody can read.
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section for tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          echo "release notes: $(wc -l < notes.md) lines from CHANGELOG.md"
+
           gh release create "${GITHUB_REF_NAME}" \
             --title "Fruit Splat ${GITHUB_REF_NAME}" \
-            --generate-notes \
+            --notes-file notes.md \
             $(find artifacts -type f | sort)

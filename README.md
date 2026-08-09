@@ -487,6 +487,11 @@ than shipping a bad one — but you find out at tag time, not at push time. Run
 `cargo test` locally, or use `workflow_dispatch`, which runs the checks and
 builds without spending a version number.
 
+A release's notes are the matching `## [x.y.z]` section lifted out of
+[`CHANGELOG.md`](CHANGELOG.md) — not GitHub's generated list of commit subjects,
+and not a link to the file. A tag whose version has no section there fails the
+release rather than publishing an empty body.
+
 | Target | Produced |
 |---|---|
 | Linux | `fruit-splat-linux-x86_64.tar.gz` |

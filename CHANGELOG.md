@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Release notes are now the matching `## [x.y.z]` section of this file, lifted
+  out at publish time, rather than GitHub's generated list of commit subjects.
+  The changelog says what changed and why; a list of subjects says neither, and
+  a link makes the reader go and find it. A tag whose version has no section
+  here fails the release instead of publishing an empty body.
+
 ## [0.2.0] - 2026-08-09
 
 The interface release: the shop moves off the bottom of the window and into a
