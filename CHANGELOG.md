@@ -10,6 +10,15 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Fixed
+
+- The web build showed no shop. Its canvas is a fixed size written into
+  `web/index.html` by hand, and it was never widened when the shop moved from a
+  bottom bar into a right-hand column: the window went from 1000 to 1420 wide,
+  the canvas stayed at 1200, and the 220px column sat off the edge of it. Native
+  builds were unaffected, which is why nothing caught it. A test now fails if the
+  canvas and `WINDOW_W`/`WINDOW_H` drift apart again.
+
 ## [0.2.3] - 2026-08-09
 
 ### Fixed

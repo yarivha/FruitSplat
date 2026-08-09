@@ -16,9 +16,16 @@
     align-items: center;
     justify-content: center;
   }
-  /* The canvas is left at its authored 1200x740 and is NOT scaled by CSS.
-     That is deliberate, and the two lines below from macroquad's JS bundle are
-     the reason:
+  /* The canvas is left at its authored 1420x740 and is NOT scaled by CSS.
+     That size is the native window: the 1200px playfield plus the 220px shop
+     column beside it. It has to be kept in step with WINDOW_W/WINDOW_H in
+     main.rs by hand, and a test in that file fails if it drifts — when the shop
+     moved out of a bottom bar and into the right-hand column, this canvas
+     stayed 1200 wide and the whole column fell off it, invisible and
+     unclickable in the browser while every native build was fine.
+
+     Not scaling is deliberate, and the two lines below from macroquad's JS
+     bundle are the reason:
 
          resize():                 canvas.clientWidth  * dpi_scale()
          mouse_relative_position(): (clientX - canvas.getBoundingClientRect().left) * dpi_scale()
@@ -26,27 +33,28 @@
      The drawing buffer is sized from clientWidth, which ignores CSS transforms.
      Mouse input is mapped through getBoundingClientRect(), which does not. Scale
      the canvas with `transform` and those two disagree by exactly the scale
-     factor: the game still renders at 1200x740, but every click arrives
-     compressed toward the top-left. At any scale below 0.88 the shop bar drops
-     out of reach altogether and no tower can be armed at all.
+     factor: the game still renders at 1420x740, but every click arrives
+     compressed toward the top-left. At any scale below 0.88 the shop drops out
+     of reach altogether and no tower can be armed at all.
 
      Sizing with CSS width/height instead keeps them in agreement, but then the
-     drawing buffer follows the window and screen_width() stops being 1200 —
-     which the HUD, the shop bar and the route-card row are all laid out against.
+     drawing buffer follows the window and screen_width() stops being 1420 —
+     which the HUD, the shop column and the route-card row are all laid out
+     against.
 
      So: no scaling. Browser zoom is the way to fit a smaller screen, and it
      works correctly because it scales layout and hit-testing together. */
   #glcanvas {
     display: block;
     flex: 0 0 auto;
-    width: 1200px;
+    width: 1420px;
     height: 740px;
     outline: none;
   }
 </style>
 </head>
 <body>
-  <canvas id="glcanvas" width="1200" height="740" tabindex="1"></canvas>
+  <canvas id="glcanvas" width="1420" height="740" tabindex="1"></canvas>
   <script>
     // Right click is a game input — it cancels a placement and closes the tower
     // panel. Without this the browser opens its own context menu over the

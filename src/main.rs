@@ -1475,6 +1475,32 @@ mod tests {
     use super::*;
     use tower::SPIKE_RADIUS;
 
+    #[test]
+    fn the_web_canvas_is_the_size_of_the_window_the_game_is_laid_out_for() {
+        // The web build draws into a canvas of a fixed size written by hand into
+        // the page, so nothing in Rust makes it follow WINDOW_W/WINDOW_H. It did
+        // not follow them when the shop moved out of a bottom bar and into the
+        // right-hand column: the window went from 1000 to 1420 wide, the canvas
+        // stayed at 1200, and the 220px column sat off the edge of it — missing
+        // and unclickable in the browser while every native build was correct.
+        // No other test could see it, because they all measure the layout
+        // against the constants rather than against what the page gives it.
+        let html = include_str!("../web/index.html");
+
+        for needle in [
+            format!("width=\"{WINDOW_W}\""),
+            format!("height=\"{WINDOW_H}\""),
+            format!("width: {WINDOW_W}px;"),
+            format!("height: {WINDOW_H}px;"),
+        ] {
+            assert!(
+                html.contains(&needle),
+                "web/index.html has no `{needle}`: the canvas must be \
+                 {WINDOW_W}x{WINDOW_H}, both as attributes and in CSS"
+            );
+        }
+    }
+
     /// A long straight run, so a fruit's distance along it is easy to reason
     /// about. Spike collision is measured along the track, never in pixels.
     fn straight_path() -> Path {
