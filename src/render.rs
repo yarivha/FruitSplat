@@ -11,7 +11,7 @@ use macroquad::prelude::*;
 use crate::fruit::{Fruit, FruitKind, Splat};
 use crate::mode::MODES;
 use crate::path::Path;
-use crate::projectile::{Projectile, ProjectileKind};
+use crate::projectile::{Blast, Projectile, ProjectileKind};
 use crate::scenery::{Palette, Prop, PropKind};
 use crate::tower::{Pulse, SpikePile, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
@@ -1094,6 +1094,66 @@ fn draw_tower_body(kind: TowerKind, pos: Vec2, angle: f32, r: f32) {
             draw_circle(x, y, r * 0.32, Color::new(0.24, 0.27, 0.34, 1.0));
             draw_circle(x - r * 0.08, y - r * 0.08, r * 0.13, tint(c, 0.45));
         }
+
+        TowerKind::BombLobber => {
+            // A short, fat mortar tube tipped up at the sky, with a shell nosing
+            // out of it. Stubby on purpose: every other barrel here is a long
+            // thin line, and at tower size the silhouette is all the player has
+            // to tell them apart with.
+            let iron = Color::new(0.26, 0.27, 0.31, 1.0);
+            let mouth = pos + dir * r * 0.86;
+
+            // Tube, drawn as a thick line so the ends are round.
+            draw_line(
+                x - dir.x * r * 0.24,
+                y - dir.y * r * 0.24,
+                mouth.x,
+                mouth.y,
+                r * 0.78,
+                iron,
+            );
+            // Lit along the upper edge, shadowed along the lower.
+            draw_line(
+                x - perp.x * r * 0.22,
+                y - perp.y * r * 0.22,
+                mouth.x - perp.x * r * 0.22,
+                mouth.y - perp.y * r * 0.22,
+                r * 0.20,
+                tint(iron, 0.28),
+            );
+            draw_line(
+                x + perp.x * r * 0.26,
+                y + perp.y * r * 0.26,
+                mouth.x + perp.x * r * 0.26,
+                mouth.y + perp.y * r * 0.26,
+                r * 0.16,
+                shade(iron, 0.62),
+            );
+
+            // The bore, and a shell sitting in it ready to go.
+            draw_circle(mouth.x, mouth.y, r * 0.34, shade(iron, 0.35));
+            let shell = mouth + dir * r * 0.16;
+            draw_circle(
+                shell.x,
+                shell.y,
+                r * 0.26,
+                Color::new(0.16, 0.16, 0.19, 1.0),
+            );
+            draw_circle(
+                shell.x - dir.x * r * 0.04 - perp.x * r * 0.06,
+                shell.y - dir.y * r * 0.04 - perp.y * r * 0.06,
+                r * 0.10,
+                Color::new(0.45, 0.46, 0.52, 1.0),
+            );
+
+            // Baseplate bolts, which read as heaviness at a glance.
+            for i in 0..2 {
+                let side = if i == 0 { 1.0 } else { -1.0 };
+                let bolt = pos + perp * r * 0.62 * side - dir * r * 0.30;
+                draw_circle(bolt.x, bolt.y, r * 0.13, shade(c, 0.55));
+                draw_circle(bolt.x, bolt.y, r * 0.07, tint(c, 0.35));
+            }
+        }
     }
 
     specular(pos, r * 0.9);
@@ -1241,12 +1301,58 @@ pub fn draw_projectile(p: &Projectile) {
         return;
     }
 
+    // A shell is an iron ball with a lit fuse, so it reads as something about
+    // to go off rather than as an oversized seed.
+    if p.kind == ProjectileKind::Shell {
+        shaded_ball(p.pos, r, c);
+        let a = p.spin.to_radians();
+        let fuse = p.pos + vec2(a.cos(), a.sin()) * r * 1.25;
+        draw_line(p.pos.x, p.pos.y, fuse.x, fuse.y, r * 0.22, shade(c, 1.6));
+        draw_circle(fuse.x, fuse.y, r * 0.30, Color::new(1.0, 0.78, 0.30, 0.95));
+        draw_circle(fuse.x, fuse.y, r * 0.16, Color::new(1.0, 0.97, 0.80, 1.0));
+        return;
+    }
+
     draw_circle(p.pos.x, p.pos.y, r, c);
     draw_circle(
         p.pos.x - r * 0.3,
         p.pos.y - r * 0.3,
         r * 0.35,
         Color::new(1.0, 1.0, 1.0, 0.35),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The blast a shell leaves: a filled flash that fades fast inside a ring that
+// carries on out to the true blast radius.
+//
+// The ring is the useful half. It ends exactly on the radius that did the
+// damage, so a player watching one land learns what a Bomb Lobber covers —
+// which is otherwise unknowable, the tower's range being much shorter than the
+// area it clears.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_blast(b: &Blast) {
+    let t = b.progress();
+
+    draw_circle(
+        b.pos.x,
+        b.pos.y,
+        b.radius * (0.35 + t * 0.65),
+        Color::new(1.0, 0.72, 0.30, (1.0 - t) * 0.28),
+    );
+    draw_circle_lines(
+        b.pos.x,
+        b.pos.y,
+        b.radius * t,
+        4.0,
+        Color::new(1.0, 0.86, 0.55, 1.0 - t),
+    );
+    // A dark core that shrinks as the flash spreads, for the smoke.
+    draw_circle(
+        b.pos.x,
+        b.pos.y,
+        b.radius * 0.30 * (1.0 - t),
+        Color::new(0.22, 0.18, 0.16, (1.0 - t) * 0.5),
     );
 }
 
@@ -1907,6 +2013,14 @@ fn draw_tower_stats(t: &Tower, panel: Rect) {
             ("Spikes/pile", t.spike_charges().to_string()),
             ("Every", format!("{:.2}s", t.fire_cooldown())),
             ("Laid", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
+        // Blast before range: the area it clears is the number that decides
+        // where this one goes, and it is nearly twice the reach.
+        TowerKind::BombLobber => [
+            ("Blast", format!("{:.0}", t.splash_radius())),
+            ("Every", format!("{:.2}s", t.fire_cooldown())),
+            ("Shells", t.shots_fired.to_string()),
             ("Kills", t.kills.to_string()),
         ],
         TowerKind::TripleSeeder => [

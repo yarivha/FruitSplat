@@ -25,7 +25,7 @@ mod wave;
 use audio::{Audio, Track};
 use fruit::{Fruit, FruitKind, Splat};
 use path::Path;
-use projectile::{Projectile, ProjectileKind};
+use projectile::{Blast, Projectile, ProjectileKind};
 use tower::{Pulse, SpikePile, Tower, TowerKind, PATH_CLEARANCE, SPIKE_SPACING, TOWER_RADIUS};
 
 /// Height of the playable field. The shop is a column down the right now, not a
@@ -84,6 +84,7 @@ const DEMO_TOWER_SPOTS: [Vec2; TowerKind::ALL.len()] = [
     Vec2::new(880.0, 460.0),
     Vec2::new(330.0, 280.0),
     Vec2::new(1060.0, 290.0),
+    Vec2::new(770.0, 235.0),
 ];
 
 /// Seconds between a wave clearing and the next one going out on its own, once
@@ -149,6 +150,8 @@ struct Game {
     projectiles: Vec<Projectile>,
     splats: Vec<Splat>,
     pulses: Vec<Pulse>,
+    /// Expanding rings where shells have landed. Cosmetic.
+    blasts: Vec<Blast>,
     /// Spike piles sitting on the track, dropped by Spike Layers.
     spikes: Vec<SpikePile>,
     /// Fruit still waiting to enter the track this wave.
@@ -207,6 +210,7 @@ impl Game {
             projectiles: Vec::new(),
             splats: Vec::new(),
             pulses: Vec::new(),
+            blasts: Vec::new(),
             spikes: Vec::new(),
             queue: Vec::new(),
             spawn_timer: 0.0,
@@ -262,6 +266,7 @@ impl Game {
         self.projectiles.clear();
         self.splats.clear();
         self.pulses.clear();
+        self.blasts.clear();
         self.spikes.clear();
         self.queue.clear();
         self.wave_active = false;
@@ -862,9 +867,14 @@ impl Game {
             let projectile_kind = match t.kind {
                 TowerKind::Blender => ProjectileKind::Pulp,
                 TowerKind::KnifeThrower => ProjectileKind::Knife,
+                TowerKind::BombLobber => ProjectileKind::Shell,
                 _ => ProjectileKind::Seed,
             };
             let splash = t.splash_radius();
+
+            if t.kind == TowerKind::BombLobber {
+                sort_by_crowd(&mut in_range, splash);
+            }
             let pierce = t.pierce();
 
             // The whole volley goes out every time. A Triple Seeder throws
@@ -901,10 +911,12 @@ impl Game {
             let lead = in_range[0].1 - t.pos;
             t.angle = lead.y.atan2(lead.x);
             t.cooldown = t.fire_cooldown();
-            if t.kind == TowerKind::KnifeThrower {
-                self.audio.play_knife();
-            } else {
-                self.audio.play_shoot();
+            match t.kind {
+                TowerKind::KnifeThrower => self.audio.play_knife(),
+                // The lob is the soft part; the boom belongs to the landing,
+                // and plays from the impact path with the rest of the blast.
+                TowerKind::BombLobber => self.audio.play_lob(),
+                _ => self.audio.play_shoot(),
             }
         }
     }
@@ -950,7 +962,14 @@ impl Game {
                         hits.push((i, p.owner));
                     }
                 }
-                self.audio.play_splash();
+                // A shell landing is the loudest thing on the field; pulp is a
+                // wet slap. Same code path, different weight of event.
+                if p.kind == ProjectileKind::Shell {
+                    self.audio.play_boom();
+                    self.blasts.push(Blast::new(center, splash));
+                } else {
+                    self.audio.play_splash();
+                }
             } else {
                 hits.push((fi, p.owner));
             }
@@ -1051,6 +1070,11 @@ impl Game {
             p.update(dt);
         }
         self.pulses.retain(|p| !p.finished());
+
+        for b in &mut self.blasts {
+            b.update(dt);
+        }
+        self.blasts.retain(|b| !b.finished());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1132,6 +1156,11 @@ impl Game {
             for p in &self.projectiles {
                 render::draw_projectile(p);
             }
+            // Over the shots, under the splats: the blast is the event, and the
+            // fruit bursting inside it should still read on top of it.
+            for b in &self.blasts {
+                render::draw_blast(b);
+            }
             for s in &self.splats {
                 render::draw_splat(s);
             }
@@ -1206,6 +1235,37 @@ fn volley_targets(shots: usize, available: usize) -> Vec<usize> {
         return Vec::new();
     }
     (0..shots).map(|k| k % available).collect()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reorder a tower's targets so the fruit standing in the thickest crowd comes
+// first, scoring each by how many others sit within `blast` of it.
+//
+// Only the Bomb Lobber uses this. Every other tower duels whatever is nearest
+// its exit, which is right when a shot pops one fruit — but a shell is worth
+// firing for what it takes off the track at once, and "first" targeting aims it
+// at the fruit that has already outrun the crowd behind it, which is the worst
+// shot on the board.
+//
+// The sort is stable and the list arrives in threat order, so between two
+// equally crowded spots the one nearer its exit still wins, and a scattering of
+// stragglers with no crowd at all leaves the leading fruit in front — the same
+// choice every other tower would have made.
+// ─────────────────────────────────────────────────────────────────────────────
+fn sort_by_crowd<T: Copy>(targets: &mut Vec<(f32, Vec2, T, usize, f32)>, blast: f32) {
+    let mut scored: Vec<(usize, _)> = targets
+        .iter()
+        .map(|a| {
+            let caught = targets
+                .iter()
+                .filter(|b| b.1.distance(a.1) <= blast)
+                .count();
+            (caught, *a)
+        })
+        .collect();
+
+    scored.sort_by_key(|x| std::cmp::Reverse(x.0));
+    *targets = scored.into_iter().map(|(_, a)| a).collect();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1783,6 +1843,98 @@ mod tests {
         assert_eq!(volley_targets(1, 4), vec![0]);
         // Nothing in range fires nothing, rather than indexing an empty list.
         assert!(volley_targets(3, 0).is_empty());
+    }
+
+    /// A target as update_towers builds them: (progress, position, speed, lane,
+    /// distance). Only progress and position matter to the crowd sort.
+    fn target(progress: f32, at: Vec2) -> (f32, Vec2, f32, usize, f32) {
+        (progress, at, 0.0, 0, 0.0)
+    }
+
+    #[test]
+    fn a_shell_is_aimed_at_the_crowd_and_not_at_the_leader() {
+        // The whole reason the Bomb Lobber targets differently. A straggler has
+        // outrun the pack and is nearest the exit, so every other tower would
+        // shoot it — and a shell spent on it clears exactly one fruit.
+        let mut targets = vec![
+            target(0.90, vec2(900.0, 100.0)), // the leader, alone
+            target(0.40, vec2(300.0, 100.0)), // a cluster of three
+            target(0.38, vec2(330.0, 110.0)),
+            target(0.36, vec2(320.0, 130.0)),
+        ];
+
+        sort_by_crowd(&mut targets, 60.0);
+
+        assert!(
+            targets[0].1.x < 400.0,
+            "the shell was aimed at the lone leader instead of the crowd"
+        );
+    }
+
+    #[test]
+    fn a_tie_between_equal_crowds_goes_to_whichever_is_nearer_its_exit() {
+        // Two clusters of two, far apart. Neither is thicker, so the tiebreak
+        // has to fall back on threat — which is the order the list arrives in,
+        // and only survives because the sort is stable.
+        let mut targets = vec![
+            target(0.80, vec2(900.0, 100.0)),
+            target(0.78, vec2(920.0, 110.0)),
+            target(0.30, vec2(200.0, 100.0)),
+            target(0.28, vec2(220.0, 110.0)),
+        ];
+
+        sort_by_crowd(&mut targets, 60.0);
+
+        assert_eq!(
+            targets[0].0, 0.80,
+            "a tie on crowd size ignored which fruit was nearer its exit"
+        );
+    }
+
+    #[test]
+    fn with_nothing_bunched_up_a_shell_goes_at_the_leader_like_anything_else() {
+        // Every fruit alone in its own blast: the crowd score is 1 across the
+        // board, so the sort must leave the threat order it was given intact.
+        let mut targets = vec![
+            target(0.90, vec2(900.0, 100.0)),
+            target(0.50, vec2(500.0, 100.0)),
+            target(0.10, vec2(100.0, 100.0)),
+        ];
+        let before: Vec<f32> = targets.iter().map(|t| t.0).collect();
+
+        sort_by_crowd(&mut targets, 60.0);
+
+        let after: Vec<f32> = targets.iter().map(|t| t.0).collect();
+        assert_eq!(before, after, "a scattered field was reordered anyway");
+    }
+
+    #[test]
+    fn a_wider_blast_can_change_which_crowd_is_worth_hitting() {
+        // Two pairs and one loose trio spread wider than a small blast can
+        // cover. The upgrade that widens the blast is supposed to change the
+        // tower's mind about where to aim, which is what makes it an upgrade
+        // rather than a bigger number.
+        let spread = vec![
+            target(0.90, vec2(900.0, 100.0)),
+            target(0.88, vec2(940.0, 100.0)),
+            target(0.30, vec2(100.0, 100.0)),
+            target(0.28, vec2(180.0, 100.0)),
+            target(0.26, vec2(260.0, 100.0)),
+        ];
+
+        let mut tight = spread.clone();
+        sort_by_crowd(&mut tight, 50.0);
+        assert!(
+            tight[0].1.x > 800.0,
+            "a narrow blast should take the pair it can actually cover"
+        );
+
+        let mut wide = spread;
+        sort_by_crowd(&mut wide, 100.0);
+        assert!(
+            wide[0].1.x < 400.0,
+            "a wide blast should reach the loose trio and prefer it"
+        );
     }
 
     #[test]

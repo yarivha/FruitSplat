@@ -343,6 +343,43 @@ def make_boss_burst():
 # Entry point
 # -----------------------------------------------------------------------------
 
+def make_lob():
+    """The Bomb Lobber firing: a hollow thump with none of the crack of a
+    gunshot. It has to sit under the boom that follows a moment later rather
+    than compete with it, so it is short, soft and almost all low end."""
+    n = int(0.22 * SR)
+    out = [0.0] * n
+    tone(out, 150.0, 0.18, vol=0.5, kind="sine", decay=26.0, sweep=0.45)
+    tone(out, 96.0, 0.20, vol=0.35, kind="sine", decay=20.0, sweep=0.6)
+    puff = lowpass(noise(n), 900.0)
+    for i in range(n):
+        out[i] += puff[i] * math.exp(-(i / SR) * 34.0) * 0.30
+    return normalize(out, 0.55)
+
+
+def make_boom():
+    """A shell landing: the loudest thing on the field. Low body, a broadband
+    crack on the front, and a tail long enough to feel like it moved some air —
+    which is the point, since one of these clears a whole cluster."""
+    dur = 0.75
+    n = int(dur * SR)
+    out = [0.0] * n
+
+    # Body: a low sine swept down hard, which is most of the weight.
+    tone(out, 110.0, 0.6, vol=0.75, kind="sine", decay=7.0, sweep=0.35)
+    tone(out, 62.0, 0.7, vol=0.55, kind="sine", decay=5.0, sweep=0.5)
+
+    # The crack, and the rumble it decays into.
+    crack = highpass(noise(n), 1800.0)
+    rumble = lowpass(noise(n), 700.0)
+    for i in range(n):
+        t = i / SR
+        out[i] += crack[i] * math.exp(-t * 40.0) * 0.55
+        out[i] += rumble[i] * math.exp(-t * 6.5) * 0.45
+
+    return normalize(out, 0.95)
+
+
 def main():
     # Fixed seed so regenerating produces byte-identical assets.
     random.seed(20260806)
@@ -373,6 +410,8 @@ def main():
     # clips straight by tier with no special case. Only the call order matters
     # to the seeded stream, not the file name, so it belongs down here.
     write_wav("pop_5.wav", make_boss_burst())
+    write_wav("lob.wav", make_lob())
+    write_wav("boom.wav", make_boom())
     print("Done.")
 
 

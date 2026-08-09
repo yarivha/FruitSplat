@@ -3,7 +3,9 @@
 //
 // Seeds are small and fast and pop exactly one fruit. Pulp blobs travel slower
 // and pop everything inside their splash radius, which is what makes the Blender
-// worth its price once fruit start splitting into clusters.
+// worth its price once fruit start splitting into clusters. Shells are the same
+// idea taken to its end: slow, heavy, and a blast wide enough to take a whole
+// cluster off the track at once.
 // =============================================================================
 
 use macroquad::prelude::*;
@@ -17,6 +19,7 @@ pub enum ProjectileKind {
     Seed,
     Pulp,
     Knife,
+    Shell,
 }
 
 impl ProjectileKind {
@@ -26,6 +29,7 @@ impl ProjectileKind {
             ProjectileKind::Seed => 4.0,
             ProjectileKind::Pulp => 9.0,
             ProjectileKind::Knife => 6.0,
+            ProjectileKind::Shell => 11.0,
         }
     }
 
@@ -35,6 +39,11 @@ impl ProjectileKind {
             ProjectileKind::Seed => 430.0,
             ProjectileKind::Pulp => 270.0,
             ProjectileKind::Knife => 380.0,
+            // The slowest thing in the air by a wide margin, and deliberately
+            // so: a shell you can see coming is a shell whose blast the player
+            // can read, and leading a slow shot into a moving crowd is the
+            // skill the tower is sold on.
+            ProjectileKind::Shell => 210.0,
         }
     }
 
@@ -43,6 +52,7 @@ impl ProjectileKind {
             ProjectileKind::Seed => Color::new(0.29, 0.20, 0.13, 1.0),
             ProjectileKind::Pulp => Color::new(0.85, 0.92, 0.55, 1.0),
             ProjectileKind::Knife => Color::new(0.88, 0.90, 0.95, 1.0),
+            ProjectileKind::Shell => Color::new(0.20, 0.20, 0.23, 1.0),
         }
     }
 }
@@ -118,5 +128,42 @@ impl Projectile {
 
     pub fn expired(&self) -> bool {
         self.life <= 0.0
+    }
+}
+
+/// The expanding ring left where a shell lands. Purely cosmetic, but not
+/// decoration: the blast is wide enough that without seeing it the player has no
+/// way to learn what a Bomb Lobber actually covers, and placing one is entirely
+/// a question of guessing that radius.
+pub struct Blast {
+    pub pos: Vec2,
+    pub radius: f32,
+    pub life: f32,
+    pub max_life: f32,
+}
+
+impl Blast {
+    pub fn new(pos: Vec2, radius: f32) -> Self {
+        // Longer-lived than the Freezer's ring. A shell fires every couple of
+        // seconds, so its mark can afford to linger and be read.
+        Blast {
+            pos,
+            radius,
+            life: 0.55,
+            max_life: 0.55,
+        }
+    }
+
+    pub fn update(&mut self, dt: f32) {
+        self.life -= dt;
+    }
+
+    pub fn finished(&self) -> bool {
+        self.life <= 0.0
+    }
+
+    /// 0.0 at the moment of the blast, 1.0 once it has fully expanded.
+    pub fn progress(&self) -> f32 {
+        1.0 - (self.life / self.max_life).clamp(0.0, 1.0)
     }
 }

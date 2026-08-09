@@ -21,6 +21,12 @@ const SHOOT_VOLUME: f32 = 0.22;
 const KNIFE_VOLUME: f32 = 0.26;
 const SPIKES_VOLUME: f32 = 0.34;
 const SPLASH_VOLUME: f32 = 0.50;
+/// The lob sits under its own boom rather than beside it.
+const LOB_VOLUME: f32 = 0.30;
+/// The loudest thing in the mix. A Bomb Lobber fires every couple of seconds at
+/// most, so it can afford to be an event; at the Seed Shooter's cadence this
+/// would be unbearable inside a wave.
+const BOOM_VOLUME: f32 = 0.72;
 const FREEZE_VOLUME: f32 = 0.35;
 const PLACE_VOLUME: f32 = 0.50;
 const DENY_VOLUME: f32 = 0.40;
@@ -56,6 +62,8 @@ pub struct Audio {
     knife: Sound,
     spikes: Sound,
     splash: Sound,
+    lob: Sound,
+    boom: Sound,
     freeze: Sound,
     place: Sound,
     deny: Sound,
@@ -106,6 +114,8 @@ impl Audio {
             knife: decode(include_bytes!("../assets/knife.wav")).await,
             spikes: decode(include_bytes!("../assets/spikes.wav")).await,
             splash: decode(include_bytes!("../assets/splash.wav")).await,
+            lob: decode(include_bytes!("../assets/lob.wav")).await,
+            boom: decode(include_bytes!("../assets/boom.wav")).await,
             freeze: decode(include_bytes!("../assets/freeze.wav")).await,
             place: decode(include_bytes!("../assets/place.wav")).await,
             deny: decode(include_bytes!("../assets/deny.wav")).await,
@@ -197,6 +207,18 @@ impl Audio {
 
     pub fn play_splash(&self) {
         self.sfx(&self.splash, SPLASH_VOLUME);
+    }
+
+    /// The mortar firing. Deliberately quiet — it is the run-up to the boom,
+    /// and a loud one would step on the louder thing arriving a moment later.
+    pub fn play_lob(&self) {
+        self.sfx(&self.lob, LOB_VOLUME);
+    }
+
+    /// A shell landing. The loudest effect in the game, which is the whole
+    /// point of the tower that makes it.
+    pub fn play_boom(&self) {
+        self.sfx(&self.boom, BOOM_VOLUME);
     }
 
     pub fn play_freeze(&self) {

@@ -10,6 +10,34 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Added
+
+- **Bomb Lobber** ($320), a seventh tower. It lobs a slow shell that takes
+  everything standing in the blast off the track at once — 110px at Lv1 against
+  the Blender's 58, rising to 165. The dearest tower in the shop and the slowest
+  to fire, so between shells whatever it missed keeps walking.
+  - The only tower that does not use "first" targeting. It aims at whichever
+    fruit has the most neighbours inside its blast, because a shell spent on the
+    straggler that has outrun the pack clears exactly one fruit. Ties fall back
+    on threat, and a field with nothing bunched up falls back on the leader.
+  - Its blast is wider than half its own range, so it is placed by guessing
+    where a crowd will be rather than by what it can see.
+  - Two new sounds: a hollow lob on firing and a boom on landing, the loudest
+    effect in the game. An expanding ring marks the blast, which is the only way
+    to learn the radius the tower actually covers.
+- The menu title is spelled out in fruit instead of set in the text font. Each
+  letter is a 5x7 grid with a berry on every lit cell, drawn with the shading the
+  fruit on the track use and coloured a tier per letter.
+- The web build scales to the screen instead of overflowing it. The page sizes
+  the canvas to the device — never with a CSS `transform`, which desynchronises
+  rendering from hit-testing — and `render.rs` draws through a camera fitted to a
+  fixed 1420x740 view, converting pointer positions back through the same fit, so
+  the two scale together. A desktop window is that size exactly, so nothing about
+  it changes.
+- A **turn your phone sideways** prompt on screens under 820px in portrait, where
+  the game would otherwise be a 200px strip. It overlays the canvas rather than
+  hiding it, so rotating back restores a game that still fits.
+
 ### Changed
 
 - Hard gets a speed ramp of its own — 0.050 to a x2.20 ceiling, against the
@@ -21,18 +49,6 @@ commit message and in the comments around the code it touched.
   where two of them used to read the same. Medium itself is unchanged — it is
   still the baseline `balance_report` models.
 
-### Added
-
-- The web build scales to the screen instead of overflowing it. The page sizes
-  the canvas to the device — never with a CSS `transform`, which desynchronises
-  rendering from hit-testing — and `render.rs` draws through a camera fitted to a
-  fixed 1420x740 view, converting pointer positions back through the same fit, so
-  the two scale together. A desktop window is that size exactly, so nothing about
-  it changes.
-- A **turn your phone sideways** prompt on screens under 820px in portrait, where
-  the game would otherwise be a 200px strip. It overlays the canvas rather than
-  hiding it, so rotating back restores a game that still fits.
-
 ### Fixed
 
 - Towers on the right quarter of the map could not be upgraded or sold. Their
@@ -41,12 +57,6 @@ commit message and in the comments around the code it touched.
   first, leaving the overhanging part of the panel drawn but dead. For a tower at
   x 1126 that was all but 28px of its upgrade button. The panel now stays inside
   the playfield, and a test sweeps every tower position to keep it there.
-
-### Added
-
-- The menu title is spelled out in fruit instead of set in the text font. Each
-  letter is a 5x7 grid with a berry on every lit cell, drawn with the shading the
-  fruit on the track use and coloured a tier per letter.
 
 ## [0.2.4] - 2026-08-09
 

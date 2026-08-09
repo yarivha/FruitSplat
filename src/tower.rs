@@ -34,17 +34,20 @@ pub enum TowerKind {
     SpikeLayer,
     /// Three seeds at three separate fruit, every shot.
     TripleSeeder,
+    /// Lobs a shell that clears everything standing near where it lands.
+    BombLobber,
 }
 
 impl TowerKind {
-    /// Shop order, also the order of the 1–5 hotkeys.
-    pub const ALL: [TowerKind; 6] = [
+    /// Shop order, also the order of the 1–7 hotkeys.
+    pub const ALL: [TowerKind; 7] = [
         TowerKind::SeedShooter,
         TowerKind::Blender,
         TowerKind::Freezer,
         TowerKind::KnifeThrower,
         TowerKind::SpikeLayer,
         TowerKind::TripleSeeder,
+        TowerKind::BombLobber,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -55,6 +58,7 @@ impl TowerKind {
             TowerKind::KnifeThrower => "Knife Thrower",
             TowerKind::SpikeLayer => "Spike Layer",
             TowerKind::TripleSeeder => "Triple Seeder",
+            TowerKind::BombLobber => "Bomb Lobber",
         }
     }
 
@@ -70,6 +74,7 @@ impl TowerKind {
             TowerKind::KnifeThrower => "Knives",
             TowerKind::SpikeLayer => "Spikes",
             TowerKind::TripleSeeder => "Triple",
+            TowerKind::BombLobber => "Bombs",
         }
     }
 
@@ -85,6 +90,11 @@ impl TowerKind {
             // a crowd, and being able to buy that answer early would flatten
             // the whole reason the Blender and the Knife Thrower differ.
             TowerKind::TripleSeeder => 260,
+            // The most expensive thing in the shop. It answers a crowd outright
+            // rather than working through one, and a price that let it arrive
+            // before the split ladder starts producing crowds would leave
+            // nothing for the Blender or the Knife Thrower to be better at.
+            TowerKind::BombLobber => 320,
         }
     }
 
@@ -99,6 +109,7 @@ impl TowerKind {
             TowerKind::KnifeThrower => [110, 220],
             TowerKind::SpikeLayer => [130, 260],
             TowerKind::TripleSeeder => [160, 280],
+            TowerKind::BombLobber => [200, 340],
         };
         match level {
             1 => Some(costs[0]),
@@ -124,6 +135,8 @@ impl TowerKind {
             (TowerKind::SpikeLayer, 2) => "biggest piles",
             (TowerKind::TripleSeeder, 1) => "a fourth seed, faster",
             (TowerKind::TripleSeeder, 2) => "a fifth seed, faster",
+            (TowerKind::BombLobber, 1) => "wider blast, faster",
+            (TowerKind::BombLobber, 2) => "widest blast, faster",
             _ => "fully upgraded",
         }
     }
@@ -137,6 +150,10 @@ impl TowerKind {
             TowerKind::KnifeThrower => [145.0, 165.0, 185.0],
             TowerKind::SpikeLayer => [120.0, 138.0, 158.0],
             TowerKind::TripleSeeder => [150.0, 172.0, 195.0],
+            // Short. The blast is what makes it worth its price, so reach is
+            // where it pays for that — a Bomb Lobber has to be put where the
+            // crowd will be rather than parked somewhere it can see everything.
+            TowerKind::BombLobber => [125.0, 142.0, 160.0],
         };
         table[level_index(level)]
     }
@@ -164,6 +181,11 @@ impl TowerKind {
             // cancelling the triple out: at Lv3 the sustained rate came to
             // exactly a Seed Shooter's, for two and a half times the money.
             TowerKind::TripleSeeder => [0.45, 0.38, 0.32],
+            // By a distance the slowest thing in the shop. One shell clears a
+            // whole cluster, so the cost of that is the wait: between lobs the
+            // fruit it did not catch keep walking, and something else has to
+            // answer them.
+            TowerKind::BombLobber => [2.60, 2.10, 1.70],
         };
         table[level_index(level)]
     }
@@ -195,6 +217,10 @@ impl TowerKind {
     pub fn splash_radius(&self, level: u8) -> f32 {
         match self {
             TowerKind::Blender => [58.0, 72.0, 90.0][level_index(level)],
+            // Roughly double the Blender's, which is the whole difference
+            // between the two: the Blender catches the fruit around the one it
+            // hit, the Bomb Lobber clears the ground the cluster is standing on.
+            TowerKind::BombLobber => [110.0, 135.0, 165.0][level_index(level)],
             _ => 0.0,
         }
     }
@@ -236,6 +262,9 @@ impl TowerKind {
             TowerKind::KnifeThrower => Color::new(0.42, 0.47, 0.60, 1.0),
             TowerKind::SpikeLayer => Color::new(0.60, 0.34, 0.28, 1.0),
             TowerKind::TripleSeeder => Color::new(0.36, 0.52, 0.38, 1.0),
+            // Gunmetal with a little violet in it, so it is not mistaken for
+            // the Knife Thrower's blue-grey at a glance across the field.
+            TowerKind::BombLobber => Color::new(0.34, 0.29, 0.38, 1.0),
         }
     }
 
@@ -249,6 +278,7 @@ impl TowerKind {
             TowerKind::KnifeThrower => "pierces",
             TowerKind::SpikeLayer => "spikes",
             TowerKind::TripleSeeder => "3 at once",
+            TowerKind::BombLobber => "clears",
         }
     }
 }
@@ -679,19 +709,105 @@ mod tests {
     }
 
     #[test]
-    fn the_triple_seeder_costs_more_than_anything_it_outguns() {
-        // It answers a crowd on its own. Being able to buy that early would
-        // flatten the reason the Blender and the Knife Thrower differ, so it
-        // has to be the dearest thing in the shop.
+    fn answering_a_crowd_outright_costs_more_than_working_through_one() {
+        // The Triple Seeder and the Bomb Lobber both answer a crowd on their
+        // own rather than chipping at it. Being able to buy either early would
+        // flatten the reason the Blender and the Knife Thrower differ from each
+        // other, so both have to sit above everything that does not.
+        let crowd = [TowerKind::TripleSeeder, TowerKind::BombLobber];
+
+        for answer in crowd {
+            for kind in TowerKind::ALL {
+                if crowd.contains(&kind) {
+                    continue;
+                }
+                assert!(
+                    answer.cost() > kind.cost(),
+                    "the {} is not dearer than the {}",
+                    answer.name(),
+                    kind.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_bomb_lobber_is_the_dearest_and_the_slowest_of_the_shooters() {
+        // It is the most absolute answer in the game — everything standing in
+        // the blast comes off the track at once — so it pays for that twice, in
+        // price and in how long it waits between shells. Either one alone would
+        // leave it strictly better than the Triple Seeder rather than a
+        // different trade.
+        //
+        // The Spike Layer is left out of the rate half deliberately. Its
+        // cooldown is the gap between laying piles that then sit on the track
+        // until fruit wear them away, not the gap between shots, and at 4.50s
+        // it is the slower number without being the slower tower.
+        let bomb = TowerKind::BombLobber;
+
         for kind in TowerKind::ALL {
-            if kind == TowerKind::TripleSeeder {
+            if kind == bomb {
                 continue;
             }
             assert!(
-                TowerKind::TripleSeeder.cost() > kind.cost(),
-                "the Triple Seeder is not dearer than the {}",
+                bomb.cost() > kind.cost(),
+                "the Bomb Lobber is not dearer than the {}",
                 kind.name()
             );
+            if kind == TowerKind::SpikeLayer {
+                continue;
+            }
+            for level in 1..=MAX_LEVEL {
+                assert!(
+                    bomb.cooldown(level) > kind.cooldown(level),
+                    "at Lv{level} the Bomb Lobber fires no slower than the {}",
+                    kind.name()
+                );
+            }
         }
+    }
+
+    #[test]
+    fn the_bomb_lobber_clears_far_more_ground_than_the_blender() {
+        // The two are the only splash in the game and the difference between
+        // them has to be plain, or the dearer one is just a worse Blender.
+        for level in 1..=MAX_LEVEL {
+            let (bomb, blender) = (
+                TowerKind::BombLobber.splash_radius(level),
+                TowerKind::Blender.splash_radius(level),
+            );
+            assert!(
+                bomb >= blender * 1.7,
+                "at Lv{level} the blast is {bomb} against the Blender's {blender}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_bomb_lobber_reaches_less_far_than_it_clears() {
+        // What makes it a placement puzzle rather than a turret: the ground it
+        // covers is wider than the ground it can see, so it has to be put where
+        // the crowd will be rather than somewhere with a good view.
+        for level in 1..=MAX_LEVEL {
+            let kind = TowerKind::BombLobber;
+            assert!(
+                kind.splash_radius(level) * 2.0 > kind.range(level),
+                "at Lv{level} the blast no longer spans a useful part of the range"
+            );
+        }
+    }
+
+    #[test]
+    fn every_tower_can_be_armed_from_the_keyboard() {
+        // The shop zips tower kinds against NUMBER_KEYS, so a seventh tower
+        // added without a seventh key would simply be unreachable from the
+        // keyboard — silently, since zip stops at the shorter side. That is
+        // exactly how a route once ended up with a card and no key.
+        assert!(
+            TowerKind::ALL.len() <= crate::NUMBER_KEYS.len(),
+            "{} towers but only {} number keys",
+            TowerKind::ALL.len(),
+            crate::NUMBER_KEYS.len()
+        );
     }
 }

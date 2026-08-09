@@ -206,12 +206,30 @@ where they meet.
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
 | Spike Layer | $150 | 120 px | 4.50s | Lays spike piles onto the track all wave long |
+| Bomb Lobber | $320 | 125 px | 2.60s | A 110px blast that clears a whole cluster |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
 
 The Blender and the Knife Thrower both beat crowds, but differently: splash hits
 a **blob** of fruit around one point, while pierce hits a **line** of them along
 the shot's path. That makes the Knife Thrower strongest on the switchback
 routes, where fruit queue up single file down a lane.
+
+The **Bomb Lobber** is the third answer, and the most absolute: a slow shell that
+takes everything standing in its blast off the track at once. It is the dearest
+tower in the shop and the slowest to fire, which is what it pays for that with —
+between shells, whatever it did not catch keeps walking, so it cannot hold a lane
+by itself. Its blast is roughly double the Blender's and wider than half its own
+range, so it is placed by guessing where the crowd will *be* rather than by what
+it can see.
+
+It is also the only tower that does not use "first" targeting. Everything else
+duels whatever is nearest its exit, which is right when a shot pops one fruit; a
+shell aimed that way lands on the straggler that has already outrun the pack —
+the worst shot on the board. The Bomb Lobber aims at whichever fruit has the most
+neighbours inside its blast instead, falling back on threat when two crowds tie
+and on the leader when nothing is bunched up at all. Widening the blast can
+therefore change its mind about where to aim, which is what its upgrades buy
+beyond a bigger number.
 
 The Spike Layer is the odd one out — it doesn't shoot. It lays piles of spikes
 directly onto the track, and each pile is worth **one hit per spike** before it
@@ -284,6 +302,7 @@ what that specific tower has actually done:
 | Blender | Range, splash, shots fired, kills |
 | Knife Thrower | Range, pierce, knives thrown, kills |
 | Spike Layer | Spikes per pile, seconds between piles, piles laid, kills |
+| Bomb Lobber | Blast radius, seconds between shells, shells fired, kills |
 | Freezer | Range, chill strength, pulses, fruit chilled |
 
 Kills are credited to the tower whose shot landed, so a Blender's splash banks
@@ -300,6 +319,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
 | Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
 | Spike Layer | $130 — 6 spikes/pile, lays every 3.40s | $260 — 9 spikes/pile, every 2.60s |
+| Bomb Lobber | $200 — blast 110 → 135 px, faster | $340 — blast 165 px, faster |
 | Freezer | $100 — chill 45% → 35% | $200 — chill 25%, lasts 2.3s |
 
 Overlapping Freezers stack by keeping the strongest chill and the longest
@@ -346,6 +366,10 @@ Because it is armoured, the towers sort themselves into roles against it:
   Durian stands on it, so it strips itself in a fraction of a second — they stay
   an anti-swarm tower, which is exactly what the boss leaves behind when it
   finally comes apart.
+- **Bomb Lobbers** are no better against it than anything else — a shell is one
+  hit, however wide the blast — but the boss travels inside a swarm, and one
+  shell can take most of that escort off the track while the Knife Throwers work
+  on the husk.
 - **Freezers** still work on it, and buying the field a few extra seconds of
   fire is worth more here than anywhere else in the game.
 
