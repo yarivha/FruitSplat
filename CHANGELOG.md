@@ -24,6 +24,11 @@ commit message and in the comments around the code it touched.
 
 ### Fixed
 
+- The Triple Seeder's 0.70s cooldown cancelled its own triple out: at Lv3 its
+  sustained rate came to exactly a Seed Shooter's, for two and a half times the
+  money, and $260 of Seed Shooters out-shot it at every level. It fires on the
+  Seed Shooter's cadence now — three seeds where that tower puts one — and gains
+  a seed per upgrade instead of losing rate.
 - Multi-shot towers fired one shot per fruit in range, so a Triple Seeder facing
   a lone fruit fired once — slower and dearer than the Seed Shooter for the same
   output, and worst against a boss. A volley now always fires every shot, cycling

@@ -98,7 +98,7 @@ impl TowerKind {
             TowerKind::Freezer => [100, 200],
             TowerKind::KnifeThrower => [110, 220],
             TowerKind::SpikeLayer => [130, 260],
-            TowerKind::TripleSeeder => [190, 340],
+            TowerKind::TripleSeeder => [160, 280],
         };
         match level {
             1 => Some(costs[0]),
@@ -122,8 +122,8 @@ impl TowerKind {
             (TowerKind::KnifeThrower, 2) => "deepest pierce",
             (TowerKind::SpikeLayer, 1) => "bigger piles, faster",
             (TowerKind::SpikeLayer, 2) => "biggest piles",
-            (TowerKind::TripleSeeder, 1) => "faster, longer reach",
-            (TowerKind::TripleSeeder, 2) => "four at once",
+            (TowerKind::TripleSeeder, 1) => "a fourth seed, faster",
+            (TowerKind::TripleSeeder, 2) => "a fifth seed, faster",
             _ => "fully upgraded",
         }
     }
@@ -150,9 +150,11 @@ impl TowerKind {
             TowerKind::KnifeThrower => [0.75, 0.60, 0.46],
             // For the Spike Layer this is the gap between dropping piles.
             TowerKind::SpikeLayer => [2.20, 1.70, 1.30],
-            // Slower per volley than a Seed Shooter, but each volley is worth
-            // three of its shots.
-            TowerKind::TripleSeeder => [0.70, 0.58, 0.48],
+            // The same cadence as a Seed Shooter, so the volley is simply
+            // three of its shots where it fires one. A longer cooldown was
+            // cancelling the triple out: at Lv3 the sustained rate came to
+            // exactly a Seed Shooter's, for two and a half times the money.
+            TowerKind::TripleSeeder => [0.45, 0.38, 0.32],
         };
         table[level_index(level)]
     }
@@ -206,8 +208,8 @@ impl TowerKind {
             // The Lv3 Seed Shooter splits its fire across the two lead fruit.
             TowerKind::SeedShooter => [1, 1, 2][level_index(level)],
             // The Triple Seeder's whole point: three separate fruit engaged at
-            // once from the first level, four once fully upgraded.
-            TowerKind::TripleSeeder => [3, 3, 4][level_index(level)],
+            // once from the first level, and a seed more at each upgrade.
+            TowerKind::TripleSeeder => [3, 4, 5][level_index(level)],
             _ => 1,
         }
     }
@@ -643,7 +645,7 @@ mod tests {
         assert_eq!(TowerKind::SeedShooter.shots(1), 1);
         assert_eq!(TowerKind::SeedShooter.shots(3), 2);
         assert_eq!(TowerKind::TripleSeeder.shots(1), 3);
-        assert_eq!(TowerKind::TripleSeeder.shots(3), 4);
+        assert_eq!(TowerKind::TripleSeeder.shots(3), 5);
 
         let multi = [TowerKind::SeedShooter, TowerKind::TripleSeeder];
         for kind in TowerKind::ALL {
@@ -654,6 +656,38 @@ mod tests {
                 assert_eq!(kind.shots(level), 1, "{} at Lv{level}", kind.name());
             }
         }
+    }
+
+    #[test]
+    fn the_triple_seeder_puts_out_far_more_than_a_seed_shooter() {
+        // The whole reason to buy it, and it did not hold. A cooldown long
+        // enough to cancel the triple out left its sustained rate at Lv3
+        // *identical* to a Seed Shooter's, for two and a half times the money.
+        for level in 1..=MAX_LEVEL {
+            let rate = |k: TowerKind| k.shots(level) as f32 / k.cooldown(level);
+            let (triple, seed) = (rate(TowerKind::TripleSeeder), rate(TowerKind::SeedShooter));
+            assert!(
+                triple >= seed * 1.8,
+                "Lv{level}: Triple Seeder {triple:.2}/s against Seed Shooter {seed:.2}/s"
+            );
+        }
+    }
+
+    #[test]
+    fn a_triple_seeder_is_worth_more_than_its_price_in_seed_shooters() {
+        // Being dearest is fine; being worse value than the cheapest tower is
+        // not, because then buying it is simply a mistake. One Triple Seeder
+        // once put out 4.3 shots a second where the $270 of Seed Shooters it
+        // costs put out 6.7.
+        let per_dollar = |k: TowerKind| k.shots(1) as f32 / k.cooldown(1) / k.cost() as f32;
+        let (triple, seed) = (
+            per_dollar(TowerKind::TripleSeeder),
+            per_dollar(TowerKind::SeedShooter),
+        );
+        assert!(
+            triple >= seed,
+            "the Triple Seeder buys {triple:.4} shots/s per dollar, the Seed Shooter {seed:.4}"
+        );
     }
 
     #[test]
