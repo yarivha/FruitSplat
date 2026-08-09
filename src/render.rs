@@ -15,7 +15,7 @@ use crate::projectile::{Projectile, ProjectileKind};
 use crate::scenery::{Palette, Prop, PropKind};
 use crate::tower::{Pulse, SpikePile, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
-use crate::{PLAYFIELD_H, PLAYFIELD_W};
+use crate::{PLAYFIELD_H, PLAYFIELD_W, SHOP_PANEL_W};
 
 /// Number of bands used to fake the grass gradient.
 const FIELD_BANDS: i32 = 40;
@@ -24,38 +24,44 @@ const FIELD_BANDS: i32 = 40;
 const TRACK_OUTER: f32 = 44.0;
 const TRACK_INNER: f32 = 34.0;
 
-/// Shop bar layout. Sized so all five tower buttons plus the hint column fit
-/// across the window without wrapping — which is why the buttons use each
-/// tower's short name rather than its full one.
-const BTN_W: f32 = 150.0;
-const BTN_H: f32 = 62.0;
-const BTN_GAP: f32 = 10.0;
-const BTN_X0: f32 = 16.0;
+/// Shop layout. The buttons stack down the right-hand column, so their width
+/// comes from the panel and only their height and spacing are chosen here. A row
+/// ran out of window at five buttons; a column has room for a good many more.
+const BTN_H: f32 = 58.0;
+const BTN_GAP: f32 = 7.0;
+/// Margin between the panel's edges and everything inside it.
+const PANEL_PAD: f32 = 12.0;
+/// Where the tower buttons start, leaving room for the panel heading.
+const BTN_Y0: f32 = 62.0;
+
+/// The controls sit in a block at the foot of the column — the two audio
+/// toggles side by side on one row, then pause, auto and quit. Laid out from the
+/// bottom of the window upward, so adding another tower above can never push
+/// them off the screen.
+const CTRL_H: f32 = 32.0;
+const CTRL_GAP: f32 = 7.0;
+const CTRL_BOTTOM_PAD: f32 = 12.0;
 
 /// Floating tower-panel size.
 const PANEL_W: f32 = 250.0;
 const PANEL_H: f32 = 228.0;
 
-/// Audio toggles: effects first, then music. They sit in the gap between the
-/// cash readout and the wave counter, which is the only part of the top strip
-/// nothing else claims.
-const AUDIO_BTN: f32 = 30.0;
-const AUDIO_BTN_X0: f32 = 352.0;
-const AUDIO_BTN_Y: f32 = 11.0;
-const AUDIO_BTN_GAP: f32 = 8.0;
+/// Which control sits on which row of the block at the foot of the shop column,
+/// counted from the bottom of the window upward. Quit is furthest from the tower
+/// buttons on purpose: it is the one click here that cannot be taken back.
+const CTRL_ROW_QUIT: usize = 0;
+const CTRL_ROW_AUTO: usize = 1;
+const CTRL_ROW_PAUSE: usize = 2;
+const CTRL_ROW_AUDIO: usize = 3;
+/// How many rows that block occupies, for the layout tests and for working out
+/// how much of the column is left for towers.
+pub const CTRL_ROWS: usize = 4;
 
-/// Quit button, just right of the audio toggles. Only drawn during a run —
-/// there is nothing to quit from the title screen.
-const QUIT_BTN_X: f32 = 432.0;
-const QUIT_BTN_W: f32 = 96.0;
 const QUIT_LABEL: &str = "QUIT RUN";
 const QUIT_LABEL_ARMED: &str = "SURE?";
-
-/// Auto-send toggle, in the gap between the difficulty label and the wave
-/// counter — the right half of the strip, where the wave state already lives.
-const AUTO_BTN_X: f32 = 650.0;
-const AUTO_BTN_W: f32 = 92.0;
 const AUTO_LABEL: &str = "AUTO";
+const PAUSE_LABEL: &str = "PAUSE";
+const PAUSE_LABEL_HELD: &str = "RESUME";
 
 /// Route-selection card layout. The cards share a single row, so their width
 /// falls out of how many routes there are rather than being fixed — at the old
@@ -1130,13 +1136,7 @@ pub fn draw_hud(h: &HudState) {
     } = *h;
 
     // Dark strip so white text stays readable over the grass.
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        52.0,
-        Color::new(0.0, 0.0, 0.0, 0.35),
-    );
+    draw_rectangle(0.0, 0.0, PLAYFIELD_W, 52.0, Color::new(0.0, 0.0, 0.0, 0.35));
 
     let lives_color = if lives <= 5 {
         Color::new(1.0, 0.42, 0.38, 1.0)
@@ -1157,7 +1157,7 @@ pub fn draw_hud(h: &HudState) {
     // then decides how much slack every later decision has.
     draw_text(
         MODES[mode.min(MODES.len() - 1)].name,
-        560.0,
+        360.0,
         34.0,
         22.0,
         mode_color(mode.min(MODES.len() - 1)),
@@ -1174,13 +1174,11 @@ pub fn draw_hud(h: &HudState) {
     };
     draw_text(
         &wave_txt,
-        screen_width() - dims.width - 20.0,
+        PLAYFIELD_W - dims.width - 20.0,
         35.0,
         30.0,
         wave_color,
     );
-
-    draw_auto_button(auto);
 
     if !wave_active {
         // Plain ASCII only throughout: the default font has no glyph for an em
@@ -1200,9 +1198,9 @@ pub fn draw_hud(h: &HudState) {
         } else {
             format!("SPACE  -  send wave {wave} of {total_waves}")
         };
-        text_center(
+        field_text_center(
             &prompt,
-            PLAYFIELD_H - 22.0,
+            PLAYFIELD_H - 26.0,
             30.0,
             Color::new(1.0, 0.9, 0.5, 1.0),
         );
@@ -1230,12 +1228,9 @@ pub struct HudState {
 // against the same layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn audio_button_rect(i: usize) -> Rect {
-    Rect::new(
-        AUDIO_BTN_X0 + i as f32 * (AUDIO_BTN + AUDIO_BTN_GAP),
-        AUDIO_BTN_Y,
-        AUDIO_BTN,
-        AUDIO_BTN,
-    )
+    let row = ctrl_row_rect(CTRL_ROW_AUDIO);
+    let w = (row.w - CTRL_GAP) * 0.5;
+    Rect::new(row.x + i as f32 * (w + CTRL_GAP), row.y, w, row.h)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1330,7 +1325,7 @@ fn draw_note_icon(c: Vec2, ink: Color) {
 // Rect of the quit button, which abandons the run and returns to the title.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn quit_button_rect() -> Rect {
-    Rect::new(QUIT_BTN_X, AUDIO_BTN_Y, QUIT_BTN_W, AUDIO_BTN)
+    ctrl_row_rect(CTRL_ROW_QUIT)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1383,7 +1378,7 @@ pub fn draw_quit_button(armed: bool) {
 // Rect of the auto-send toggle.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn auto_button_rect() -> Rect {
-    Rect::new(AUTO_BTN_X, AUDIO_BTN_Y, AUTO_BTN_W, AUDIO_BTN)
+    ctrl_row_rect(CTRL_ROW_AUTO)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1431,29 +1426,153 @@ pub fn draw_auto_button(on: bool) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// The usable width inside the shop column, once its margins are taken out.
+// ─────────────────────────────────────────────────────────────────────────────
+fn panel_inner_w() -> f32 {
+    SHOP_PANEL_W - PANEL_PAD * 2.0
+}
+
+fn panel_inner_x() -> f32 {
+    PLAYFIELD_W + PANEL_PAD
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Full-width rect of control row `row`, counted from the bottom of the panel up.
+//
+// Anchored to the bottom of the window rather than flowing after the tower
+// buttons, so adding a tower grows the column downward into empty space instead
+// of shoving the controls off the screen.
+// ─────────────────────────────────────────────────────────────────────────────
+fn ctrl_row_rect(row: usize) -> Rect {
+    Rect::new(
+        panel_inner_x(),
+        PLAYFIELD_H - CTRL_BOTTOM_PAD - CTRL_H - row as f32 * (CTRL_H + CTRL_GAP),
+        panel_inner_w(),
+        CTRL_H,
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rect of the pause toggle.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn pause_button_rect() -> Rect {
+    ctrl_row_rect(CTRL_ROW_PAUSE)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The pause toggle. Lit while the game is held, and it says RESUME then rather
+// than PAUSE — a held game should tell you the way out, not repeat the way in.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_pause_button(paused: bool) {
+    let r = pause_button_rect();
+    let hovered = r.contains(mouse_vec());
+
+    let (bg, edge, ink, label) = if paused {
+        (
+            Color::new(0.34, 0.28, 0.10, 0.96),
+            Color::new(1.0, 0.85, 0.45, 1.0),
+            Color::new(1.0, 0.92, 0.70, 1.0),
+            PAUSE_LABEL_HELD,
+        )
+    } else if hovered {
+        (
+            Color::new(0.22, 0.24, 0.28, 0.95),
+            Color::new(0.62, 0.64, 0.72, 0.95),
+            Color::new(0.90, 0.90, 0.94, 1.0),
+            PAUSE_LABEL,
+        )
+    } else {
+        (
+            Color::new(0.10, 0.11, 0.15, 0.78),
+            Color::new(0.46, 0.48, 0.56, 0.9),
+            Color::new(0.72, 0.72, 0.78, 1.0),
+            PAUSE_LABEL,
+        )
+    };
+
+    draw_rectangle(r.x, r.y, r.w, r.h, bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, if paused { 2.5 } else { 1.5 }, edge);
+
+    let dims = measure_text(label, None, 15, 1.0);
+    draw_text(
+        label,
+        r.x + (r.w - dims.width) * 0.5,
+        r.y + r.h * 0.5 + 5.0,
+        15.0,
+        ink,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The held-game overlay. Dims the field only, leaving the shop column lit so its
+// buttons still read as clickable — pause is for thinking about what to build.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_paused_overlay() {
+    draw_rectangle(
+        0.0,
+        0.0,
+        PLAYFIELD_W,
+        PLAYFIELD_H,
+        Color::new(0.0, 0.0, 0.0, 0.45),
+    );
+    field_text_center(
+        "PAUSED",
+        PLAYFIELD_H * 0.44,
+        64.0,
+        Color::new(1.0, 0.9, 0.5, 1.0),
+    );
+    field_text_center(
+        "the wave is held — build, upgrade, then resume",
+        PLAYFIELD_H * 0.44 + 44.0,
+        24.0,
+        Color::new(1.0, 1.0, 1.0, 0.75),
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Rect of shop button `i`, so main.rs can hit-test clicks against the same
 // layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn shop_button_rect(i: usize) -> Rect {
     Rect::new(
-        BTN_X0 + i as f32 * (BTN_W + BTN_GAP),
-        PLAYFIELD_H + 14.0,
-        BTN_W,
+        panel_inner_x(),
+        BTN_Y0 + i as f32 * (BTN_H + BTN_GAP),
+        panel_inner_w(),
         BTN_H,
     )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Bottom shop bar: one button per tower, dimmed when it can't be afforded and
-// outlined when it's the current selection.
+// The shop column: a heading, one button per tower, the placement hints, and the
+// control block at the foot.
+//
+// A button is dimmed when it can't be afforded and outlined when it's armed.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
     draw_rectangle(
+        PLAYFIELD_W,
         0.0,
+        SHOP_PANEL_W,
         PLAYFIELD_H,
-        screen_width(),
-        screen_height() - PLAYFIELD_H,
         Color::new(0.12, 0.12, 0.16, 1.0),
+    );
+    // A seam against the field, so the column reads as chrome rather than as
+    // more playfield the player might try to build on.
+    draw_line(
+        PLAYFIELD_W,
+        0.0,
+        PLAYFIELD_W,
+        PLAYFIELD_H,
+        2.0,
+        Color::new(0.30, 0.31, 0.38, 1.0),
+    );
+
+    draw_text(
+        "TOWERS",
+        panel_inner_x() + 2.0,
+        36.0,
+        24.0,
+        Color::new(0.80, 0.80, 0.88, 1.0),
     );
 
     for (i, kind) in TowerKind::ALL.iter().enumerate() {
@@ -1474,46 +1593,69 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
             draw_rectangle_lines(r.x, r.y, r.w, r.h, 3.0, Color::new(0.6, 1.0, 0.6, 1.0));
         }
 
-        // Colour swatch identifying the tower.
-        // The real tower artwork, drawn small, rather than a flat colour dot.
+        // The real tower artwork drawn small, rather than a flat colour dot.
         // Barrels and blades reach about 1.6x the radius, so the text column
         // starts clear of that rather than being overlapped by it.
-        let icon = vec2(r.x + 20.0, r.y + r.h * 0.5 - 1.0);
-        draw_tower_icon(*kind, icon, 12.0);
+        let icon = vec2(r.x + 22.0, r.y + r.h * 0.5);
+        draw_tower_icon(*kind, icon, 13.0);
         if !affordable {
             // Fade the icon toward the button background instead of redrawing
             // every layer of it at a lower alpha.
-            draw_circle(icon.x, icon.y, 19.0, Color::new(bg.r, bg.g, bg.b, 0.62));
+            draw_circle(icon.x, icon.y, 21.0, Color::new(bg.r, bg.g, bg.b, 0.62));
         }
 
         let text_alpha = if affordable { 1.0 } else { 0.45 };
+        let text_x = r.x + 46.0;
+        // Only the first nine get a number key, and the label should not claim
+        // one that does not exist.
+        let name = if i < crate::NUMBER_KEYS.len() {
+            format!("{}. {}", i + 1, kind.short_name())
+        } else {
+            kind.short_name().to_string()
+        };
         draw_text(
-            format!("{}. {}", i + 1, kind.short_name()),
-            r.x + 44.0,
-            r.y + 25.0,
-            16.0,
+            &name,
+            text_x,
+            r.y + 24.0,
+            17.0,
             Color::new(1.0, 1.0, 1.0, text_alpha),
         );
         draw_text(
-            format!("${}  {}", kind.cost(), kind.blurb()),
-            r.x + 44.0,
-            r.y + 46.0,
+            format!("${}", kind.cost()),
+            text_x,
+            r.y + 44.0,
+            15.0,
+            Color::new(1.0, 0.88, 0.45, text_alpha),
+        );
+        let dims = measure_text(kind.blurb(), None, 13, 1.0);
+        draw_text(
+            kind.blurb(),
+            r.x + r.w - dims.width - 8.0,
+            r.y + 44.0,
             13.0,
-            Color::new(0.85, 0.85, 0.9, text_alpha),
+            Color::new(0.80, 0.80, 0.88, text_alpha),
         );
     }
 
-    let dim = Color::new(0.70, 0.70, 0.78, 1.0);
-    let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
-    draw_text("click to place", hint_x, PLAYFIELD_H + 30.0, 14.0, dim);
-    draw_text("right-click cancels", hint_x, PLAYFIELD_H + 52.0, 14.0, dim);
-    draw_text(
+    // Hints, tucked between the last tower and the control block.
+    let dim = Color::new(0.62, 0.62, 0.70, 1.0);
+    let hint_y = ctrl_row_rect(CTRL_ROWS - 1).y - 62.0;
+    for (i, line) in [
+        "click to place",
+        "right-click cancels",
         "click a tower for stats",
-        hint_x,
-        PLAYFIELD_H + 74.0,
-        14.0,
-        dim,
-    );
+    ]
+    .iter()
+    .enumerate()
+    {
+        draw_text(
+            line,
+            panel_inner_x() + 2.0,
+            hint_y + i as f32 * 17.0,
+            13.0,
+            dim,
+        );
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2158,11 +2300,29 @@ pub fn draw_victory(route: &str, total_waves: u32, lives: u32, mode: usize) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Draw text horizontally centred on the window at baseline `y`.
+// Draw text horizontally centred on the window at baseline `y`. For the screens
+// that cover everything — the title, the picker, the end screens — where the
+// shop column isn't drawn and the whole window is the canvas.
 // ─────────────────────────────────────────────────────────────────────────────
 fn text_center(text: &str, y: f32, size: f32, color: Color) {
     let dims = measure_text(text, None, size as u16, 1.0);
-    draw_text(text, (screen_width() - dims.width) * 0.5, y, size, color);
+    draw_text(
+        text,
+        (PLAYFIELD_W + SHOP_PANEL_W - dims.width) * 0.5,
+        y,
+        size,
+        color,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Draw text centred on the *field* rather than the window, for anything shown
+// during play. Centring on the window would push it under the shop column and
+// leave it looking off to one side of the board it belongs to.
+// ─────────────────────────────────────────────────────────────────────────────
+fn field_text_center(text: &str, y: f32, size: f32, color: Color) {
+    let dims = measure_text(text, None, size as u16, 1.0);
+    draw_text(text, (PLAYFIELD_W - dims.width) * 0.5, y, size, color);
 }
 
 #[cfg(test)]
@@ -2172,49 +2332,79 @@ mod tests {
     /// The fixed window width the layout constants are tuned against.
     const WINDOW_W: f32 = PLAYFIELD_W;
 
+    /// Everything drawn in the shop column has to stay inside it.
+    fn inside_panel(r: Rect) -> bool {
+        r.x >= PLAYFIELD_W && r.x + r.w <= PLAYFIELD_W + SHOP_PANEL_W
+    }
+
     #[test]
-    fn every_shop_button_fits_inside_the_window() {
+    fn every_shop_button_sits_inside_the_column() {
         for i in 0..TowerKind::ALL.len() {
             let r = shop_button_rect(i);
+            assert!(inside_panel(r), "tower button {i} escapes the column");
             assert!(
-                r.x >= 0.0 && r.x + r.w <= WINDOW_W,
-                "shop button {i} runs off the window"
+                r.y >= 0.0 && r.y + r.h <= PLAYFIELD_H,
+                "tower button {i} runs off the window"
             );
         }
     }
 
     #[test]
-    fn shop_buttons_do_not_overlap() {
+    fn shop_buttons_stack_without_overlapping() {
         for i in 1..TowerKind::ALL.len() {
             let prev = shop_button_rect(i - 1);
             let cur = shop_button_rect(i);
             assert!(
-                cur.x >= prev.x + prev.w,
-                "shop buttons {} and {i} overlap",
+                cur.y >= prev.y + prev.h,
+                "tower buttons {} and {i} overlap",
                 i - 1
             );
         }
     }
 
     #[test]
-    fn the_hint_column_clears_the_last_shop_button() {
+    fn the_towers_clear_the_control_block_below_them() {
+        // The controls are anchored to the bottom of the window and the towers
+        // grow downward from the top, so this is the check that says how many
+        // more towers the column can still take.
         let last = shop_button_rect(TowerKind::ALL.len() - 1);
-        let hint_x = BTN_X0 + TowerKind::ALL.len() as f32 * (BTN_W + BTN_GAP);
+        let top_control = ctrl_row_rect(CTRL_ROWS - 1);
 
         assert!(
-            hint_x >= last.x + last.w,
-            "hint text overlaps the last shop button"
+            last.y + last.h < top_control.y,
+            "the tower buttons have grown into the controls"
         );
-        // Leave enough width for the longest hint string at its font size.
+        // Room left for the hint lines that sit between them.
         assert!(
-            hint_x <= WINDOW_W - 176.0,
-            "no room left for the hint column"
+            top_control.y - (last.y + last.h) >= 60.0,
+            "no room left between the last tower and the controls"
         );
     }
 
-    /// The dark strip along the top of the playfield, which the audio toggles
-    /// have to stay inside to read against a backing rather than the grass.
-    const HUD_STRIP_H: f32 = 52.0;
+    #[test]
+    fn every_control_row_sits_inside_the_column_and_the_window() {
+        for row in 0..CTRL_ROWS {
+            let r = ctrl_row_rect(row);
+            assert!(inside_panel(r), "control row {row} escapes the column");
+            assert!(
+                r.y >= 0.0 && r.y + r.h <= PLAYFIELD_H,
+                "control row {row} runs off the window"
+            );
+        }
+    }
+
+    #[test]
+    fn control_rows_do_not_overlap() {
+        for row in 1..CTRL_ROWS {
+            let lower = ctrl_row_rect(row - 1);
+            let upper = ctrl_row_rect(row);
+            assert!(
+                upper.y + upper.h <= lower.y,
+                "control rows {} and {row} overlap",
+                row - 1
+            );
+        }
+    }
 
     #[test]
     fn the_mode_row_fits_the_window_and_does_not_overlap() {
@@ -2263,53 +2453,9 @@ mod tests {
     }
 
     #[test]
-    fn the_audio_buttons_sit_inside_the_hud_strip() {
-        for i in 0..2 {
-            let r = audio_button_rect(i);
-            assert!(
-                r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H,
-                "button {i} overhangs"
-            );
-            assert!(r.x >= 0.0 && r.x + r.w <= WINDOW_W, "button {i} runs off");
-        }
-    }
-
-    #[test]
     fn the_audio_buttons_do_not_overlap_each_other() {
         let (sfx, music) = (audio_button_rect(0), audio_button_rect(1));
         assert!(music.x >= sfx.x + sfx.w, "the two toggles overlap");
-    }
-
-    #[test]
-    fn the_audio_buttons_clear_the_cash_readout() {
-        // The cash text starts at x=200 at size 30. Six digits of it is about
-        // 100px, and the buttons must not land on top of a rich player's total.
-        assert!(
-            audio_button_rect(0).x >= 310.0,
-            "audio buttons crowd the cash readout"
-        );
-    }
-
-    #[test]
-    fn the_quit_button_clears_the_audio_toggles() {
-        // They sit side by side in the same strip, and the quit button ends a
-        // run — it must not be reachable by a slip off the music toggle.
-        let music = audio_button_rect(1);
-        let quit = quit_button_rect();
-
-        assert!(
-            quit.x >= music.x + music.w,
-            "quit overlaps the audio toggles"
-        );
-        assert!(quit.x - (music.x + music.w) >= 8.0, "quit crowds them");
-    }
-
-    #[test]
-    fn the_quit_button_sits_inside_the_hud_strip() {
-        let r = quit_button_rect();
-        assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "quit overhangs");
-        // The wave counter is right-aligned; leave it its half of the strip.
-        assert!(r.x + r.w <= WINDOW_W * 0.6, "quit crowds the wave counter");
     }
 
     #[test]
@@ -2329,43 +2475,47 @@ mod tests {
     }
 
     #[test]
-    fn the_top_strip_buttons_never_overlap_each_other() {
-        // Audio, quit and auto all live in the same 52px strip and all take a
-        // click before the field does. Two overlapping would make which one
-        // fires depend on their order in the code rather than on what was hit.
+    fn no_two_panel_controls_overlap() {
+        // Audio, pause, auto and quit all share the block at the foot of the
+        // column, and all take a click before the field does. Two overlapping
+        // would make which one fires depend on their order in the code rather
+        // than on what was actually hit.
         let rects = [
             ("sfx", audio_button_rect(0)),
             ("music", audio_button_rect(1)),
-            ("quit", quit_button_rect()),
+            ("pause", pause_button_rect()),
             ("auto", auto_button_rect()),
+            ("quit", quit_button_rect()),
         ];
 
         for (i, (an, a)) in rects.iter().enumerate() {
             for (bn, b) in rects.iter().skip(i + 1) {
-                assert!(
-                    a.x + a.w <= b.x || b.x + b.w <= a.x,
-                    "the {an} and {bn} buttons overlap"
-                );
+                let apart =
+                    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+                assert!(apart, "the {an} and {bn} buttons overlap");
             }
         }
     }
 
     #[test]
-    fn the_auto_button_sits_inside_the_strip_clear_of_the_wave_counter() {
-        let r = auto_button_rect();
-        assert!(r.y >= 0.0 && r.y + r.h <= HUD_STRIP_H, "auto overhangs");
-        // "WAVE 25/25" is right-aligned at 30px, about 165px wide plus a 20px
-        // margin, so the counter owns roughly the last 185px of the strip.
-        assert!(
-            r.x + r.w <= WINDOW_W - 185.0,
-            "the auto button crowds the wave counter"
-        );
+    fn the_panel_controls_never_reach_into_the_field() {
+        // A click left of PLAYFIELD_W is a field click. Anything in this block
+        // straying over that line would place a tower as well as press itself.
+        for (name, r) in [
+            ("sfx", audio_button_rect(0)),
+            ("music", audio_button_rect(1)),
+            ("pause", pause_button_rect()),
+            ("auto", auto_button_rect()),
+            ("quit", quit_button_rect()),
+        ] {
+            assert!(r.x >= PLAYFIELD_W, "the {name} button overhangs the field");
+        }
     }
 
     #[test]
     fn the_auto_label_fits_its_button() {
         assert!(
-            AUTO_LABEL.len() as f32 * 8.0 + 12.0 <= AUTO_BTN_W,
+            AUTO_LABEL.len() as f32 * 8.0 + 12.0 <= ctrl_row_rect(CTRL_ROW_AUTO).w,
             "\"{AUTO_LABEL}\" overflows the auto button"
         );
     }

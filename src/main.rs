@@ -28,8 +28,9 @@ use path::Path;
 use projectile::{Projectile, ProjectileKind};
 use tower::{Pulse, SpikePile, Tower, TowerKind, PATH_CLEARANCE, SPIKE_SPACING, TOWER_RADIUS};
 
-/// Height of the playable field; the shop bar occupies the strip below it.
-pub const PLAYFIELD_H: f32 = 650.0;
+/// Height of the playable field. The shop is a column down the right now, not a
+/// bar along the bottom, so the field gets the whole window height.
+pub const PLAYFIELD_H: f32 = 740.0;
 /// Width of the playable field. Routes and scenery are authored against this
 /// fixed space rather than the live window size, so layout is reproducible
 /// without a graphics context.
@@ -41,8 +42,16 @@ pub const PLAYFIELD_H: f32 = 650.0;
 /// the end of the route.
 pub const PLAYFIELD_W: f32 = 1200.0;
 
-const WINDOW_W: i32 = PLAYFIELD_W as i32;
-const WINDOW_H: i32 = 740;
+/// Width of the shop column running down the right of the window.
+///
+/// A vertical column rather than a horizontal bar because a row of buttons runs
+/// out of window after five or six, while a column has room to spare — and the
+/// audio, auto, quit and pause controls can share it instead of competing with
+/// the wave counter for space in the top strip.
+pub const SHOP_PANEL_W: f32 = 220.0;
+
+const WINDOW_W: i32 = (PLAYFIELD_W + SHOP_PANEL_W) as i32;
+const WINDOW_H: i32 = PLAYFIELD_H as i32;
 /// Cash earned for each fruit destroyed outright — that is, one that had no
 /// children left to split into.
 ///
@@ -56,7 +65,7 @@ const CASH_PER_FRUIT_CLEARED: u32 = 1;
 /// types in play, and pick a route on the selection screen. One array so a sixth
 /// route or tower can't gain a card without gaining a key, which is exactly how
 /// route five ended up unreachable from the keyboard.
-const NUMBER_KEYS: [KeyCode; 5] = [
+pub const NUMBER_KEYS: [KeyCode; 5] = [
     KeyCode::Key1,
     KeyCode::Key2,
     KeyCode::Key3,
@@ -86,12 +95,10 @@ fn window_conf() -> Conf {
         window_width: WINDOW_W,
         window_height: WINDOW_H,
         high_dpi: true,
-        // Routes, scenery and the shop bar are authored against a fixed
-        // PLAYFIELD_W x PLAYFIELD_H space, but the HUD and hit-testing read the
-        // live window size. Resizing pulls those two apart: narrow the window
-        // and the shop buttons keep taking clicks from where they are no longer
-        // drawn, shorten it and the whole bar falls off the bottom, since
-        // PLAYFIELD_H never gives the strip back.
+        // Routes, scenery, the shop column and every hit-test are authored
+        // against a fixed PLAYFIELD_W x PLAYFIELD_H space plus the panel beside
+        // it. Resizing would pull the drawing and the hit-testing apart, so the
+        // window is pinned to exactly what the layout was built for.
         window_resizable: false,
         ..Default::default()
     }
@@ -160,6 +167,9 @@ struct Game {
     /// Seconds until the next wave sends itself. Only counts down while
     /// `auto_wave` is on and no wave is walking.
     auto_timer: f32,
+    /// Whether the run is held. Input keeps working while it is — the point of
+    /// pausing is to look at the board and spend money, not to stop doing so.
+    paused: bool,
     audio: Audio,
 }
 
@@ -197,6 +207,7 @@ impl Game {
             quit_armed: 0.0,
             auto_wave: false,
             auto_timer: AUTO_WAVE_DELAY,
+            paused: false,
             audio,
         }
     }
@@ -241,6 +252,7 @@ impl Game {
         self.selected_tower = None;
         self.quit_armed = 0.0;
         self.next_lane = 0;
+        self.paused = false;
         // The auto-send *setting* survives — it is a preference, not run state —
         // but its countdown restarts, so a fresh run always gets the full gap
         // before wave one rather than inheriting a part-spent timer.
@@ -369,6 +381,14 @@ impl Game {
             return;
         }
 
+        // Held. Input above this line already ran, so towers can still be
+        // bought, upgraded and sold while the wave stands still — that is what
+        // pausing is for. Nothing below advances: not the spawn clock, not
+        // cooldowns, not the auto-send timer.
+        if self.paused {
+            return;
+        }
+
         if self.quit_armed > 0.0 {
             self.quit_armed -= dt;
         }
@@ -464,7 +484,10 @@ impl Game {
                 self.auto_wave = !self.auto_wave;
                 self.auto_timer = AUTO_WAVE_DELAY;
                 self.audio.play_place();
-            } else if m.y >= PLAYFIELD_H {
+            } else if render::pause_button_rect().contains(m) {
+                self.paused = !self.paused;
+                self.audio.play_place();
+            } else if m.x >= PLAYFIELD_W {
                 self.click_shop(m);
             } else if !self.click_tower_panel(m) {
                 // Only treat it as a field click if the panel didn't take it.
@@ -629,7 +652,7 @@ impl Game {
             return false;
         }
         if p.x < TOWER_RADIUS
-            || p.x > screen_width() - TOWER_RADIUS
+            || p.x > PLAYFIELD_W - TOWER_RADIUS
             || p.y < TOWER_RADIUS
             || p.y > PLAYFIELD_H - TOWER_RADIUS
         {
@@ -1087,7 +1110,7 @@ impl Game {
                 // Placement preview follows the cursor while a tower is armed.
                 if let Some(kind) = self.selected {
                     let m = mouse_vec();
-                    if m.y < PLAYFIELD_H {
+                    if m.x < PLAYFIELD_W {
                         render::draw_ghost(m, kind, self.placement_valid(m, kind));
                     }
                 }
@@ -1099,7 +1122,12 @@ impl Game {
         // is drawn last for the same reason: the tower panel can float under it.
         render::draw_audio_buttons(self.audio.sfx_muted(), self.audio.music_muted());
         if self.state == State::Playing {
+            render::draw_pause_button(self.paused);
+            render::draw_auto_button(self.auto_wave);
             render::draw_quit_button(self.quit_armed > 0.0);
+            if self.paused {
+                render::draw_paused_overlay();
+            }
         }
     }
 }
@@ -1229,7 +1257,7 @@ fn mouse_vec() -> Vec2 {
 // that never hit anything.
 // ─────────────────────────────────────────────────────────────────────────────
 fn off_field(p: Vec2) -> bool {
-    p.x < -50.0 || p.x > screen_width() + 50.0 || p.y < -50.0 || p.y > PLAYFIELD_H + 50.0
+    p.x < -50.0 || p.x > PLAYFIELD_W + 50.0 || p.y < -50.0 || p.y > PLAYFIELD_H + 50.0
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
