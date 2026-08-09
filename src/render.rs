@@ -67,11 +67,31 @@ const PAUSE_LABEL_HELD: &str = "RESUME";
 /// falls out of how many routes there are rather than being fixed — at the old
 /// fixed 220px a fifth route ran 164px off the side of the window, and two rows
 /// don't fit under the title.
-const CARD_H: f32 = 210.0;
-const CARD_GAP: f32 = 12.0;
-const CARD_Y: f32 = 296.0;
-/// Space left either side of the row of cards.
-const CARD_MARGIN: f32 = 14.0;
+const CARD_H: f32 = 200.0;
+const CARD_GAP: f32 = 14.0;
+const CARD_Y: f32 = 248.0;
+/// Space left either side of a row of cards.
+const CARD_MARGIN: f32 = 20.0;
+/// Cards per row. Two rows rather than one: a single row of seven left each card
+/// too narrow to read its own name, and the window is wide but not that wide.
+const CARDS_PER_ROW: usize = 4;
+
+/// Y of the bottom edge of the last row of cards.
+fn card_rows_bottom() -> f32 {
+    let rows = card_count().div_ceil(CARDS_PER_ROW) as f32;
+    CARD_Y + rows * CARD_H + (rows - 1.0) * CARD_GAP
+}
+
+/// How many cards the picker shows: one per route, plus the random one.
+pub fn card_count() -> usize {
+    TRACKS.len() + 1
+}
+
+/// Index of the card that picks a route at random — always the last, so adding a
+/// route never moves it out from under the player's finger.
+pub fn random_card_index() -> usize {
+    TRACKS.len()
+}
 
 /// The running build's version, shown in the corner of the title screen.
 ///
@@ -86,7 +106,7 @@ const VERSION_LABEL: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 const MODE_BTN_W: f32 = 196.0;
 const MODE_BTN_H: f32 = 58.0;
 const MODE_BTN_GAP: f32 = 12.0;
-const MODE_BTN_Y: f32 = 220.0;
+const MODE_BTN_Y: f32 = 172.0;
 /// The coordinate space routes are authored in, used to scale the previews.
 const AUTHOR_W: f32 = PLAYFIELD_W;
 const AUTHOR_H: f32 = PLAYFIELD_H;
@@ -905,6 +925,27 @@ fn draw_tower_body(kind: TowerKind, pos: Vec2, angle: f32, r: f32) {
             }
             draw_circle(x, y, r * 0.30, Color::new(0.72, 0.90, 1.0, 1.0));
             draw_circle(x - r * 0.08, y - r * 0.08, r * 0.13, WHITE);
+        }
+
+        TowerKind::TripleSeeder => {
+            // Three barrels fanned around the aim, so what the tower does is
+            // legible from the board rather than only from its panel.
+            let wood = Color::new(0.30, 0.22, 0.13, 1.0);
+            for spread in [-0.42_f32, 0.0, 0.42] {
+                let a = angle + spread;
+                let d = vec2(a.cos(), a.sin());
+                let tip = pos + d * (r + r * 0.46);
+                draw_line(x, y, tip.x, tip.y, r * 0.26, wood);
+                draw_circle(tip.x, tip.y, r * 0.13, Color::new(0.52, 0.40, 0.24, 1.0));
+            }
+            // A collar covering the roots, so the three read as one machine.
+            draw_circle(x, y, r * 0.46, Color::new(0.26, 0.38, 0.28, 1.0));
+            draw_circle(
+                x - r * 0.08,
+                y - r * 0.10,
+                r * 0.28,
+                Color::new(0.44, 0.60, 0.46, 1.0),
+            );
         }
 
         TowerKind::SpikeLayer => {
@@ -1755,6 +1796,12 @@ fn draw_tower_stats(t: &Tower, panel: Rect) {
             ("Dropped", t.shots_fired.to_string()),
             ("Kills", t.kills.to_string()),
         ],
+        TowerKind::TripleSeeder => [
+            ("Range", format!("{:.0}", t.range())),
+            ("Targets", t.shots().to_string()),
+            ("Volleys", t.shots_fired.to_string()),
+            ("Kills", t.kills.to_string()),
+        ],
         TowerKind::SeedShooter => [
             ("Range", format!("{:.0}", t.range())),
             ("Rate", format!("{:.2}s", t.fire_cooldown())),
@@ -1916,11 +1963,21 @@ pub fn draw_menu() {
 // and screen_width() needs a live graphics context.
 pub fn track_card_rect(i: usize) -> Rect {
     let w = card_width();
-    let n = TRACKS.len() as f32;
-    let total = n * w + (n - 1.0) * CARD_GAP;
+    let row = i / CARDS_PER_ROW;
+    let col = i % CARDS_PER_ROW;
+
+    // The last row is usually short, so it gets centred on its own count rather
+    // than left-aligned under a full row above it.
+    let in_row = (card_count() - row * CARDS_PER_ROW).min(CARDS_PER_ROW) as f32;
+    let total = in_row * w + (in_row - 1.0) * CARD_GAP;
     let x0 = (PLAYFIELD_W - total) * 0.5;
 
-    Rect::new(x0 + i as f32 * (w + CARD_GAP), CARD_Y, w, CARD_H)
+    Rect::new(
+        x0 + col as f32 * (w + CARD_GAP),
+        CARD_Y + row as f32 * (CARD_H + CARD_GAP),
+        w,
+        CARD_H,
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1928,7 +1985,7 @@ pub fn track_card_rect(i: usize) -> Rect {
 // margins and the gaps between cards are taken out.
 // ─────────────────────────────────────────────────────────────────────────────
 fn card_width() -> f32 {
-    let n = TRACKS.len() as f32;
+    let n = CARDS_PER_ROW as f32;
     (PLAYFIELD_W - 2.0 * CARD_MARGIN - (n - 1.0) * CARD_GAP) / n
 }
 
@@ -2050,11 +2107,15 @@ pub fn draw_track_select(selected_mode: usize) {
         Color::new(0.0, 0.0, 0.0, 0.62),
     );
 
-    text_center("CHOOSE YOUR ROUTE", 138.0, 62.0, WHITE);
+    // The screen's vertical rhythm, top to bottom: title, subtitle, difficulty
+    // caption, the difficulty row at MODE_BTN_Y, then the card rows at CARD_Y.
+    // Set explicitly rather than nudged, because two rows of cards leave far
+    // less slack above them than one did.
+    text_center("CHOOSE YOUR ROUTE", 88.0, 56.0, WHITE);
     text_center(
         "Longer routes give your towers more time to shoot",
-        182.0,
-        24.0,
+        126.0,
+        23.0,
         Color::new(1.0, 1.0, 1.0, 0.7),
     );
     // Spells out that this applies to any route, because each card carries its
@@ -2062,7 +2123,7 @@ pub fn draw_track_select(selected_mode: usize) {
     // screen: how punishing the track is, versus how much you start with.
     text_center(
         "DIFFICULTY  -  applies to whichever route you pick",
-        208.0,
+        156.0,
         17.0,
         Color::new(1.0, 1.0, 1.0, 0.55),
     );
@@ -2139,9 +2200,11 @@ pub fn draw_track_select(selected_mode: usize) {
         );
     }
 
+    draw_random_card();
+
     text_center(
-        &format!("click a route, or press 1-{}", TRACKS.len()),
-        CARD_Y + CARD_H + 48.0,
+        &format!("click a route, or press 1-{}", card_count()),
+        card_rows_bottom() + 34.0,
         26.0,
         Color::new(1.0, 0.85, 0.4, 1.0),
     );
@@ -2210,6 +2273,94 @@ fn draw_track_preview(lanes: &[&[(f32, f32)]], card: Rect, palette: &Palette) {
             draw_circle(e.x, e.y, 5.0, Color::new(0.85, 0.25, 0.25, 0.9));
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The card that starts a run on a route chosen at random.
+//
+// Deliberately looks like a route card rather than a button, because that is
+// what it is: another way to answer the same question. It shows every route's
+// outline layered faintly on top of itself, which is both a preview of "any of
+// these" and the only honest picture of a choice not yet made.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_random_card() {
+    let r = track_card_rect(random_card_index());
+    let hovered = r.contains(mouse_vec());
+
+    let bg = if hovered {
+        Color::new(0.26, 0.24, 0.30, 1.0)
+    } else {
+        Color::new(0.17, 0.16, 0.22, 1.0)
+    };
+    draw_rectangle(r.x, r.y, r.w, r.h, bg);
+    draw_rectangle_lines(
+        r.x,
+        r.y,
+        r.w,
+        r.h,
+        if hovered { 3.0 } else { 1.5 },
+        if hovered {
+            Color::new(0.85, 0.80, 1.0, 1.0)
+        } else {
+            Color::new(0.42, 0.40, 0.52, 1.0)
+        },
+    );
+
+    draw_text(
+        format!("{}. Surprise Me", random_card_index() + 1),
+        r.x + 12.0,
+        r.y + 26.0,
+        19.0,
+        WHITE,
+    );
+
+    // Every route's shape, stacked and faint.
+    let inner_x = r.x + 10.0;
+    let inner_y = r.y + 40.0;
+    let inner_w = r.w - 20.0;
+    let inner_h = 130.0;
+    draw_rectangle(
+        inner_x,
+        inner_y,
+        inner_w,
+        inner_h,
+        Color::new(0.12, 0.12, 0.17, 1.0),
+    );
+
+    let scale = (inner_w / PLAYFIELD_W).min(inner_h / PLAYFIELD_H);
+    for track in TRACKS.iter() {
+        for lane in track.lanes {
+            for w in lane.windows(2) {
+                let a = vec2(inner_x + w[0].0 * scale, inner_y + w[0].1 * scale);
+                let b = vec2(inner_x + w[1].0 * scale, inner_y + w[1].1 * scale);
+                draw_line(a.x, a.y, b.x, b.y, 3.0, Color::new(0.62, 0.55, 0.80, 0.30));
+            }
+        }
+    }
+
+    draw_text(
+        "one of the six, picked for you",
+        r.x + 12.0,
+        r.y + 168.0,
+        15.0,
+        Color::new(0.72, 0.72, 0.80, 1.0),
+    );
+    draw_text(
+        "Random",
+        r.x + 12.0,
+        r.y + 190.0,
+        19.0,
+        Color::new(0.80, 0.74, 1.0, 1.0),
+    );
+    let txt = format!("{} routes", TRACKS.len());
+    let dims = measure_text(&txt, None, 17, 1.0);
+    draw_text(
+        &txt,
+        r.x + r.w - dims.width - 12.0,
+        r.y + 190.0,
+        17.0,
+        Color::new(0.75, 0.75, 0.82, 1.0),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2431,6 +2582,113 @@ mod tests {
         assert!(
             row.y + row.h <= CARD_Y,
             "the difficulty row overlaps the route cards"
+        );
+    }
+
+    #[test]
+    fn route_cards_never_overlap_and_stay_on_screen() {
+        let win_w = PLAYFIELD_W + SHOP_PANEL_W;
+        for i in 0..card_count() {
+            let a = track_card_rect(i);
+            assert!(
+                a.x >= 0.0 && a.x + a.w <= win_w,
+                "card {i} runs off the side"
+            );
+            assert!(
+                a.y >= 0.0 && a.y + a.h <= PLAYFIELD_H,
+                "card {i} runs off the bottom"
+            );
+
+            for j in (i + 1)..card_count() {
+                let b = track_card_rect(j);
+                let apart =
+                    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+                assert!(apart, "cards {i} and {j} overlap");
+            }
+        }
+    }
+
+    #[test]
+    fn no_route_card_reaches_under_the_audio_toggles() {
+        // The audio toggles are drawn on every screen, including this one, and
+        // the panel controls are hit-tested before anything else. A card sliding
+        // under one would silently lose its clicks to it.
+        let sfx = audio_button_rect(0);
+        for i in 0..card_count() {
+            let c = track_card_rect(i);
+            let apart = c.x + c.w <= sfx.x || c.y + c.h <= sfx.y || sfx.y + sfx.h <= c.y;
+            assert!(apart, "card {i} reaches under the audio toggles");
+        }
+    }
+
+    #[test]
+    fn the_cards_use_two_rows() {
+        // The point of the change: one row of seven left each card too narrow to
+        // read. If a route is ever removed this should fail rather than silently
+        // going back to a single cramped row.
+        assert!(
+            card_count() > CARDS_PER_ROW,
+            "the cards fit on one row again"
+        );
+        assert_eq!(card_count().div_ceil(CARDS_PER_ROW), 2);
+    }
+
+    #[test]
+    fn the_picker_heading_block_does_not_collide() {
+        // Three lines of heading, then the difficulty row, then two rows of
+        // cards. Two rows leave far less slack above them than one did, and
+        // every one of these overlapped something at least once while the
+        // layout was being moved.
+        const TITLE_BASELINE: f32 = 88.0;
+        const SUBTITLE_BASELINE: f32 = 126.0;
+        const CAPTION_BASELINE: f32 = 156.0;
+
+        assert!(
+            SUBTITLE_BASELINE > TITLE_BASELINE,
+            "subtitle sits on the title"
+        );
+        assert!(
+            CAPTION_BASELINE > SUBTITLE_BASELINE,
+            "the difficulty caption sits on the subtitle"
+        );
+        assert!(
+            mode_button_rect(0).y >= CAPTION_BASELINE,
+            "the difficulty row sits on its own caption"
+        );
+    }
+
+    #[test]
+    fn the_mode_row_clears_the_first_row_of_cards() {
+        for i in 0..MODES.len() {
+            let m = mode_button_rect(i);
+            assert!(m.y + m.h <= CARD_Y, "the difficulty row overlaps the cards");
+        }
+    }
+
+    #[test]
+    fn the_hint_below_the_cards_still_fits_the_window() {
+        assert!(
+            card_rows_bottom() + 34.0 <= PLAYFIELD_H - 8.0,
+            "the 'click a route' line falls off the bottom"
+        );
+    }
+
+    #[test]
+    fn the_random_card_is_last_and_is_not_a_route() {
+        // It must sit past every route so adding one never shifts it, and it
+        // must not be mistakable for an index into TRACKS.
+        assert_eq!(random_card_index(), TRACKS.len());
+        assert_eq!(card_count(), TRACKS.len() + 1);
+    }
+
+    #[test]
+    fn every_card_can_be_reached_from_the_keyboard() {
+        // Route five was once unreachable because the cards outgrew the keys.
+        assert!(
+            card_count() <= crate::NUMBER_KEYS.len(),
+            "{} cards but only {} number keys",
+            card_count(),
+            crate::NUMBER_KEYS.len()
         );
     }
 

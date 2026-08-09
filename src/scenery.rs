@@ -119,6 +119,9 @@ enum Theme {
     Grove,
     /// The two-entrance route: a cold upland with two ways down into it.
     Highland,
+    /// The long wandering route: open, bright, and easy on the eye, to match
+    /// the gentlest walk in the game.
+    Meadow,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +134,8 @@ fn theme(track: usize) -> Theme {
         1 => Theme::Market,
         2 => Theme::Farm,
         3 => Theme::Grove,
-        _ => Theme::Highland,
+        4 => Theme::Highland,
+        _ => Theme::Meadow,
     }
 }
 
@@ -172,6 +176,15 @@ pub fn palette(track: usize) -> Palette {
             track_border: Color::new(0.31, 0.23, 0.15, 1.0),
             track_dirt: Color::new(0.50, 0.39, 0.26, 1.0),
             foliage: Color::new(0.19, 0.38, 0.22, 1.0),
+        },
+        // Bright open meadow. The lightest palette of the six, so the longest
+        // and friendliest route also reads as the friendliest at a glance.
+        Theme::Meadow => Palette {
+            grass_top: Color::new(0.46, 0.60, 0.32, 1.0),
+            grass_bottom: Color::new(0.33, 0.48, 0.26, 1.0),
+            track_border: Color::new(0.44, 0.34, 0.21, 1.0),
+            track_dirt: Color::new(0.68, 0.57, 0.38, 1.0),
+            foliage: Color::new(0.34, 0.56, 0.28, 1.0),
         },
         // Cold, thin upland grass over pale stone. Deliberately the bluest of
         // the five: the two-lane route asks the player to watch two places at
@@ -237,6 +250,18 @@ fn prop_mix(theme: Theme) -> (&'static [PropKind], usize) {
                 PropKind::Rock,
             ],
             62,
+        ),
+        Theme::Meadow => (
+            &[
+                PropKind::Flowers,
+                PropKind::Flowers,
+                PropKind::Bush,
+                PropKind::Tree,
+                PropKind::Tree,
+                PropKind::Pond,
+                PropKind::Rock,
+            ],
+            48,
         ),
         // Rocky and sparse. Two lanes leave less open ground to build on, so
         // the scatter is thinner than anywhere else — scenery never blocks

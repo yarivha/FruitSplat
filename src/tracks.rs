@@ -78,7 +78,7 @@ impl TrackDef {
 }
 
 /// Every route offered at the start of a game.
-pub const TRACKS: [TrackDef; 5] = [
+pub const TRACKS: [TrackDef; 6] = [
     TrackDef {
         name: "Orchard Snake",
         blurb: "a steady weave",
@@ -198,6 +198,38 @@ pub const TRACKS: [TrackDef; 5] = [
                 (1240.0, 430.0),
             ],
         ],
+    },
+    // ─────────────────────────────────────────────────────────────────────────
+    // The longest route in the game, and so the most forgiving: every extra
+    // pixel of track is another moment a fruit spends inside somebody's range.
+    // Nothing else about it is unusual — length is doing all the work, which is
+    // exactly what makes it the one to learn on.
+    // ─────────────────────────────────────────────────────────────────────────
+    TrackDef {
+        name: "Meander",
+        blurb: "the long way round",
+        difficulty: "Gentle",
+        waves: 25,
+        lanes: &[&[
+            (-40.0, 130.0),
+            (150.0, 130.0),
+            (150.0, 300.0),
+            (60.0, 300.0),
+            (60.0, 470.0),
+            (240.0, 470.0),
+            (240.0, 620.0),
+            (420.0, 620.0),
+            (420.0, 180.0),
+            (600.0, 180.0),
+            (600.0, 540.0),
+            (760.0, 540.0),
+            (760.0, 240.0),
+            (900.0, 240.0),
+            (900.0, 620.0),
+            (1060.0, 620.0),
+            (1060.0, 340.0),
+            (1240.0, 340.0),
+        ]],
     },
 ];
 
@@ -376,22 +408,38 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_hard_route_is_the_shortest_and_the_gentle_one_the_longest() {
-        let hard = TRACKS.iter().find(|t| t.difficulty == "Hard").unwrap();
-        let gentle = TRACKS.iter().find(|t| t.difficulty == "Gentle").unwrap();
+    /// The route with the shortest and the longest walk, by name.
+    fn extremes() -> (&'static TrackDef, &'static TrackDef) {
+        let by_len = |a: &&TrackDef, b: &&TrackDef| a.length().total_cmp(&b.length());
+        (
+            TRACKS.iter().min_by(by_len).unwrap(),
+            TRACKS.iter().max_by(by_len).unwrap(),
+        )
+    }
 
-        for t in &TRACKS {
-            assert!(
-                hard.length() <= t.length(),
-                "{} is shorter than Hard",
-                t.name
-            );
-            assert!(
-                gentle.length() >= t.length(),
-                "{} is longer than Gentle",
-                t.name
-            );
+    #[test]
+    fn the_shortest_route_is_labelled_hard_and_the_longest_gentle() {
+        // Asked this way round rather than "the Gentle route is the longest",
+        // because more than one route can share a label — there are two Gentle
+        // ones now. What has to hold is that the extremes are labelled honestly.
+        let (shortest, longest) = extremes();
+        assert_eq!(shortest.difficulty, "Hard", "{} is shortest", shortest.name);
+        assert_eq!(longest.difficulty, "Gentle", "{} is longest", longest.name);
+    }
+
+    #[test]
+    fn no_route_labelled_gentle_is_shorter_than_one_labelled_hard() {
+        // The weaker claim that survives duplicate labels: whatever carries a
+        // label has to be on the right side of everything carrying the other.
+        for gentle in TRACKS.iter().filter(|t| t.difficulty == "Gentle") {
+            for hard in TRACKS.iter().filter(|t| t.difficulty == "Hard") {
+                assert!(
+                    gentle.length() > hard.length(),
+                    "{} (Gentle) is shorter than {} (Hard)",
+                    gentle.name,
+                    hard.name
+                );
+            }
         }
     }
 
@@ -431,12 +479,17 @@ mod tests {
 
     #[test]
     fn harder_routes_are_shorter_runs() {
-        let hard = TRACKS.iter().find(|t| t.difficulty == "Hard").unwrap();
-        let gentle = TRACKS.iter().find(|t| t.difficulty == "Gentle").unwrap();
-
-        for t in &TRACKS {
-            assert!(hard.waves <= t.waves, "{} is shorter than Hard", t.name);
-            assert!(gentle.waves >= t.waves, "{} is longer than Gentle", t.name);
+        // Same shape of claim as the length one: a Hard route must not outlast a
+        // Gentle one, however many routes carry either label.
+        for gentle in TRACKS.iter().filter(|t| t.difficulty == "Gentle") {
+            for hard in TRACKS.iter().filter(|t| t.difficulty == "Hard") {
+                assert!(
+                    hard.waves <= gentle.waves,
+                    "{} (Hard) runs longer than {} (Gentle)",
+                    hard.name,
+                    gentle.name
+                );
+            }
         }
     }
 

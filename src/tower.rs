@@ -24,7 +24,7 @@ pub const MAX_LEVEL: u8 = 3;
 /// Fraction of everything invested that selling a tower gives back.
 const SELL_REFUND: f32 = 0.6;
 
-/// The four tower types available in the shop.
+/// The tower types available in the shop.
 #[derive(Clone, Copy, PartialEq)]
 pub enum TowerKind {
     SeedShooter,
@@ -32,16 +32,19 @@ pub enum TowerKind {
     Freezer,
     KnifeThrower,
     SpikeLayer,
+    /// Three seeds at three separate fruit, every shot.
+    TripleSeeder,
 }
 
 impl TowerKind {
     /// Shop order, also the order of the 1–5 hotkeys.
-    pub const ALL: [TowerKind; 5] = [
+    pub const ALL: [TowerKind; 6] = [
         TowerKind::SeedShooter,
         TowerKind::Blender,
         TowerKind::Freezer,
         TowerKind::KnifeThrower,
         TowerKind::SpikeLayer,
+        TowerKind::TripleSeeder,
     ];
 
     pub fn name(&self) -> &'static str {
@@ -51,6 +54,7 @@ impl TowerKind {
             TowerKind::Freezer => "Freezer",
             TowerKind::KnifeThrower => "Knife Thrower",
             TowerKind::SpikeLayer => "Spike Layer",
+            TowerKind::TripleSeeder => "Triple Seeder",
         }
     }
 
@@ -65,6 +69,7 @@ impl TowerKind {
             TowerKind::Freezer => "Freezer",
             TowerKind::KnifeThrower => "Knives",
             TowerKind::SpikeLayer => "Spikes",
+            TowerKind::TripleSeeder => "Triple",
         }
     }
 
@@ -76,6 +81,10 @@ impl TowerKind {
             TowerKind::Freezer => 140,
             TowerKind::KnifeThrower => 130,
             TowerKind::SpikeLayer => 150,
+            // Dearer than anything else. Three shots a volley is the answer to
+            // a crowd, and being able to buy that answer early would flatten
+            // the whole reason the Blender and the Knife Thrower differ.
+            TowerKind::TripleSeeder => 260,
         }
     }
 
@@ -89,6 +98,7 @@ impl TowerKind {
             TowerKind::Freezer => [100, 200],
             TowerKind::KnifeThrower => [110, 220],
             TowerKind::SpikeLayer => [130, 260],
+            TowerKind::TripleSeeder => [190, 340],
         };
         match level {
             1 => Some(costs[0]),
@@ -112,6 +122,8 @@ impl TowerKind {
             (TowerKind::KnifeThrower, 2) => "deepest pierce",
             (TowerKind::SpikeLayer, 1) => "bigger piles, faster",
             (TowerKind::SpikeLayer, 2) => "biggest piles",
+            (TowerKind::TripleSeeder, 1) => "faster, longer reach",
+            (TowerKind::TripleSeeder, 2) => "four at once",
             _ => "fully upgraded",
         }
     }
@@ -124,6 +136,7 @@ impl TowerKind {
             TowerKind::Freezer => [120.0, 142.0, 165.0],
             TowerKind::KnifeThrower => [145.0, 165.0, 185.0],
             TowerKind::SpikeLayer => [120.0, 138.0, 158.0],
+            TowerKind::TripleSeeder => [150.0, 172.0, 195.0],
         };
         table[level_index(level)]
     }
@@ -137,6 +150,9 @@ impl TowerKind {
             TowerKind::KnifeThrower => [0.75, 0.60, 0.46],
             // For the Spike Layer this is the gap between dropping piles.
             TowerKind::SpikeLayer => [2.20, 1.70, 1.30],
+            // Slower per volley than a Seed Shooter, but each volley is worth
+            // three of its shots.
+            TowerKind::TripleSeeder => [0.70, 0.58, 0.48],
         };
         table[level_index(level)]
     }
@@ -189,6 +205,9 @@ impl TowerKind {
         match self {
             // The Lv3 Seed Shooter splits its fire across the two lead fruit.
             TowerKind::SeedShooter => [1, 1, 2][level_index(level)],
+            // The Triple Seeder's whole point: three separate fruit engaged at
+            // once from the first level, four once fully upgraded.
+            TowerKind::TripleSeeder => [3, 3, 4][level_index(level)],
             _ => 1,
         }
     }
@@ -217,6 +236,7 @@ impl TowerKind {
             TowerKind::Freezer => Color::new(0.55, 0.80, 0.90, 1.0),
             TowerKind::KnifeThrower => Color::new(0.42, 0.47, 0.60, 1.0),
             TowerKind::SpikeLayer => Color::new(0.60, 0.34, 0.28, 1.0),
+            TowerKind::TripleSeeder => Color::new(0.36, 0.52, 0.38, 1.0),
         }
     }
 
@@ -229,6 +249,7 @@ impl TowerKind {
             TowerKind::Freezer => "slows",
             TowerKind::KnifeThrower => "pierces",
             TowerKind::SpikeLayer => "spikes",
+            TowerKind::TripleSeeder => "3 at once",
         }
     }
 }
@@ -478,17 +499,23 @@ mod tests {
 
     #[test]
     fn only_the_spike_layer_lays_spikes() {
+        // Driven off ALL rather than a hand-written list, so a tower added
+        // later is covered without anyone remembering to add it here.
         for level in 1..=MAX_LEVEL {
-            assert!(TowerKind::SpikeLayer.spike_charges(level) > 0);
-            assert!(TowerKind::SpikeLayer.max_piles(level) > 0);
-            for kind in [
-                TowerKind::SeedShooter,
-                TowerKind::Blender,
-                TowerKind::Freezer,
-                TowerKind::KnifeThrower,
-            ] {
-                assert_eq!(kind.spike_charges(level), 0);
-                assert_eq!(kind.max_piles(level), 0);
+            for kind in TowerKind::ALL {
+                let lays = kind == TowerKind::SpikeLayer;
+                assert_eq!(
+                    kind.spike_charges(level) > 0,
+                    lays,
+                    "{} spike charges at Lv{level}",
+                    kind.name()
+                );
+                assert_eq!(
+                    kind.max_piles(level) > 0,
+                    lays,
+                    "{} pile allowance at Lv{level}",
+                    kind.name()
+                );
             }
         }
     }
@@ -608,9 +635,41 @@ mod tests {
     }
 
     #[test]
-    fn only_the_seed_shooter_ever_fires_twice() {
+    fn only_the_multi_target_towers_engage_more_than_one_fruit() {
+        // The Seed Shooter earns a second target at Lv3; the Triple Seeder is
+        // built around engaging several from the start and is priced for it.
+        // Everything else is single-target at every level, and driving this off
+        // ALL means a new tower cannot quietly join them.
+        assert_eq!(TowerKind::SeedShooter.shots(1), 1);
         assert_eq!(TowerKind::SeedShooter.shots(3), 2);
-        assert_eq!(TowerKind::Blender.shots(3), 1);
-        assert_eq!(TowerKind::Freezer.shots(3), 1);
+        assert_eq!(TowerKind::TripleSeeder.shots(1), 3);
+        assert_eq!(TowerKind::TripleSeeder.shots(3), 4);
+
+        let multi = [TowerKind::SeedShooter, TowerKind::TripleSeeder];
+        for kind in TowerKind::ALL {
+            if multi.contains(&kind) {
+                continue;
+            }
+            for level in 1..=MAX_LEVEL {
+                assert_eq!(kind.shots(level), 1, "{} at Lv{level}", kind.name());
+            }
+        }
+    }
+
+    #[test]
+    fn the_triple_seeder_costs_more_than_anything_it_outguns() {
+        // It answers a crowd on its own. Being able to buy that early would
+        // flatten the reason the Blender and the Knife Thrower differ, so it
+        // has to be the dearest thing in the shop.
+        for kind in TowerKind::ALL {
+            if kind == TowerKind::TripleSeeder {
+                continue;
+            }
+            assert!(
+                TowerKind::TripleSeeder.cost() > kind.cost(),
+                "the Triple Seeder is not dearer than the {}",
+                kind.name()
+            );
+        }
     }
 }

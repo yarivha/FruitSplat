@@ -65,13 +65,27 @@ const CASH_PER_FRUIT_CLEARED: u32 = 1;
 /// types in play, and pick a route on the selection screen. One array so a sixth
 /// route or tower can't gain a card without gaining a key, which is exactly how
 /// route five ended up unreachable from the keyboard.
-pub const NUMBER_KEYS: [KeyCode; 5] = [
+pub const NUMBER_KEYS: [KeyCode; 7] = [
     KeyCode::Key1,
     KeyCode::Key2,
     KeyCode::Key3,
     KeyCode::Key4,
     KeyCode::Key5,
+    KeyCode::Key6,
+    KeyCode::Key7,
 ];
+/// Where the screenshot demo puts one of each tower. One entry per TowerKind,
+/// held to that by a test — it used to be an assert inside the demo, which meant
+/// adding a tower broke screenshot mode and nothing said so until someone ran it.
+const DEMO_TOWER_SPOTS: [Vec2; TowerKind::ALL.len()] = [
+    Vec2::new(185.0, 275.0),
+    Vec2::new(395.0, 445.0),
+    Vec2::new(640.0, 405.0),
+    Vec2::new(880.0, 460.0),
+    Vec2::new(330.0, 280.0),
+    Vec2::new(1060.0, 290.0),
+];
+
 /// Seconds between a wave clearing and the next one going out on its own, once
 /// auto-send is armed.
 ///
@@ -357,14 +371,21 @@ impl Game {
             }
         }
 
-        for i in 0..tracks::TRACKS.len() {
+        for i in 0..render::card_count() {
             let picked_by_key = NUMBER_KEYS.get(i).is_some_and(|&k| is_key_pressed(k));
             let picked_by_click = clicked && render::track_card_rect(i).contains(m);
-
-            if picked_by_key || picked_by_click {
-                self.start_run(i);
-                return;
+            if !(picked_by_key || picked_by_click) {
+                continue;
             }
+
+            // The last card isn't a route, it's a way of not choosing one.
+            let track = if i == render::random_card_index() {
+                gen_range(0, tracks::TRACKS.len())
+            } else {
+                i
+            };
+            self.start_run(track);
+            return;
         }
     }
 
@@ -456,9 +477,12 @@ impl Game {
     // Hotkeys, tower selection, placement, and sending the next wave.
     // ─────────────────────────────────────────────────────────────────────────
     fn handle_input(&mut self, audio_click: bool) {
-        for (i, key) in NUMBER_KEYS.iter().enumerate() {
+        // Zipped rather than indexed: there are more number keys than towers,
+        // because the route picker needs one for its random card, and indexing
+        // ALL by key position would panic the moment that key was pressed here.
+        for (key, kind) in NUMBER_KEYS.iter().zip(TowerKind::ALL.iter()) {
             if is_key_pressed(*key) {
-                self.toggle_selection(TowerKind::ALL[i]);
+                self.toggle_selection(*kind);
             }
         }
 
@@ -1276,17 +1300,8 @@ impl Game {
         self.start_run(track);
         self.cash = 500;
 
-        // One position per tower kind — must stay the same length as ALL.
-        let spots = [
-            vec2(185.0, 245.0),
-            vec2(395.0, 415.0),
-            vec2(640.0, 375.0),
-            vec2(880.0, 430.0),
-            vec2(330.0, 250.0),
-        ];
-        assert_eq!(spots.len(), TowerKind::ALL.len());
         for (i, kind) in TowerKind::ALL.iter().enumerate() {
-            let mut t = Tower::new(*kind, spots[i], self.next_tower_id);
+            let mut t = Tower::new(*kind, DEMO_TOWER_SPOTS[i], self.next_tower_id);
             // Spread the levels so the pips and upgraded stats are visible.
             t.level = (i as u8 % 3) + 1;
             t.angle = -0.62;
@@ -1611,6 +1626,17 @@ mod tests {
             near_exit.progress(&short) > barely_started.progress(&long),
             "raw distance would have called these two equally urgent"
         );
+    }
+
+    #[test]
+    fn the_screenshot_demo_has_a_spot_for_every_tower() {
+        assert_eq!(DEMO_TOWER_SPOTS.len(), TowerKind::ALL.len());
+        for (i, p) in DEMO_TOWER_SPOTS.iter().enumerate() {
+            assert!(
+                p.x > 0.0 && p.x < PLAYFIELD_W && p.y > 0.0 && p.y < PLAYFIELD_H,
+                "demo tower {i} is staged outside the field"
+            );
+        }
     }
 
     #[test]
