@@ -40,6 +40,12 @@ cargo run --release
 
 Close the window to quit.
 
+The title itself is spelled out in fruit: each letter is a 5x7 grid with a berry
+on every lit cell, drawn with the same shading the fruit on the track use, and
+coloured a tier per letter. The berries are nudged off their grid by a hash of
+their position rather than by an RNG — the menu redraws every frame, so a live
+random offset would leave the whole wordmark crawling.
+
 The title screen carries the build's version in its bottom right corner. It comes
 from `CARGO_PKG_VERSION`, so it is whatever the binary was actually compiled at —
 which is the point, since the question it answers is "which build is this?" and a

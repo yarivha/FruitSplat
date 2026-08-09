@@ -10,6 +10,12 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Added
+
+- The menu title is spelled out in fruit instead of set in the text font. Each
+  letter is a 5x7 grid with a berry on every lit cell, drawn with the shading the
+  fruit on the track use and coloured a tier per letter.
+
 ## [0.2.4] - 2026-08-09
 
 ### Fixed

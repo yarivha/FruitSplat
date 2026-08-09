@@ -1926,6 +1926,169 @@ fn mouse_vec() -> Vec2 {
 // ─────────────────────────────────────────────────────────────────────────────
 // Title screen.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// The title, spelled out in fruit rather than set in the text font.
+//
+// Every letter is a 5x7 grid and every lit cell is a berry, drawn with the same
+// shaded_ball and specular the fruit themselves use — so the wordmark is made of
+// the game's own artwork instead of merely sitting above it. One fruit colour
+// per letter, cycling the tiers the game actually sends, which lands the same
+// five on each word.
+//
+// The berries are nudged off their grid by a hash of their position rather than
+// by an RNG. It has to be deterministic: this is redrawn every frame, and a live
+// random offset would leave the whole title crawling.
+// ─────────────────────────────────────────────────────────────────────────────
+const TITLE_TEXT: &str = "FRUIT SPLAT";
+const TITLE_COLS: usize = 5;
+const TITLE_ROWS: usize = 7;
+/// Blank columns between two letters, and for the gap between the two words.
+const TITLE_GAP_COLS: f32 = 1.0;
+const TITLE_SPACE_COLS: f32 = 3.0;
+/// How much of the window's width the finished wordmark spans.
+const TITLE_SPAN: f32 = 0.80;
+/// One colour per letter, in tier order.
+const TITLE_FRUIT: [FruitKind; 5] = [
+    FruitKind::Strawberry,
+    FruitKind::Orange,
+    FruitKind::Lime,
+    FruitKind::Blueberry,
+    FruitKind::Watermelon,
+];
+
+#[rustfmt::skip]
+fn title_glyph(ch: char) -> Option<[&'static str; TITLE_ROWS]> {
+    Some(match ch {
+        'F' => ["#####",
+                "#....",
+                "#....",
+                "####.",
+                "#....",
+                "#....",
+                "#...."],
+        'R' => ["####.",
+                "#...#",
+                "#...#",
+                "####.",
+                "#.#..",
+                "#..#.",
+                "#...#"],
+        'U' => ["#...#",
+                "#...#",
+                "#...#",
+                "#...#",
+                "#...#",
+                "#...#",
+                ".###."],
+        'I' => ["#####",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                "#####"],
+        'T' => ["#####",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#..",
+                "..#.."],
+        'S' => [".####",
+                "#....",
+                "#....",
+                ".###.",
+                "....#",
+                "....#",
+                "####."],
+        'P' => ["####.",
+                "#...#",
+                "#...#",
+                "####.",
+                "#....",
+                "#....",
+                "#...."],
+        'L' => ["#....",
+                "#....",
+                "#....",
+                "#....",
+                "#....",
+                "#....",
+                "#####"],
+        'A' => [".###.",
+                "#...#",
+                "#...#",
+                "#####",
+                "#...#",
+                "#...#",
+                "#...#"],
+        _ => return None,
+    })
+}
+
+/// Width of the wordmark in grid cells, gaps and the word break included.
+fn title_width_cells(text: &str) -> f32 {
+    let mut cells = 0.0;
+    for (i, ch) in text.chars().enumerate() {
+        if i > 0 {
+            cells += TITLE_GAP_COLS;
+        }
+        cells += match title_glyph(ch) {
+            Some(_) => TITLE_COLS as f32,
+            None => TITLE_SPACE_COLS,
+        };
+    }
+    cells
+}
+
+/// A repeatable -1..1 from an index, so the scatter is fixed for a given berry.
+fn wobble(seed: u32) -> f32 {
+    let n = seed.wrapping_mul(2_654_435_761);
+    ((n >> 8) & 0xffff) as f32 / 32_768.0 - 1.0
+}
+
+fn draw_fruit_title(center: Vec2, cell: f32) {
+    let mut x = center.x - title_width_cells(TITLE_TEXT) * cell * 0.5;
+    let top = center.y - TITLE_ROWS as f32 * cell * 0.5;
+    let mut letter = 0usize;
+
+    for (i, ch) in TITLE_TEXT.chars().enumerate() {
+        if i > 0 {
+            x += TITLE_GAP_COLS * cell;
+        }
+
+        let Some(glyph) = title_glyph(ch) else {
+            x += TITLE_SPACE_COLS * cell;
+            continue;
+        };
+
+        let body = TITLE_FRUIT[letter % TITLE_FRUIT.len()].body();
+        letter += 1;
+
+        for (row, cells) in glyph.iter().enumerate() {
+            for (col, lit) in cells.chars().enumerate() {
+                if lit != '#' {
+                    continue;
+                }
+
+                let seed = (i * 97 + row * 13 + col) as u32;
+                let at = vec2(
+                    x + (col as f32 + 0.5) * cell + wobble(seed) * cell * 0.06,
+                    top + (row as f32 + 0.5) * cell + wobble(seed + 1) * cell * 0.06,
+                );
+                // Just over half a cell, so neighbouring berries touch and a
+                // letter reads as one bunch rather than a row of loose dots.
+                let r = cell * 0.52 * (1.0 + wobble(seed + 2) * 0.06);
+
+                shaded_ball(at, r, body);
+                specular(at, r);
+            }
+        }
+
+        x += TITLE_COLS as f32 * cell;
+    }
+}
+
 pub fn draw_menu() {
     let cy = screen_height() * 0.42;
     draw_rectangle(
@@ -1936,7 +2099,9 @@ pub fn draw_menu() {
         Color::new(0.0, 0.0, 0.0, 0.5),
     );
 
-    text_center("FRUIT SPLAT", cy - 60.0, 78.0, WHITE);
+    let cell = screen_width() * TITLE_SPAN / title_width_cells(TITLE_TEXT);
+    draw_fruit_title(vec2(screen_width() * 0.5, cy - 96.0), cell);
+
     text_center(
         "Build towers. Splat the fruit before it reaches the end.",
         cy + 6.0,
@@ -2500,6 +2665,49 @@ mod tests {
     /// Everything drawn in the shop column has to stay inside it.
     fn inside_panel(r: Rect) -> bool {
         r.x >= PLAYFIELD_W && r.x + r.w <= PLAYFIELD_W + SHOP_PANEL_W
+    }
+
+    #[test]
+    fn every_letter_of_the_title_has_a_glyph_the_right_shape() {
+        // A missing glyph is silent — the letter is simply not drawn, and the
+        // rest of the wordmark closes up over the hole — so it is worth pinning
+        // rather than trusting an eyeball on the menu.
+        for ch in TITLE_TEXT.chars().filter(|c| *c != ' ') {
+            let glyph = title_glyph(ch).unwrap_or_else(|| panic!("no glyph for {ch:?}"));
+            for row in glyph {
+                assert_eq!(
+                    row.chars().count(),
+                    TITLE_COLS,
+                    "{ch:?} has a row that is not {TITLE_COLS} cells wide"
+                );
+                assert!(
+                    row.chars().all(|c| c == '#' || c == '.'),
+                    "{ch:?} has a row using something other than # and ."
+                );
+            }
+        }
+        // The space is the one character with no glyph; anything else missing
+        // one would be a typo in TITLE_TEXT.
+        assert!(title_glyph(' ').is_none());
+    }
+
+    #[test]
+    fn the_fruit_title_fits_across_the_window() {
+        let win_w = PLAYFIELD_W + SHOP_PANEL_W;
+        let cells = title_width_cells(TITLE_TEXT);
+        let cell = win_w * TITLE_SPAN / cells;
+
+        assert!(cells > 0.0, "the wordmark measured as empty");
+        assert!(
+            cells * cell < win_w,
+            "the wordmark is wider than the window"
+        );
+        // Tall enough to read as fruit rather than confetti: a berry is about
+        // half a cell across, and much under this they stop being legible.
+        assert!(
+            TITLE_ROWS as f32 * cell >= 90.0,
+            "the wordmark is too short to read as fruit"
+        );
     }
 
     #[test]
