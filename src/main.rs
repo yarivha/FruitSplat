@@ -95,6 +95,9 @@ const DEMO_TOWER_SPOTS: [Vec2; TowerKind::ALL.len()] = [
 /// place a tower or buy an upgrade without turning the gap into dead time, and
 /// Space still overrides it for anyone who wants the wave now.
 const AUTO_WAVE_DELAY: f32 = 3.0;
+/// How far apart a multi-shot volley's projectiles leave the tower, measured
+/// across its face. Only so three seeds at one fruit are visibly three.
+const VOLLEY_SPREAD: f32 = 7.0;
 /// How long the quit button stays armed waiting for its confirming click.
 /// Long enough to move the mouse back deliberately, short enough that it can't
 /// still be waiting by the time an unrelated click lands on it later.
@@ -858,19 +861,28 @@ impl Game {
             let splash = t.splash_radius();
             let pierce = t.pierce();
 
-            // A Lv3 Seed Shooter engages the two lead fruit; everything else
-            // fires a single shot.
-            for (_, pos, speed, lane, dist) in in_range.iter().take(t.shots()) {
+            // The whole volley goes out every time. A Triple Seeder throws
+            // three seeds whether there are three fruit in range or one.
+            let volley = t.shots();
+            for k in volley_targets(volley, in_range.len()) {
+                let (_, pos, speed, lane, dist) = in_range[k];
+
                 // Aim where the fruit will be, not where it is. Shots don't
                 // home, so without leading, the late-wave speed ramp would make
                 // towers miss almost everything through no fault of the player.
                 // The lead runs along the target's own lane.
                 let travel = pos.distance(t.pos) / projectile_kind.speed();
-                let path = self.paths.get(*lane).unwrap_or(&self.paths[0]);
+                let path = self.paths.get(lane).unwrap_or(&self.paths[0]);
                 let aim = path.point_at(dist + speed * travel);
 
+                // Fan the volley across the tower's face so three seeds at one
+                // target read as three, instead of stacking into one sprite.
+                let dir = (aim - t.pos).normalize_or_zero();
+                let perp = vec2(-dir.y, dir.x);
+                let offset = k as f32 - (volley as f32 - 1.0) * 0.5;
+
                 self.projectiles.push(Projectile::new(
-                    t.pos,
+                    t.pos + perp * offset * VOLLEY_SPREAD,
                     aim,
                     projectile_kind,
                     splash,
@@ -1154,6 +1166,24 @@ impl Game {
             }
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Which fruit each shot of a volley goes to, as indices into the in-range list
+// ordered by threat.
+//
+// Cycles back to the front when there are fewer fruit in range than shots, so
+// the whole volley is always fired. Taking one fruit per shot instead meant a
+// multi-shot tower facing a lone fruit fired once — which made the Triple Seeder
+// slower, dearer and strictly worse than the Seed Shooter it costs nearly three
+// times as much as, and worst exactly where it should have shone: against a
+// single armoured boss.
+// ─────────────────────────────────────────────────────────────────────────────
+fn volley_targets(shots: usize, available: usize) -> Vec<usize> {
+    if available == 0 {
+        return Vec::new();
+    }
+    (0..shots).map(|k| k % available).collect()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1637,6 +1667,32 @@ mod tests {
                 "demo tower {i} is staged outside the field"
             );
         }
+    }
+
+    #[test]
+    fn a_volley_always_fires_every_shot() {
+        // Three fruit in range, three shots, three different targets.
+        assert_eq!(volley_targets(3, 5), vec![0, 1, 2]);
+        // Two fruit: the third shot comes back round to the leader.
+        assert_eq!(volley_targets(3, 2), vec![0, 1, 0]);
+        // One fruit — a boss, say — still takes all three.
+        assert_eq!(volley_targets(3, 1), vec![0, 0, 0]);
+        // Single-shot towers are unaffected.
+        assert_eq!(volley_targets(1, 4), vec![0]);
+        // Nothing in range fires nothing, rather than indexing an empty list.
+        assert!(volley_targets(3, 0).is_empty());
+    }
+
+    #[test]
+    fn a_multi_shot_tower_beats_a_single_shot_one_against_a_lone_target() {
+        // The property that was broken: facing one fruit, a Triple Seeder must
+        // put out more than a Seed Shooter, or its price buys nothing at all.
+        let triple = volley_targets(TowerKind::TripleSeeder.shots(1), 1).len();
+        let single = volley_targets(TowerKind::SeedShooter.shots(1), 1).len();
+        assert!(
+            triple > single,
+            "Triple Seeder fires {triple} at a lone fruit, Seed Shooter {single}"
+        );
     }
 
     #[test]

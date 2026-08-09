@@ -15,6 +15,14 @@ commit message and in the comments around the code it touched.
 - Release notes are lifted from this file's matching version section instead of
   a generated commit list. A tag with no section here fails the release.
 
+### Fixed
+
+- Multi-shot towers fired one shot per fruit in range, so a Triple Seeder facing
+  a lone fruit fired once — slower and dearer than the Seed Shooter for the same
+  output, and worst against a boss. A volley now always fires every shot, cycling
+  back to the leading fruit when there are fewer targets than shots. This also
+  makes a Lv3 Seed Shooter fire both its seeds at a single target.
+
 ## [0.2.0] - 2026-08-09
 
 The interface release: the shop moved from a bar along the bottom to a column

@@ -193,7 +193,7 @@ where they meet.
 | Tower | Cost | Range | Rate | Role |
 |---|---|---|---|---|
 | Seed Shooter | $90 | 135 px | 0.45s | Single target, cheap sustained damage |
-| Triple Seeder | $260 | 150 px | 0.70s | Three seeds at three separate fruit, every volley |
+| Triple Seeder | $260 | 150 px | 0.70s | Three seeds every volley, spread over up to three fruit |
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
 | Spike Layer | $150 | 120 px | 2.20s | Drops spike piles onto the track itself |
@@ -238,6 +238,11 @@ engages three separate fruit at once — four fully upgraded — which is answer
 crowd on its own, and the Blender and the Knife Thrower each do half of that.
 Being able to buy it early would flatten the reason those two differ.
 
+A volley always fires every shot. With fewer fruit in range than shots, the extra
+seeds come back round to the leading fruit rather than going unfired — so a
+multi-shot tower is still worth its price against a lone target, which is exactly
+the case a boss presents.
+
 ### Stats and upgrades
 
 Click a placed tower with nothing armed to open its panel. The panel floats
@@ -261,7 +266,7 @@ track, and selling refunds **60%** of everything invested, upgrades included.
 
 | Tower | Lv2 | Lv3 |
 |---|---|---|
-| Seed Shooter | $70 — faster, longer reach | $150 — twin shot, fires at the two lead fruit |
+| Seed Shooter | $70 — faster, longer reach | $150 — twin shot |
 | Blender | $120 — splash 58 → 72 px | $240 — splash 90 px, faster |
 | Knife Thrower | $110 — pierce 3 → 4, faster | $220 — pierce 6 |
 | Spike Layer | $130 — 6 spikes/pile, 4 piles, faster | $260 — 9 spikes/pile, 5 piles |
