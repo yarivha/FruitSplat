@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Fruit Splat</title>
 <style>
   html, body {
@@ -16,45 +16,91 @@
     align-items: center;
     justify-content: center;
   }
-  /* The canvas is left at its authored 1420x740 and is NOT scaled by CSS.
-     That size is the native window: the 1200px playfield plus the 220px shop
-     column beside it. It has to be kept in step with WINDOW_W/WINDOW_H in
-     main.rs by hand, and a test in that file fails if it drifts — when the shop
-     moved out of a bottom bar and into the right-hand column, this canvas
-     stayed 1200 wide and the whole column fell off it, invisible and
-     unclickable in the browser while every native build was fine.
+  /* The canvas is sized with CSS width/height, never with a transform, and the
+     game scales itself to whatever size it ends up.
 
-     Not scaling is deliberate, and the two lines below from macroquad's JS
-     bundle are the reason:
+     Those two lines below from macroquad's JS bundle are why the distinction
+     matters:
 
          resize():                 canvas.clientWidth  * dpi_scale()
          mouse_relative_position(): (clientX - canvas.getBoundingClientRect().left) * dpi_scale()
 
      The drawing buffer is sized from clientWidth, which ignores CSS transforms.
-     Mouse input is mapped through getBoundingClientRect(), which does not. Scale
-     the canvas with `transform` and those two disagree by exactly the scale
-     factor: the game still renders at 1420x740, but every click arrives
-     compressed toward the top-left. At any scale below 0.88 the shop drops out
-     of reach altogether and no tower can be armed at all.
+     Input is mapped through getBoundingClientRect(), which does not. Scale the
+     canvas with `transform` and the two disagree by exactly the scale factor:
+     the game renders at full size while every tap arrives compressed toward the
+     top-left, and below about 0.88 the shop is out of reach entirely.
 
-     Sizing with CSS width/height instead keeps them in agreement, but then the
-     drawing buffer follows the window and screen_width() stops being 1420 —
-     which the HUD, the shop column and the route-card row are all laid out
-     against.
+     Sizing with width/height keeps them in agreement, because both then read the
+     same box. What it costs is that the drawing buffer follows the element, so
+     screen_width() is whatever the device gave us rather than the 1420 the
+     layout is authored against — which is why render.rs draws through a camera
+     fitted to a fixed 1420x740 view instead of straight to the surface. The two
+     halves of that arrangement have to stay together: the page may resize the
+     canvas freely, and nothing may transform it.
 
-     So: no scaling. Browser zoom is the way to fit a smaller screen, and it
-     works correctly because it scales layout and hit-testing together. */
+     min() keeps the aspect ratio without letterboxing in CSS: take the narrowest
+     of the viewport's width, the view's own width, and the width that makes the
+     game exactly as tall as the viewport. aspect-ratio derives the height. On a
+     desktop window at the authored size this resolves to 1420 and changes
+     nothing. */
   #glcanvas {
     display: block;
     flex: 0 0 auto;
-    width: 1420px;
-    height: 740px;
+    width: min(100vw, 1420px, calc(100vh * 1420 / 740));
+    aspect-ratio: 1420 / 740;
+    height: auto;
     outline: none;
+    /* Stop a tap being held for a double-tap-to-zoom that never comes; without
+       it every tap on a phone is delayed by about 300ms. */
+    touch-action: manipulation;
+  }
+
+  /* Held upright, a phone gets a game two hundred pixels tall — legible in the
+     sense that it renders, but not one anybody can play. The prompt covers it
+     rather than hiding the canvas: display:none would take clientWidth to zero,
+     macroquad would resize the buffer to nothing, and turning the phone back
+     would restore a canvas the game no longer fits. Left visible underneath, the
+     game keeps running and rotating simply reveals it.
+
+     Bounded by width as well as orientation so an upright tablet, which has room
+     for the game, is not told to turn itself sideways. */
+  #rotate-hint {
+    display: none;
+  }
+  @media (orientation: portrait) and (max-width: 820px) {
+    #rotate-hint {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      background: #14161a;
+      color: #e8e6df;
+      font: 500 20px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: center;
+      padding: 0 32px;
+    }
+    #rotate-hint .glyph {
+      font-size: 64px;
+      line-height: 1;
+    }
+    #rotate-hint .sub {
+      font-size: 15px;
+      opacity: 0.65;
+    }
   }
 </style>
 </head>
 <body>
   <canvas id="glcanvas" width="1420" height="740" tabindex="1"></canvas>
+  <div id="rotate-hint">
+    <div class="glyph">&#8635;</div>
+    <div>Turn your phone sideways to play</div>
+    <div class="sub">Fruit Splat is played across a wide board.</div>
+  </div>
   <script>
     // Right click is a game input — it cancels a placement and closes the tower
     // panel. Without this the browser opens its own context menu over the

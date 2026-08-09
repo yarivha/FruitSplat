@@ -10,6 +10,18 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Added
+
+- The web build scales to the screen instead of overflowing it. The page sizes
+  the canvas to the device — never with a CSS `transform`, which desynchronises
+  rendering from hit-testing — and `render.rs` draws through a camera fitted to a
+  fixed 1420x740 view, converting pointer positions back through the same fit, so
+  the two scale together. A desktop window is that size exactly, so nothing about
+  it changes.
+- A **turn your phone sideways** prompt on screens under 820px in portrait, where
+  the game would otherwise be a 200px strip. It overlays the canvas rather than
+  hiding it, so rotating back restores a game that still fits.
+
 ### Fixed
 
 - Towers on the right quarter of the map could not be upgraded or sold. Their

@@ -569,8 +569,8 @@ that file rather than adding to them, which silently drops `--allow-undefined` a
 breaks the web build. That is why the workflow sets no global `RUSTFLAGS` and
 passes `-D warnings` to clippy directly.
 
-The page leaves the canvas at its authored **1200 × 740** and does not scale it
-at all. That is deliberate, and macroquad's JS bundle is the reason — it uses two
+The page sizes the canvas with CSS **width and height**, never with a
+`transform`. macroquad's JS bundle is why the distinction matters — it uses two
 different measurements:
 
 ```js
@@ -578,15 +578,30 @@ resize():                  canvas.clientWidth * dpi_scale()            // ignore
 mouse_relative_position():  (clientX - getBoundingClientRect().left)   // does not
 ```
 
-Size the canvas with a CSS `transform` and those disagree by exactly the scale
-factor: the game still renders at 1200 × 740, but every click arrives compressed
-toward the top-left, and below a scale of 0.88 the shop bar is out of reach so no
-tower can be armed at all. Size it with CSS width and height instead and they
-agree, but the drawing buffer then follows the window and `screen_width()` stops
-being 1200 — which the HUD, shop bar and route-card row are all laid out against.
+A `transform` makes those disagree by exactly the scale factor: the game renders
+full size while every click arrives compressed toward the top-left, and below a
+scale of 0.88 the shop is out of reach so no tower can be armed at all. Width and
+height keep them in agreement, because both then read the same box.
 
-So the canvas is left alone. On a screen too small for it, **browser zoom** is
-the way to fit — it scales layout and hit-testing together, so it stays correct.
+What that costs is a drawing buffer that follows the element, so `screen_width()`
+is whatever the device gave us rather than the 1420 the layout is authored
+against. `render.rs` answers it with a **view**: everything is drawn in a fixed
+1420 × 740 space through a camera fitted to the real surface, centred, with bars
+where the aspect ratios differ, and every pointer position is converted back
+through the same fit before anything is hit-tested. Rendering and input therefore
+scale together by construction. On a desktop window, fixed at exactly that size,
+the scale is 1 and the offset zero.
+
+The two halves have to stay together: the page may resize the canvas freely, and
+nothing may transform it. A test asserts the stylesheet contains no `transform:`,
+and another that the page is still built around the view's dimensions.
+
+Phones get the game scaled to fit their width. Held upright that is a strip about
+200px tall — it renders, but it is not playable — so the page covers it with a
+**turn your phone sideways** prompt below 820px in portrait. The prompt overlays
+the canvas rather than hiding it: `display: none` would take `clientWidth` to
+zero and macroquad would resize the buffer to nothing, so turning the phone back
+would restore a canvas the game no longer fits.
 
 The `.wasm` is about 5.7 MB, of which 5.1 MB is the embedded audio — the WAVs are
 uncompressed PCM. Stripping barely dents it; shrinking it means shorter loops or

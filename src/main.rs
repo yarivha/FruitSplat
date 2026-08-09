@@ -1095,6 +1095,14 @@ impl Game {
     // Draw the current frame, back to front.
     // ─────────────────────────────────────────────────────────────────────────
     fn draw(&self) {
+        // Everything below is drawn in the view's coordinates, whatever size the
+        // real surface is; begin_view scales them onto it.
+        render::begin_view();
+        self.draw_view();
+        render::end_view();
+    }
+
+    fn draw_view(&self) {
         render::draw_background(&self.palette);
 
         // The selection screen shows its own route previews, so the live board
@@ -1311,11 +1319,16 @@ fn spike_spots(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Current mouse position as a Vec2.
+// Current pointer position, in view coordinates.
+//
+// Everything this file hit-tests — shop buttons, towers, the panel — is laid out
+// in the view's space, so the pointer has to be converted out of surface pixels
+// before any of it means anything. On the web the surface is whatever size the
+// page gave the canvas, which is rarely the view's size and never is on a phone.
 // ─────────────────────────────────────────────────────────────────────────────
 fn mouse_vec() -> Vec2 {
     let (x, y) = mouse_position();
-    vec2(x, y)
+    render::to_view(render::surface(), vec2(x, y))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1476,29 +1489,49 @@ mod tests {
     use tower::SPIKE_RADIUS;
 
     #[test]
-    fn the_web_canvas_is_the_size_of_the_window_the_game_is_laid_out_for() {
-        // The web build draws into a canvas of a fixed size written by hand into
-        // the page, so nothing in Rust makes it follow WINDOW_W/WINDOW_H. It did
-        // not follow them when the shop moved out of a bottom bar and into the
-        // right-hand column: the window went from 1000 to 1420 wide, the canvas
-        // stayed at 1200, and the 220px column sat off the edge of it — missing
-        // and unclickable in the browser while every native build was correct.
-        // No other test could see it, because they all measure the layout
-        // against the constants rather than against what the page gives it.
+    fn the_web_page_is_built_around_the_view_the_game_draws() {
+        // The page decides the canvas's shape and nothing in Rust makes it agree
+        // with the view. It stopped agreeing once already: when the shop moved
+        // out of a bottom bar and into the right-hand column the window went
+        // from 1000 to 1420 wide, the canvas stayed at 1200, and the column sat
+        // off the edge of it — missing and unclickable in the browser while
+        // every native build was correct. Nothing else can see this, because
+        // every other test measures the layout against the constants rather
+        // than against what the page actually hands the game.
         let html = include_str!("../web/index.html");
+        let (w, h) = (render::VIEW_W, render::VIEW_H);
 
         for needle in [
-            format!("width=\"{WINDOW_W}\""),
-            format!("height=\"{WINDOW_H}\""),
-            format!("width: {WINDOW_W}px;"),
-            format!("height: {WINDOW_H}px;"),
+            format!("width=\"{w}\""),
+            format!("height=\"{h}\""),
+            // Sized against the viewport, capped at the view's own width, and
+            // held to the view's shape.
+            format!("{w}px"),
+            format!("aspect-ratio: {w} / {h}"),
+            format!("calc(100vh * {w} / {h})"),
         ] {
             assert!(
                 html.contains(&needle),
-                "web/index.html has no `{needle}`: the canvas must be \
-                 {WINDOW_W}x{WINDOW_H}, both as attributes and in CSS"
+                "web/index.html has no `{needle}`: the page must be built \
+                 around the {w}x{h} view render.rs draws"
             );
         }
+    }
+
+    #[test]
+    fn the_web_page_never_transforms_the_canvas() {
+        // The one thing the page must not do. macroquad sizes its drawing buffer
+        // from clientWidth, which ignores CSS transforms, and maps input through
+        // getBoundingClientRect(), which honours them — so a transformed canvas
+        // renders at one scale and takes clicks at another. That shipped once
+        // and made the shop unreachable in the browser.
+        let html = include_str!("../web/index.html");
+        let css = &html[..html.find("</style>").expect("the page has no stylesheet")];
+
+        assert!(
+            !css.contains("transform:"),
+            "web/index.html transforms the canvas; size it with width/height"
+        );
     }
 
     /// A long straight run, so a fruit's distance along it is easy to reason

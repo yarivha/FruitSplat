@@ -17,6 +17,97 @@ use crate::tower::{Pulse, SpikePile, Tower, TowerKind, TOWER_RADIUS};
 use crate::tracks::TRACKS;
 use crate::{PLAYFIELD_H, PLAYFIELD_W, SHOP_PANEL_W};
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The view: a fixed space the game is drawn in, scaled onto whatever surface it
+// actually has.
+//
+// Every layout number in this file is authored against VIEW_W x VIEW_H, and the
+// game draws in those coordinates whatever size the real drawing surface is. A
+// camera scales that space to fit, centred, with bars either side of it where
+// the aspect ratios differ.
+//
+// The web build is why. Its canvas is sized by CSS to whatever the device has,
+// and macroquad takes its drawing buffer from the element's clientWidth — so on
+// a phone screen_width() is a few hundred pixels and a layout authored against
+// 1420 would draw almost entirely off the side. Scaling the canvas with a CSS
+// transform instead is the trap web/index.html documents: the buffer ignores
+// transforms and hit-testing does not, so the two disagree and every tap lands
+// somewhere other than where it looks. Doing the scaling here keeps rendering
+// and input in one place, both derived from the same numbers.
+//
+// On a desktop window, which is fixed at exactly this size, the scale is 1 and
+// the offset zero, so none of it does anything.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Width of the space the game is drawn in: playfield plus the shop column.
+pub const VIEW_W: f32 = PLAYFIELD_W + SHOP_PANEL_W;
+/// Height of the space the game is drawn in.
+pub const VIEW_H: f32 = PLAYFIELD_H;
+
+/// Scale and top-left offset that fit the view onto a surface of `surface`
+/// pixels, preserving the aspect ratio and centring what is left over.
+///
+/// Split out from the camera so it can be tested: the camera itself needs a live
+/// graphics context, and this arithmetic is the part that can be wrong.
+pub fn view_fit(surface: Vec2) -> (f32, Vec2) {
+    let scale = (surface.x / VIEW_W)
+        .min(surface.y / VIEW_H)
+        .max(f32::MIN_POSITIVE);
+    let size = vec2(VIEW_W, VIEW_H) * scale;
+    (scale, (surface - size) * 0.5)
+}
+
+/// Turn a point in real surface pixels into one in view coordinates. Every
+/// pointer position goes through this before anything is hit-tested.
+pub fn to_view(surface: Vec2, point: Vec2) -> Vec2 {
+    let (scale, offset) = view_fit(surface);
+    (point - offset) / scale
+}
+
+/// The surface actually being drawn to.
+pub fn surface() -> Vec2 {
+    vec2(screen_width(), screen_height())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Point the camera at the view and start drawing in its coordinates. The bars
+// beside a mismatched surface are painted first, so they don't smear the last
+// frame down the sides.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn begin_view() {
+    clear_background(Color::new(0.05, 0.06, 0.07, 1.0));
+
+    let surface = surface();
+    let (scale, offset) = view_fit(surface);
+    let size = vec2(VIEW_W, VIEW_H) * scale;
+
+    let cam = Camera2D {
+        target: vec2(VIEW_W, VIEW_H) * 0.5,
+        // Built by hand rather than with Camera2D::from_display_rect, whose
+        // negative y zoom suits a render target. Against the screen's own
+        // framebuffer it turns the world upside down — the menu came out
+        // mirrored top to bottom, text and all.
+        zoom: vec2(2.0 / VIEW_W, 2.0 / VIEW_H),
+        offset: Vec2::ZERO,
+        rotation: 0.0,
+        render_target: None,
+        // A viewport is given in GL coordinates, measured from the bottom left.
+        // The letterbox is centred, so the flipped y comes to the same offset
+        // either way round.
+        viewport: Some((
+            offset.x as i32,
+            offset.y as i32,
+            size.x as i32,
+            size.y as i32,
+        )),
+    };
+    set_camera(&cam);
+}
+
+pub fn end_view() {
+    set_default_camera();
+}
+
 /// Number of bands used to fake the grass gradient.
 const FIELD_BANDS: i32 = 40;
 
@@ -209,7 +300,7 @@ fn specular(center: Vec2, r: f32) {
 // Paint the grass gradient behind the whole playfield.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_background(p: &Palette) {
-    let w = screen_width();
+    let w = VIEW_W;
     let band_h = PLAYFIELD_H / FIELD_BANDS as f32;
 
     for i in 0..FIELD_BANDS {
@@ -1720,7 +1811,7 @@ pub fn draw_shop(selected: Option<TowerKind>, cash: u32) {
 // the playfield, then clamps vertically so it always stays inside it.
 // main.rs hit-tests clicks against this same rect.
 //
-// Every edge here is PLAYFIELD_W, not screen_width(). The shop column starts at
+// Every edge here is PLAYFIELD_W, not VIEW_W. The shop column starts at
 // PLAYFIELD_W and main.rs gives it any click past that line before the panel is
 // consulted at all, so a panel overhanging the column is drawn but dead: it took
 // the towers between x 950 and 1126 — a quarter of the map — and left them
@@ -1924,11 +2015,14 @@ fn draw_sell_button(t: &Tower, panel: Rect, mouse: Vec2) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Current mouse position as a Vec2.
+// Current mouse position, in view coordinates — the same space every rect in
+// this file is expressed in. Reading mouse_position() raw would hover-test
+// against surface pixels, which only match on a window that happens to be the
+// view's exact size.
 // ─────────────────────────────────────────────────────────────────────────────
 fn mouse_vec() -> Vec2 {
     let (x, y) = mouse_position();
-    vec2(x, y)
+    to_view(surface(), vec2(x, y))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2098,17 +2192,11 @@ fn draw_fruit_title(center: Vec2, cell: f32) {
 }
 
 pub fn draw_menu() {
-    let cy = screen_height() * 0.42;
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        screen_height(),
-        Color::new(0.0, 0.0, 0.0, 0.5),
-    );
+    let cy = VIEW_H * 0.42;
+    draw_rectangle(0.0, 0.0, VIEW_W, VIEW_H, Color::new(0.0, 0.0, 0.0, 0.5));
 
-    let cell = screen_width() * TITLE_SPAN / title_width_cells(TITLE_TEXT);
-    draw_fruit_title(vec2(screen_width() * 0.5, cy - 96.0), cell);
+    let cell = VIEW_W * TITLE_SPAN / title_width_cells(TITLE_TEXT);
+    draw_fruit_title(vec2(VIEW_W * 0.5, cy - 96.0), cell);
 
     text_center(
         "Build towers. Splat the fruit before it reaches the end.",
@@ -2134,8 +2222,8 @@ pub fn draw_menu() {
     let dims = measure_text(VERSION_LABEL, None, 16, 1.0);
     draw_text(
         VERSION_LABEL,
-        screen_width() - dims.width - 14.0,
-        screen_height() - 14.0,
+        VIEW_W - dims.width - 14.0,
+        VIEW_H - 14.0,
         16.0,
         Color::new(1.0, 1.0, 1.0, 0.38),
     );
@@ -2145,9 +2233,11 @@ pub fn draw_menu() {
 // Rect of route card `i`, so main.rs can hit-test clicks against the same
 // layout this file draws.
 // ─────────────────────────────────────────────────────────────────────────────
-// Centred against PLAYFIELD_W rather than screen_width(): the window is fixed
-// size, so they are the same number, but the constant is one a test can reach
-// and screen_width() needs a live graphics context.
+// Centred against PLAYFIELD_W, which is 220px narrower than the view — so the
+// picker's cards sit left of centre by half that. The shop column is not drawn
+// on this screen, so there is nothing beside them to justify it. Left alone
+// here because it is a deliberate layout question rather than a scaling one,
+// and moving the cards moves what main.rs hit-tests with them.
 pub fn track_card_rect(i: usize) -> Rect {
     let w = card_width();
     let row = i / CARDS_PER_ROW;
@@ -2286,13 +2376,7 @@ fn mode_color(i: usize) -> Color {
 // the actual polyline the fruit will walk.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_track_select(selected_mode: usize) {
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        screen_height(),
-        Color::new(0.0, 0.0, 0.0, 0.62),
-    );
+    draw_rectangle(0.0, 0.0, VIEW_W, VIEW_H, Color::new(0.0, 0.0, 0.0, 0.62));
 
     // The screen's vertical rhythm, top to bottom: title, subtitle, difficulty
     // caption, the difficulty row at MODE_BTN_Y, then the card rows at CARD_Y.
@@ -2565,14 +2649,8 @@ fn difficulty_color(difficulty: &str) -> Color {
 // End screen, shown once the fruit have drained every life.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_game_over(wave: u32, total_waves: u32) {
-    let cy = screen_height() * 0.42;
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        screen_height(),
-        Color::new(0.0, 0.0, 0.0, 0.55),
-    );
+    let cy = VIEW_H * 0.42;
+    draw_rectangle(0.0, 0.0, VIEW_W, VIEW_H, Color::new(0.0, 0.0, 0.0, 0.55));
 
     text_center("OVERRUN", cy - 60.0, 72.0, WHITE);
     text_center(
@@ -2593,14 +2671,8 @@ pub fn draw_game_over(wave: u32, total_waves: u32) {
 // Shown when every wave on a route has been survived.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_victory(route: &str, total_waves: u32, lives: u32, mode: usize) {
-    let cy = screen_height() * 0.42;
-    draw_rectangle(
-        0.0,
-        0.0,
-        screen_width(),
-        screen_height(),
-        Color::new(0.0, 0.10, 0.03, 0.58),
-    );
+    let cy = VIEW_H * 0.42;
+    draw_rectangle(0.0, 0.0, VIEW_W, VIEW_H, Color::new(0.0, 0.10, 0.03, 0.58));
 
     text_center(
         "ROUTE CLEARED",
@@ -2673,6 +2745,78 @@ mod tests {
     /// Everything drawn in the shop column has to stay inside it.
     fn inside_panel(r: Rect) -> bool {
         r.x >= PLAYFIELD_W && r.x + r.w <= PLAYFIELD_W + SHOP_PANEL_W
+    }
+
+    #[test]
+    fn a_surface_the_size_of_the_view_needs_no_scaling_at_all() {
+        // The desktop window is fixed at exactly the view's size, so the whole
+        // arrangement has to be an identity there — anything else would mean the
+        // native build had quietly been rescaled to add phone support.
+        let (scale, offset) = view_fit(vec2(VIEW_W, VIEW_H));
+
+        assert_eq!(scale, 1.0);
+        assert_eq!(offset, Vec2::ZERO);
+        let p = vec2(613.0, 402.0);
+        assert_eq!(to_view(vec2(VIEW_W, VIEW_H), p), p);
+    }
+
+    #[test]
+    fn a_smaller_surface_fits_the_whole_view_inside_itself() {
+        // A phone-sized canvas of the same shape: everything shrinks, nothing is
+        // cropped, and the corners still map to the corners.
+        let surface = vec2(VIEW_W / 4.0, VIEW_H / 4.0);
+        let (scale, offset) = view_fit(surface);
+
+        assert!((scale - 0.25).abs() < 1e-6);
+        assert_eq!(offset, Vec2::ZERO);
+        assert!(to_view(surface, Vec2::ZERO).abs_diff_eq(Vec2::ZERO, 1e-3));
+        assert!(to_view(surface, surface).abs_diff_eq(vec2(VIEW_W, VIEW_H), 1e-3));
+    }
+
+    #[test]
+    fn a_mismatched_surface_centres_the_view_and_bars_the_rest() {
+        // Taller than the view's shape, as a phone held upright is: the fit is
+        // decided by width, and what is left over is split evenly top and
+        // bottom rather than piled at one end.
+        let surface = vec2(VIEW_W, VIEW_H * 3.0);
+        let (scale, offset) = view_fit(surface);
+
+        assert_eq!(scale, 1.0, "the wider axis should not have driven the fit");
+        assert_eq!(offset.x, 0.0);
+        assert_eq!(offset.y, VIEW_H, "the bars are not even");
+
+        // A tap in the middle of the visible game is the middle of the view,
+        // whatever dead space surrounds it.
+        let middle = vec2(VIEW_W * 0.5, VIEW_H * 3.0 * 0.5);
+        assert!(to_view(surface, middle).abs_diff_eq(vec2(VIEW_W * 0.5, VIEW_H * 0.5), 1e-3));
+    }
+
+    #[test]
+    fn every_corner_of_a_phone_sized_surface_round_trips() {
+        // The whole point of doing the scaling in one place: a point converted
+        // into the view and back has to land where it started, or rendering and
+        // hit-testing have drifted apart again.
+        for surface in [
+            vec2(390.0, 203.0),  // a phone held upright, canvas full width
+            vec2(844.0, 390.0),  // the same phone turned sideways
+            vec2(1024.0, 768.0), // a tablet, taller in shape than the view
+            vec2(VIEW_W, VIEW_H),
+        ] {
+            let (scale, offset) = view_fit(surface);
+            for corner in [
+                Vec2::ZERO,
+                vec2(VIEW_W, 0.0),
+                vec2(0.0, VIEW_H),
+                vec2(VIEW_W, VIEW_H),
+                vec2(VIEW_W * 0.5, VIEW_H * 0.5),
+            ] {
+                let on_surface = corner * scale + offset;
+                assert!(
+                    to_view(surface, on_surface).abs_diff_eq(corner, 1e-2),
+                    "{corner:?} did not survive the round trip on a {surface:?} surface"
+                );
+            }
+        }
     }
 
     #[test]
