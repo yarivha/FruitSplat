@@ -148,7 +148,9 @@ fn add_bosses(queue: &mut Vec<FruitKind>, count: u32) {
 pub fn spawn_interval(wave: u32) -> f32 {
     let w = wave as f32;
     // Two slopes, not one. The first tightens quickly to 0.30s by wave 28; the
-    // second keeps going, gently, to a 0.16s floor around wave 56.
+    // second keeps going, gently, reaching 0.19s by wave 50. The 0.16s floor
+    // below that is a backstop the longest route stops short of rather than a
+    // number the game arrives at.
     //
     // The second slope is what makes a long run work at all. A wave's pressure
     // is hits per second, and once the interval stops falling that is fixed by
@@ -170,7 +172,7 @@ pub fn clear_bonus(wave: u32) -> u32 {
 /// difficulty the game is balanced around. Modes may soften these; Medium is
 /// these numbers exactly.
 pub const TUNED_SPEED_RAMP: f32 = 0.035;
-pub const TUNED_MAX_SPEED: f32 = 2.80;
+pub const TUNED_MAX_SPEED: f32 = 2.75;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Speed multiplier applied to every fruit spawned during `wave`.
@@ -240,7 +242,7 @@ mod tests {
     fn balance_report() {
         // Modelled on the longest route, which is the one that sees every boss
         // wave the schedule produces.
-        const TOTAL: u32 = 70;
+        const TOTAL: u32 = 50;
 
         // One table per difficulty. Only the opening cash differs — a mode
         // changes what the player starts with, never what a wave sends — so the

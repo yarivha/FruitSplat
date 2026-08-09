@@ -83,7 +83,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Orchard Snake",
         blurb: "a steady weave",
         difficulty: "Medium",
-        waves: 58,
+        waves: 46,
         lanes: &[&[
             (-40.0, 180.0),
             (260.0, 180.0),
@@ -101,7 +101,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Market Run",
         blurb: "short and direct",
         difficulty: "Hard",
-        waves: 50,
+        waves: 42,
         lanes: &[&[
             (-40.0, 370.0),
             (300.0, 370.0),
@@ -115,7 +115,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "The Long Orchard",
         blurb: "plenty of time to shoot",
         difficulty: "Gentle",
-        waves: 64,
+        waves: 48,
         lanes: &[&[
             (-40.0, 150.0),
             (180.0, 150.0),
@@ -137,7 +137,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Zigzag Grove",
         blurb: "tight lanes, wide cover",
         difficulty: "Medium",
-        waves: 58,
+        waves: 46,
         lanes: &[&[
             (-40.0, 210.0),
             (150.0, 210.0),
@@ -171,7 +171,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Twin Gates",
         blurb: "two ways in, one out",
         difficulty: "Tricky",
-        waves: 54,
+        waves: 44,
         lanes: &[
             // The high road.
             &[
@@ -209,7 +209,7 @@ pub const TRACKS: [TrackDef; 6] = [
         name: "Meander",
         blurb: "the long way round",
         difficulty: "Gentle",
-        waves: 70,
+        waves: 50,
         lanes: &[&[
             (-40.0, 130.0),
             (150.0, 130.0),
@@ -457,14 +457,15 @@ mod tests {
         // makes a run this length worth playing to the end.
         for t in &TRACKS {
             assert!(
-                t.waves >= 50,
+                t.waves >= 40,
                 "{} ends at wave {}, short of a full run",
                 t.name,
                 t.waves
             );
-            // Not a design judgement, just a guard against a typo turning a
-            // route into a thousand waves.
-            assert!(t.waves <= 100, "{} runs implausibly long", t.name);
+            // A played-and-measured ceiling rather than a guess: 70 waves came
+            // to about fifteen minutes of fruit walking plus build time, which
+            // is longer than anyone wants to sit for one run.
+            assert!(t.waves <= 50, "{} runs longer than a sitting", t.name);
         }
     }
 

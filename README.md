@@ -58,8 +58,8 @@ cards. It carries over between runs, and the HUD shows which one you're on.
 
 | Mode | Starting cash | Starting lives | Fruit speed by the end |
 |---|---|---|---|
-| Easy | $550 | 36 | +85% |
-| Medium | $300 | 20 | +180% |
+| Easy | $550 | 36 | +73% |
+| Medium | $300 | 20 | +172% |
 | Hard | $200 | 10 | +200% |
 
 A mode never changes what a wave **sends**. The fruit, their count, their order,
@@ -80,17 +80,17 @@ gets done on every wave, so a gentler ramp is still being felt on the last one.
 `balance_report` prints a table per mode, and the affordability ratio is what
 the three dials add up to:
 
-| Wave | 1 | 13 | 25 | 40 | 50 | 70 |
+| Wave | 1 | 13 | 25 | 35 | 45 | 50 |
 |---|---|---|---|---|---|---|
-| Easy | 11.9 | 1.9 | 1.8 | 1.9 | 1.8 | 2.2 |
-| Medium | 6.8 | 1.4 | 1.2 | 1.2 | 1.1 | 1.5 |
-| Hard | 4.8 | 1.1 | 1.0 | 1.0 | 1.0 | 1.4 |
+| Easy | 11.9 | 1.9 | 1.8 | 1.8 | 1.8 | 1.8 |
+| Medium | 6.8 | 1.4 | 1.2 | 1.2 | 1.2 | 1.1 |
+| Hard | 4.8 | 1.1 | 1.0 | 1.0 | 1.0 | 1.0 |
 
 Below 1.0 means the wave outruns what you can afford, and nothing goes there.
 Be careful reading 1.0 as "fair", though: the model spends every dollar on Seed
 Shooters, lands every shot and never leaves a tower idle, so a real player at 1.0
 is behind. Hard sits on that line for most of a run on purpose. Medium keeps 1.1
-under it and Easy 1.7.
+under it and Easy 1.8.
 
 The point of those rows is that they stay **flat** from wave 13 to the end. They
 used to climb away: past wave 30 the game got steadily easier, because a wave's
@@ -112,12 +112,12 @@ lanes at once.
 
 | Route | Difficulty | Waves | Length | Character | Backdrop |
 |---|---|---|---|---|---|
-| Market Run | Hard | 50 | 1700 px | Short and direct | Dusty market of crates and fences |
-| Twin Gates | Tricky | 54 | 1775 px avg | **Two entrances**, one exit | Cold rocky highland |
-| Orchard Snake | Medium | 58 | 2570 px | A steady weave | Temperate orchard |
-| Zigzag Grove | Medium | 58 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
-| The Long Orchard | Gentle | 64 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
-| Meander | Gentle | 70 | 3710 px | The long way round — the gentlest | Bright open meadow |
+| Market Run | Hard | 42 | 1700 px | Short and direct | Dusty market of crates and fences |
+| Twin Gates | Tricky | 44 | 1775 px avg | **Two entrances**, one exit | Cold rocky highland |
+| Orchard Snake | Medium | 46 | 2570 px | A steady weave | Temperate orchard |
+| Zigzag Grove | Medium | 46 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
+| The Long Orchard | Gentle | 48 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
+| Meander | Gentle | 50 | 3710 px | The long way round — the gentlest | Bright open meadow |
 
 The cards sit in two rows of four. A seventh, **Surprise Me**, starts a run on
 one of the six picked at random.
@@ -381,13 +381,14 @@ Because it is armoured, the towers sort themselves into roles against it:
 
 ## Waves
 
-A route runs **50 to 70 waves**. A new tier unlocks every third wave, so
-watermelons first appear on wave 13. Fruit get **3.5% faster each wave** on
-Medium, capped at 2.8×; Easy ramps at 1.5% to 1.85×, Hard at 5% to 3.0×. What you
-start with is set by the difficulty mode too.
+A route runs **42 to 50 waves** — about twenty minutes, which is as long as one
+sitting should be. A new tier unlocks every third wave, so watermelons first
+appear on wave 13. Fruit get **3.5% faster each wave** on Medium, reaching 2.72×
+by wave 50; Easy ramps at 1.5% to 1.73×, Hard at 5% and hits its 3.0× ceiling at
+wave 41. What you start with is set by the difficulty mode too.
 
 Spawn intervals tighten on **two slopes**: quickly from 0.85s to 0.30s by wave 28,
-then gently on to a 0.16s floor around wave 56. The second slope is what makes a
+then gently on toward a 0.16s floor. The second slope is what makes a
 long run work. A wave's pressure is hits per second, and once the interval stops
 falling that is fixed by the fruit mix alone — so every extra fruit past wave 28
 made a wave *longer* rather than harder while its income compounded, and the run
