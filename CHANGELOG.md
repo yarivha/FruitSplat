@@ -10,6 +10,8 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-09
+
 ### Fixed
 
 - The Spike Layer laid its spikes once and then went quiet: capped at a fixed
