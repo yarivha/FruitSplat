@@ -1558,6 +1558,9 @@ pub fn draw_pause_button(paused: bool) {
 // ─────────────────────────────────────────────────────────────────────────────
 // The held-game overlay. Dims the field only, leaving the shop column lit so its
 // buttons still read as clickable — pause is for thinking about what to build.
+//
+// Plain ASCII in the label: the default font has no em dash glyph and draws one
+// as a tofu box. See `every_drawn_string_is_ascii`.
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn draw_paused_overlay() {
     draw_rectangle(
@@ -1574,7 +1577,7 @@ pub fn draw_paused_overlay() {
         Color::new(1.0, 0.9, 0.5, 1.0),
     );
     field_text_center(
-        "the wave is held — build, upgrade, then resume",
+        "the wave is held  -  build, upgrade, then resume",
         PLAYFIELD_H * 0.44 + 44.0,
         24.0,
         Color::new(1.0, 1.0, 1.0, 0.75),
@@ -2712,6 +2715,47 @@ mod tests {
     fn the_audio_buttons_do_not_overlap_each_other() {
         let (sfx, music) = (audio_button_rect(0), audio_button_rect(1));
         assert!(music.x >= sfx.x + sfx.w, "the two toggles overlap");
+    }
+
+    #[test]
+    fn every_drawn_string_is_ascii() {
+        // macroquad's default font has no glyph beyond ASCII: an em dash, a
+        // curly quote or an accent draws as a tofu box. That has reached the
+        // screen twice now — once in the send-wave prompt and once in the pause
+        // overlay — so this scans this file's own string literals rather than
+        // trusting anyone to remember.
+        //
+        // Comment lines are skipped, which is why the box-drawing rules and the
+        // em dashes in the prose above are fine. Only render.rs is scanned
+        // because only render.rs draws text; the balance report prints to a
+        // terminal, which has a real font.
+        const QUOTE: u32 = 34;
+
+        for (n, line) in include_str!("render.rs").lines().enumerate() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+
+            let mut in_string = false;
+            let mut escaped = false;
+            for ch in line.chars() {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if in_string && ch == '\\' {
+                    escaped = true;
+                } else if ch as u32 == QUOTE {
+                    in_string = !in_string;
+                } else if in_string && !ch.is_ascii() {
+                    panic!(
+                        "render.rs line {}: {:?} is not ASCII and will draw as a tofu box",
+                        n + 1,
+                        ch
+                    );
+                }
+            }
+        }
     }
 
     #[test]

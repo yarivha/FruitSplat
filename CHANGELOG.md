@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the point of pausing rather than a side effect. Nothing else advances — not the
   spawn clock, not cooldowns, not the auto-send timer. The overlay dims the field
   only, leaving the column lit so its buttons still read as live.
+  - Its label is plain ASCII, and now so is every other drawn string: the
+    default font has no glyph past ASCII, so an em dash draws as a tofu box.
+    That reached the screen twice — the send-wave prompt, then this overlay — so
+    a test scans `render.rs` for non-ASCII inside string literals rather than
+    trusting anyone to remember. Comment lines are skipped, and only `render.rs`
+    is scanned, because only `render.rs` draws text.
 - **Triple Seeder** ($260), a sixth tower that throws at three separate fruit a
   volley, four once maxed. The dearest thing in the shop on purpose: answering a
   crowd on its own is what the Blender and the Knife Thrower each do half of, and
@@ -148,7 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Procedural splat bursts and Freezer pulse rings.
 - Fully procedural visuals — grass gradient, dirt track and all fruit drawn from
   macroquad primitives, so the game ships with no image assets.
-- 126 unit tests covering path maths (corner traversal, end clamping,
+- 127 unit tests covering path maths (corner traversal, end clamping,
   perpendicular distance, zero-length segments), the split ladder, boss armour
   and the N-ary burst, the slow effect and Freezer stacking, wave composition
   and the boss schedule, tower upgrade monotonicity and sell values, spike-pile
