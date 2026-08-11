@@ -122,6 +122,10 @@ enum Theme {
     /// The long wandering route: open, bright, and easy on the eye, to match
     /// the gentlest walk in the game.
     Meadow,
+    /// The spiral: a formal walled garden, all clipped hedge. The route already
+    /// fills the field with track, so this one is about the little open ground
+    /// that is left reading as deliberate rather than leftover.
+    Garden,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,7 +139,8 @@ fn theme(track: usize) -> Theme {
         2 => Theme::Farm,
         3 => Theme::Grove,
         4 => Theme::Highland,
-        _ => Theme::Meadow,
+        5 => Theme::Meadow,
+        _ => Theme::Garden,
     }
 }
 
@@ -160,6 +165,15 @@ pub fn palette(track: usize) -> Palette {
             track_border: Color::new(0.42, 0.33, 0.22, 1.0),
             track_dirt: Color::new(0.66, 0.55, 0.38, 1.0),
             foliage: Color::new(0.38, 0.45, 0.24, 1.0),
+        },
+        // Clipped hedge and cool stone: a formal garden rather than open
+        // country, which is what a spiral of track reads as from above.
+        Theme::Garden => Palette {
+            grass_top: Color::new(0.31, 0.46, 0.34, 1.0),
+            grass_bottom: Color::new(0.20, 0.33, 0.25, 1.0),
+            track_border: Color::new(0.45, 0.42, 0.38, 1.0),
+            track_dirt: Color::new(0.63, 0.60, 0.54, 1.0),
+            foliage: Color::new(0.20, 0.42, 0.27, 1.0),
         },
         // Lush and well watered.
         Theme::Farm => Palette {
@@ -262,6 +276,22 @@ fn prop_mix(theme: Theme) -> (&'static [PropKind], usize) {
                 PropKind::Rock,
             ],
             48,
+        ),
+        // Hedges and cool stone, for the walled garden the spiral winds through.
+        Theme::Garden => (
+            &[
+                PropKind::Bush,
+                PropKind::Bush,
+                PropKind::Bush,
+                PropKind::Flowers,
+                PropKind::Flowers,
+                PropKind::Tree,
+                PropKind::Rock,
+            ],
+            // The thinnest scatter in the game. A spiral leaves narrow channels
+            // between its arms and nothing else, so anything more than this
+            // buries the ground the player has to build on.
+            26,
         ),
         // Rocky and sparse. Two lanes leave less open ground to build on, so
         // the scatter is thinner than anywhere else — scenery never blocks

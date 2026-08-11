@@ -24,7 +24,7 @@ cargo run --release
 | Input | Action |
 |---|---|
 | Click **Easy** / **Medium** / **Hard** | Set the difficulty |
-| `1`–`7` on the route screen | Pick a route (7 is random) and start |
+| `1`–`8` on the route screen | Pick a route (8 is random) and start |
 | `1`–`7` in play | Arm a tower type |
 | Click shop button | Arm a tower type |
 | Left click on field | Place the armed tower, then disarm |
@@ -105,7 +105,7 @@ until Hard was given a ramp of its own.
 
 ## Routes
 
-Each run starts by picking one of six routes. Length is the main difficulty
+Each run starts by picking one of seven routes. Length is the main difficulty
 dial — a longer route means more seconds under fire before a fruit reaches the
 exit. Turn count matters too: tight switchbacks let one tower cover several
 lanes at once.
@@ -117,10 +117,31 @@ lanes at once.
 | Orchard Snake | Medium | 46 | 2570 px | A steady weave | Temperate orchard |
 | Zigzag Grove | Medium | 46 | 2980 px | Tight lanes, one tower covers two at once | Dark, dense forest |
 | The Long Orchard | Gentle | 48 | 3070 px | Plenty of time to shoot | Lush farmland with ponds |
-| Meander | Gentle | 50 | 3710 px | The long way round — the gentlest | Bright open meadow |
+| Meander | Gentle | 50 | 3710 px | The long way round | Bright open meadow |
+| Spiral Garden | Gentle | 50 | 6510 px | **A spiral** — in to the middle and back out | Clipped hedge and stone |
 
-The cards sit in two rows of four. A seventh, **Surprise Me**, starts a run on
-one of the six picked at random.
+The cards sit in two rows of four. An eighth, **Surprise Me**, starts a run on
+one of the seven picked at random.
+
+### Spiral Garden
+
+Fruit wind all the way into the middle, turn, and wind back out through the
+channels between the arms they came in along. At 6510px it is comfortably the
+longest route in the game — three quarters longer than Meander — and a tower
+parked in an inner channel covers three or four arms at once. Both pull the same
+way, which is why it is the gentlest route despite looking like the meanest.
+
+It is a *double* spiral, and it has to be. A lane must leave the screen, so a
+spiral cannot simply stop in the middle; and it cannot cut straight out either,
+because the way out would cross every arm it had just wound past. So the inbound
+and outbound arms interleave the whole way, which is why the exit sits just below
+the entrance rather than on the far side.
+
+Every parallel pair of arms sits **110px** apart, and the whole shape is built on
+that number. A tower must be 44px from a centreline, so 88px is the least that
+leaves a legal strip between two arms. Tighten the spiral past that and the
+channels stop being buildable, at which point the middle of the board is scenery
+rather than somewhere to defend.
 
 ### Twin Gates, and lanes
 
@@ -544,7 +565,7 @@ way to seek a playing sound.
 | `src/fruit.rs` | Fruit tiers, the split ladder, splat particles |
 | `src/tower.rs` | Tower stats, spike piles, the Freezer pulse effect |
 | `src/projectile.rs` | Shots in flight, their splash radii and pierce |
-| `src/tracks.rs` | The five selectable routes and their lanes |
+| `src/tracks.rs` | The seven selectable routes and their lanes |
 | `src/mode.rs` | The three difficulty modes |
 | `src/scenery.rs` | Per-route palettes and decorative prop layout |
 | `src/wave.rs` | Wave composition and pacing |

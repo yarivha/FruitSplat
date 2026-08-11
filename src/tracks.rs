@@ -78,7 +78,7 @@ impl TrackDef {
 }
 
 /// Every route offered at the start of a game.
-pub const TRACKS: [TrackDef; 6] = [
+pub const TRACKS: [TrackDef; 7] = [
     TrackDef {
         name: "Orchard Snake",
         blurb: "a steady weave",
@@ -200,10 +200,10 @@ pub const TRACKS: [TrackDef; 6] = [
         ],
     },
     // ─────────────────────────────────────────────────────────────────────────
-    // The longest route in the game, and so the most forgiving: every extra
-    // pixel of track is another moment a fruit spends inside somebody's range.
-    // Nothing else about it is unusual — length is doing all the work, which is
-    // exactly what makes it the one to learn on.
+    // A long route where length is doing all the work: every extra pixel of
+    // track is another moment a fruit spends inside somebody's range, and
+    // nothing else about it is unusual. The one to learn on, until the Spiral
+    // Garden took the "longest" title off it.
     // ─────────────────────────────────────────────────────────────────────────
     TrackDef {
         name: "Meander",
@@ -229,6 +229,48 @@ pub const TRACKS: [TrackDef; 6] = [
             (1060.0, 620.0),
             (1060.0, 340.0),
             (1240.0, 340.0),
+        ]],
+    },
+    // ─────────────────────────────────────────────────────────────────────────
+    // The spiral. Fruit wind all the way into the middle, turn, and wind back
+    // out through the channels between the arms they came in along.
+    //
+    // A spiral cannot simply end in the middle — a lane has to leave the screen
+    // — and it cannot cut straight out either, because the way out would cross
+    // every arm it had just wound past. So this is a double spiral: the inbound
+    // and outbound arms interleave the whole way, which is why the exit sits
+    // just below the entrance rather than on the far side.
+    //
+    // Every parallel pair of arms is 110px apart. That is deliberate and it is
+    // the number the whole shape is built on: a tower must be PATH_CLEARANCE
+    // (44px) from a centreline, so 88px is the least that leaves a legal strip
+    // between two arms, and 110 leaves one comfortably. Tighten the spiral and
+    // the channels stop being buildable, at which point the middle of the
+    // board is scenery rather than a place to defend.
+    //
+    // At 6510px it is by a wide margin the longest route in the game, and a
+    // tower parked in an inner channel covers three or four arms at once. Both
+    // of those pull the same way, which is why it is labelled Gentle.
+    // ─────────────────────────────────────────────────────────────────────────
+    TrackDef {
+        name: "Spiral Garden",
+        blurb: "wind in, then wind out",
+        difficulty: "Gentle",
+        waves: 50,
+        lanes: &[&[
+            (-40.0, 90.0),
+            (1070.0, 90.0),
+            (1070.0, 640.0),
+            (80.0, 640.0),
+            (80.0, 310.0),
+            (850.0, 310.0),
+            (850.0, 420.0),
+            // The turn, at the centre.
+            (300.0, 420.0),
+            (300.0, 530.0),
+            (960.0, 530.0),
+            (960.0, 200.0),
+            (-40.0, 200.0),
         ]],
     },
 ];

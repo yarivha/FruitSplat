@@ -10,6 +10,26 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+### Added
+
+- **Spiral Garden**, a seventh route: fruit wind all the way into the middle,
+  turn, and wind back out through the channels between the arms they came in
+  along. It gets its own backdrop, a clipped-hedge walled garden with the
+  thinnest scatter of scenery in the game, since a spiral leaves little open
+  ground and anything denser buries what is left to build on.
+  - It is a *double* spiral out of necessity. A lane has to leave the screen, so
+    a spiral cannot stop in the middle, and it cannot cut straight out either
+    without crossing every arm it just wound past — so the inbound and outbound
+    arms interleave, and the exit sits below the entrance rather than opposite.
+  - Every parallel pair of arms is 110px apart, which is the number the shape is
+    built on: a tower must be 44px from a centreline, so 88px is the least that
+    leaves a buildable strip between two arms.
+  - At 6510px it is much the longest route, three quarters longer than Meander,
+    and a tower in an inner channel covers three or four arms at once — hence
+    Gentle, despite the look of it.
+- An eighth number key, so the route cards can still all be reached from the
+  keyboard.
+
 ### Changed
 
 - **Routes run 42 to 50 waves**, up from 15 to 25. Market Run 42, Twin Gates 44,

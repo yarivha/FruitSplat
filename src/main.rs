@@ -65,7 +65,7 @@ const CASH_PER_FRUIT_CLEARED: u32 = 1;
 /// types in play, and pick a route on the selection screen. One array so a sixth
 /// route or tower can't gain a card without gaining a key, which is exactly how
 /// route five ended up unreachable from the keyboard.
-pub const NUMBER_KEYS: [KeyCode; 7] = [
+pub const NUMBER_KEYS: [KeyCode; 8] = [
     KeyCode::Key1,
     KeyCode::Key2,
     KeyCode::Key3,
@@ -73,6 +73,7 @@ pub const NUMBER_KEYS: [KeyCode; 7] = [
     KeyCode::Key5,
     KeyCode::Key6,
     KeyCode::Key7,
+    KeyCode::Key8,
 ];
 /// Where the screenshot demo puts one of each tower. One entry per TowerKind,
 /// held to that by a test — it used to be an assert inside the demo, which meant
