@@ -151,6 +151,7 @@ pub const CTRL_ROWS: usize = 4;
 const QUIT_LABEL: &str = "QUIT RUN";
 const QUIT_LABEL_ARMED: &str = "SURE?";
 const AUTO_LABEL: &str = "AUTO";
+const FAST_LABEL: &str = "FAST x2";
 const PAUSE_LABEL: &str = "PAUSE";
 const PAUSE_LABEL_HELD: &str = "RESUME";
 
@@ -1760,8 +1761,27 @@ fn ctrl_row_rect(row: usize) -> Rect {
 // ─────────────────────────────────────────────────────────────────────────────
 // Rect of the pause toggle.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Pause and fast forward share a row, split like the audio pair.
+//
+// Not because they are alike to look at but because the column has no room for
+// another row: seven tower buttons leave 69px above the controls and the layout
+// test wants 60 of it, so a fifth row would have to come out of the towers.
+// Pairing the two time controls is the arrangement that costs nothing, and they
+// belong together anyway — one stops the clock, the other doubles it.
+// ─────────────────────────────────────────────────────────────────────────────
+fn time_button_rect(i: usize) -> Rect {
+    let row = ctrl_row_rect(CTRL_ROW_PAUSE);
+    let w = (row.w - CTRL_GAP) * 0.5;
+    Rect::new(row.x + i as f32 * (w + CTRL_GAP), row.y, w, row.h)
+}
+
+pub fn fast_button_rect() -> Rect {
+    time_button_rect(1)
+}
+
 pub fn pause_button_rect() -> Rect {
-    ctrl_row_rect(CTRL_ROW_PAUSE)
+    time_button_rect(0)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1801,6 +1821,48 @@ pub fn draw_pause_button(paused: bool) {
     let dims = measure_text(label, None, 15, 1.0);
     draw_text(
         label,
+        r.x + (r.w - dims.width) * 0.5,
+        r.y + r.h * 0.5 + 5.0,
+        15.0,
+        ink,
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The fast-forward toggle. Lit amber when on, the same way PAUSE lights when
+// held: the two sit side by side and are the same kind of control, so they
+// should read as one pair rather than as a button and a stranger.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn draw_fast_button(on: bool) {
+    let r = fast_button_rect();
+    let hovered = r.contains(mouse_vec());
+
+    let (bg, edge, ink) = if on {
+        (
+            Color::new(0.34, 0.28, 0.10, 0.96),
+            Color::new(1.0, 0.85, 0.45, 1.0),
+            Color::new(1.0, 0.92, 0.70, 1.0),
+        )
+    } else if hovered {
+        (
+            Color::new(0.22, 0.24, 0.28, 0.95),
+            Color::new(0.62, 0.64, 0.72, 0.95),
+            Color::new(0.90, 0.90, 0.94, 1.0),
+        )
+    } else {
+        (
+            Color::new(0.10, 0.11, 0.15, 0.78),
+            Color::new(0.46, 0.48, 0.56, 0.9),
+            Color::new(0.72, 0.72, 0.78, 1.0),
+        )
+    };
+
+    draw_rectangle(r.x, r.y, r.w, r.h, bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, if on { 2.5 } else { 1.5 }, edge);
+
+    let dims = measure_text(FAST_LABEL, None, 15, 1.0);
+    draw_text(
+        FAST_LABEL,
         r.x + (r.w - dims.width) * 0.5,
         r.y + r.h * 0.5 + 5.0,
         15.0,
@@ -3111,6 +3173,42 @@ mod tests {
             top_control.y - (last.y + last.h) >= 60.0,
             "no room left between the last tower and the controls"
         );
+    }
+
+    #[test]
+    fn pause_and_fast_split_one_row_without_overlapping() {
+        let (pause, fast) = (pause_button_rect(), fast_button_rect());
+
+        assert_eq!(pause.y, fast.y, "the two time controls are not on one row");
+        assert_eq!(pause.h, fast.h);
+        assert!(
+            pause.x + pause.w <= fast.x,
+            "PAUSE and FAST overlap: {}..{} against {}..{}",
+            pause.x,
+            pause.x + pause.w,
+            fast.x,
+            fast.x + fast.w
+        );
+        for r in [pause, fast] {
+            assert!(inside_panel(r), "a time control escapes the column");
+        }
+    }
+
+    #[test]
+    fn both_time_control_labels_fit_their_half_row() {
+        // Character budget rather than measure_text, which needs a graphics
+        // context. A half row is about 94px and the labels are drawn at 15px,
+        // so a little over 10 characters is the most that fits inside it.
+        const MAX_TIME_LABEL_CHARS: usize = 10;
+
+        for label in [PAUSE_LABEL, PAUSE_LABEL_HELD, FAST_LABEL] {
+            assert!(
+                label.len() <= MAX_TIME_LABEL_CHARS,
+                "\"{label}\" is {} chars, over the {MAX_TIME_LABEL_CHARS} that fit \
+                 a half-width button",
+                label.len()
+            );
+        }
     }
 
     #[test]

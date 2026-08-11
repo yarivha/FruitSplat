@@ -12,6 +12,18 @@ commit message and in the comments around the code it touched.
 
 ### Added
 
+- **FAST x2**, a fast-forward toggle beside PAUSE. It doubles everything the
+  world does — fruit, cooldowns, spawns, the auto-send timer — and nothing the
+  interface does, so an armed QUIT RUN still lapses in three real seconds.
+  - It takes two ordinary steps a frame rather than one of twice the length.
+    Collision asks where things are this frame, not what line they travelled
+    between frames: a blueberry at the top of the speed ramp already crosses
+    22px of a spike pile's 25px window in one clamped frame, so a doubled step
+    would carry it 43px clean over the pile and spikes would quietly stop
+    working at speed.
+  - It shares a row with PAUSE because the shop column has no room for another:
+    seven tower buttons leave 69px above the controls and the layout test wants
+    60. The two time controls belong together anyway.
 - **Shielded fruit**, from wave 10. A ring of metal that only a Bomb Lobber's
   shell or a Lv2-or-better tower gets through; everything else is turned away.
   - Not armour. A shield takes no damage and is never chipped down, and the

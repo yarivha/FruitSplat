@@ -93,6 +93,11 @@ const DEMO_TOWER_SPOTS: [Vec2; TowerKind::ALL.len()] = [
 /// by the time it lands the tower that fired may have been upgraded or sold.
 type Hit = (usize, u32, bool);
 
+/// World steps per frame while fast forward is on. Two ordinary steps rather
+/// than one double-length one — see update_play for why that distinction is not
+/// cosmetic.
+const FAST_FORWARD_STEPS: u32 = 2;
+
 /// Seconds between a wave clearing and the next one going out on its own, once
 /// auto-send is armed.
 ///
@@ -156,6 +161,8 @@ struct Game {
     projectiles: Vec<Projectile>,
     splats: Vec<Splat>,
     pulses: Vec<Pulse>,
+    /// Fast forward: the world takes two steps a frame instead of one.
+    fast: bool,
     /// Expanding rings where shells have landed. Cosmetic.
     blasts: Vec<Blast>,
     /// Spike piles sitting on the track, dropped by Spike Layers.
@@ -216,6 +223,7 @@ impl Game {
             projectiles: Vec::new(),
             splats: Vec::new(),
             pulses: Vec::new(),
+            fast: false,
             blasts: Vec::new(),
             spikes: Vec::new(),
             queue: Vec::new(),
@@ -424,10 +432,46 @@ impl Game {
             return;
         }
 
+        // Real seconds, not world ones. Arming the quit button is a promise to
+        // the hand holding the mouse, and fast-forwarding the game should not
+        // make it lapse sooner.
         if self.quit_armed > 0.0 {
             self.quit_armed -= dt;
         }
 
+        // Fast forward runs the world twice at the ordinary step rather than
+        // once at double it, which sounds equivalent and is not. Collision here
+        // is a test of where things are *this frame*, not of the line between
+        // frames: a spike pile covers the fruit's radius plus 14px along the
+        // track, so a blueberry at the top of the speed ramp already crosses
+        // 22px of that 25px window in a single clamped frame. Double the step
+        // and it crosses 43px, clean over the pile, and spikes quietly stop
+        // working at speed. Two ordinary steps keep every window the size it
+        // was.
+        for _ in 0..self.world_steps() {
+            self.step_world(dt);
+            // A step can end the run or the route; the second one must not run
+            // on into a board that has already been settled.
+            if self.state != State::Playing {
+                return;
+            }
+        }
+    }
+
+    /// How many world steps a frame runs: two while fast forward is on.
+    fn world_steps(&self) -> u32 {
+        if self.fast {
+            FAST_FORWARD_STEPS
+        } else {
+            1
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // One step of the world. Everything here advances by `dt`; nothing in it
+    // reads input, so it is safe to run more than once in a frame.
+    // ─────────────────────────────────────────────────────────────────────────
+    fn step_world(&mut self, dt: f32) {
         if self.wave_active {
             self.spawn_from_queue(dt);
         }
@@ -524,6 +568,9 @@ impl Game {
                 self.audio.play_place();
             } else if render::pause_button_rect().contains(m) {
                 self.paused = !self.paused;
+                self.audio.play_place();
+            } else if render::fast_button_rect().contains(m) {
+                self.fast = !self.fast;
                 self.audio.play_place();
             } else if m.x >= PLAYFIELD_W {
                 self.click_shop(m);
@@ -1232,6 +1279,7 @@ impl Game {
         render::draw_audio_buttons(self.audio.sfx_muted(), self.audio.music_muted());
         if self.state == State::Playing {
             render::draw_pause_button(self.paused);
+            render::draw_fast_button(self.fast);
             render::draw_auto_button(self.auto_wave);
             render::draw_quit_button(self.quit_armed > 0.0);
             if self.paused {
@@ -1581,6 +1629,38 @@ async fn main() {
 mod tests {
     use super::*;
     use tower::SPIKE_RADIUS;
+
+    #[test]
+    fn fast_forward_takes_two_ordinary_steps_rather_than_one_long_one() {
+        // The distinction the implementation turns on, pinned as arithmetic
+        // because nothing else can see it: a step is only safe if it is shorter
+        // than the narrowest collision window it has to notice.
+        //
+        // A spike pile covers the fruit's radius plus SPIKE_RADIUS along the
+        // track. The blueberry is the fastest and the smallest, so it has the
+        // narrowest window and the longest stride — if any fruit can cross a
+        // pile without being seen, it is that one.
+        let window = fruit::FruitKind::Blueberry.radius() + SPIKE_RADIUS;
+        let top_speed = fruit::FRUIT_BASE_SPEED
+            * FruitKind::Blueberry.speed_scale()
+            * mode::MODES.iter().map(|m| m.max_speed).fold(0.0, f32::max);
+
+        // The frame clamp in main().
+        const MAX_FRAME: f32 = 0.05;
+        let ordinary = top_speed * MAX_FRAME;
+        let doubled = ordinary * FAST_FORWARD_STEPS as f32;
+
+        assert!(
+            ordinary < window,
+            "even an ordinary step ({ordinary:.0}px) outruns a {window:.0}px pile"
+        );
+        assert!(
+            doubled > window,
+            "a doubled step is {doubled:.0}px against a {window:.0}px window — if this \
+             ever stops being true, scaling dt directly would be safe and this \
+             whole arrangement could go"
+        );
+    }
 
     #[test]
     fn the_web_page_is_built_around_the_view_the_game_draws() {

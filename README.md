@@ -33,6 +33,7 @@ cargo run --release
 | Right click | Cancel placement / close the panel |
 | `Space` | Send the next wave now |
 | Click **PAUSE** | Hold the wave; building stays live |
+| Click **FAST x2** | Run the world at double speed |
 | Click **AUTO** | Waves send themselves, three seconds apart |
 | Click the speaker button | Mute / unmute sound effects |
 | Click the note button | Mute / unmute music |
@@ -170,6 +171,20 @@ Two things had to change to make lanes work at all:
   distances would have every tower covering both gates quietly favour whichever
   lane happened to be longer.
 - **Tower placement must clear every lane**, and so must scenery.
+
+**FAST x2** sits beside PAUSE and runs the world at double speed. It doubles
+everything the world does — fruit, cooldowns, spawns, the auto-send timer — and
+nothing the interface does: an armed QUIT RUN still lapses in three real seconds,
+because that is a promise to the hand on the mouse rather than part of the game.
+
+It works by taking **two ordinary steps a frame**, not one step of twice the
+length, and the difference is not cosmetic. Collision here asks where things are
+*this* frame, not what line they travelled between frames. A spike pile covers
+the fruit's radius plus 14px along the track, and a blueberry at the top of the
+speed ramp already crosses 22px of that 25px window in a single clamped frame —
+double the step and it crosses 43px, clean over the pile, and spikes quietly stop
+working whenever the button is on. Two ordinary steps leave every window the size
+it was.
 
 **PAUSE** holds the wave. Input keeps running while it does — towers can be
 bought, upgraded and sold with everything standing still, which is the point of
