@@ -21,6 +21,11 @@ pub const TOWER_RADIUS: f32 = 20.0;
 pub const PATH_CLEARANCE: f32 = 44.0;
 /// Highest level a tower can reach.
 pub const MAX_LEVEL: u8 = 3;
+/// The level an ordinary tower has to reach before its work gets through a
+/// shielded fruit. Written out rather than spelled `MAX_LEVEL` because it is a
+/// balance decision that happens to coincide with the top of the ladder, not a
+/// statement that the top of the ladder is what matters.
+pub const SHIELD_BREAKING_LEVEL: u8 = 3;
 /// Fraction of everything invested that selling a tower gives back.
 const SELL_REFUND: f32 = 0.6;
 
@@ -217,13 +222,18 @@ impl TowerKind {
     // Whether this tower's work gets through a shielded fruit.
     //
     // Two ways in, and they are meant to be different answers to the same
-    // problem: buy the tower that does it natively, or upgrade what you already
-    // have. The Bomb Lobber qualifies at any level because a shell is the
-    // obvious counter and pricing it at $320 is already the cost of admission;
-    // everything else has to reach Lv2 first.
+    // problem: buy the tower that does it natively, or take one you already own
+    // all the way to the top. The Bomb Lobber qualifies at any level because a
+    // shell is the obvious counter and its $320 is already the cost of
+    // admission; everything else has to be fully upgraded.
+    //
+    // The two prices land close together on purpose. The cheapest Lv3 tower is a
+    // Seed Shooter at 90 + 70 + 150 = $310, against the Bomb Lobber's $320, so
+    // the choice is about what the rest of the board needs rather than about
+    // which is cheaper.
     // ─────────────────────────────────────────────────────────────────────────
     pub fn breaks_shield(&self, level: u8) -> bool {
-        matches!(self, TowerKind::BombLobber) || level >= 2
+        matches!(self, TowerKind::BombLobber) || level >= SHIELD_BREAKING_LEVEL
     }
 
     /// Splash radius of this tower's shots. Zero means single-target.
@@ -828,20 +838,24 @@ mod tests {
     }
 
     #[test]
-    fn a_shield_is_answered_by_a_bomb_or_by_an_upgrade() {
+    fn a_shield_is_answered_by_a_bomb_or_by_a_fully_upgraded_tower() {
         // The two ways through, and they are meant to be a choice: buy the
-        // tower that does it natively, or upgrade what is already on the board.
+        // tower that does it natively, or take one already on the board all the
+        // way to the top. Nothing in between counts — a half-upgraded tower is
+        // as useless against a shield as a fresh one.
         for kind in TowerKind::ALL {
             let bomb = kind == TowerKind::BombLobber;
 
-            assert_eq!(
-                kind.breaks_shield(1),
-                bomb,
-                "{} at Lv1 should {}get through a shield",
-                kind.name(),
-                if bomb { "" } else { "not " }
-            );
-            for level in 2..=MAX_LEVEL {
+            for level in 1..SHIELD_BREAKING_LEVEL {
+                assert_eq!(
+                    kind.breaks_shield(level),
+                    bomb,
+                    "{} at Lv{level} should {}get through a shield",
+                    kind.name(),
+                    if bomb { "" } else { "not " }
+                );
+            }
+            for level in SHIELD_BREAKING_LEVEL..=MAX_LEVEL {
                 assert!(
                     kind.breaks_shield(level),
                     "{} at Lv{level} should get through a shield",
@@ -849,6 +863,30 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn the_two_answers_to_a_shield_cost_about_the_same() {
+        // The choice has to be about what the rest of the board needs, not
+        // about which route is cheaper. The Bomb Lobber does it for its
+        // purchase price; everything else has to be paid all the way up.
+        let bomb = TowerKind::BombLobber.cost();
+        let cheapest_upgraded = TowerKind::ALL
+            .iter()
+            .filter(|k| **k != TowerKind::BombLobber)
+            .map(|k| {
+                (1..SHIELD_BREAKING_LEVEL)
+                    .fold(k.cost(), |sum, lv| sum + k.upgrade_cost(lv).unwrap_or(0))
+            })
+            .min()
+            .expect("there is always another tower");
+
+        let ratio = bomb as f32 / cheapest_upgraded as f32;
+        assert!(
+            (0.75..=1.35).contains(&ratio),
+            "a Bomb Lobber is ${bomb} against ${cheapest_upgraded} for the cheapest \
+             fully upgraded tower, which makes one of the two answers the only answer"
+        );
     }
 
     #[test]

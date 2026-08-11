@@ -171,9 +171,12 @@ pub fn clear_bonus(wave: u32) -> u32 {
 /// The first wave that can send a shielded fruit.
 ///
 /// Ten, which is after the third tier unlocks and about when a player has a
-/// board worth upgrading. Earlier and the answer — a Lv2 tower or a $320 Bomb
-/// Lobber — is not affordable yet, which would not be a puzzle so much as a
-/// wave nobody can touch.
+/// board worth upgrading. Earlier and the answer — a fully upgraded tower at
+/// $310 and up, or a $320 Bomb Lobber — is not affordable yet, which would not
+/// be a puzzle so much as a wave nobody can touch.
+///
+/// It is a real commitment even here: about a third of everything a Medium
+/// player has earned by wave 10 goes on the one tower that can touch a shield.
 pub const FIRST_SHIELD_WAVE: u32 = 10;
 
 /// The one wave in a run where *every* fruit arrives shielded.

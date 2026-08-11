@@ -388,10 +388,15 @@ drawn outside the fruit rather than tinted over it, so it can't be mistaken for
 the Freezer's frost. Only two things get through:
 
 - a **Bomb Lobber**'s shell, at any level, and
-- **any tower at Lv2 or above**.
+- **any tower at Lv3** — fully upgraded, nothing in between.
 
-Everything else is simply turned away. That is the whole mechanic and it is
-deliberately not armour: a shield takes no damage, it isn't chipped down, and the
+Everything else is simply turned away. The two prices land close together on
+purpose: the cheapest Lv3 tower is a Seed Shooter at 90 + 70 + 150 = **$310**,
+against the Bomb Lobber's **$320**, so the choice is about what the rest of your
+board needs rather than about which is cheaper. It is a real commitment either
+way — roughly a third of everything a Medium player has earned by wave 10.
+
+That is the whole mechanic and it is deliberately not armour: a shield takes no damage, it isn't chipped down, and the
 fruit underneath still dies to a single hit that reaches it. What a shield
 changes is *who* can kill the fruit, never how much killing it takes — so it
 applies pressure to what you have built rather than to how much of it.

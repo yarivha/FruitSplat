@@ -25,7 +25,10 @@ commit message and in the comments around the code it touched.
     seven tower buttons leave 69px above the controls and the layout test wants
     60. The two time controls belong together anyway.
 - **Shielded fruit**, from wave 10. A ring of metal that only a Bomb Lobber's
-  shell or a Lv2-or-better tower gets through; everything else is turned away.
+  shell or a fully upgraded Lv3 tower gets through; everything else is turned
+  away. The two prices are close on purpose — $320 for the Bomb Lobber against
+  $310 for the cheapest tower taken to Lv3 — so the choice is about what the
+  board needs rather than which is cheaper.
   - Not armour. A shield takes no damage and is never chipped down, and the
     fruit under it still dies to one hit that reaches it — what changes is
     *who* can kill it, not how much killing it takes. So it presses on what the
