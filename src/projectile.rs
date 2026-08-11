@@ -67,6 +67,10 @@ pub struct Projectile {
     pub life: f32,
     pub spin: f32,
     pub splash: f32,
+    /// Whether this shot gets through a shielded fruit. Baked in at fire time
+    /// from the tower's kind and level, so a shot already in the air keeps the
+    /// ability of the tower that fired it.
+    pub breaks_shield: bool,
     /// How many more fruit this shot can pop before it is used up. Seeds and
     /// pulp are 1; a knife carries several and keeps flying between hits.
     pub pierce: u32,
@@ -89,6 +93,7 @@ impl Projectile {
         splash: f32,
         pierce: u32,
         owner: u32,
+        breaks_shield: bool,
     ) -> Self {
         // Guard against a zero-length direction if the fruit is exactly on top
         // of the tower, which would produce a NaN velocity.
@@ -106,6 +111,7 @@ impl Projectile {
             life: PROJECTILE_LIFE,
             spin: 0.0,
             splash,
+            breaks_shield,
             // A shot that could pop nothing would hang around forever.
             pierce: pierce.max(1),
             owner,

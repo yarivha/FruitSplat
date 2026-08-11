@@ -233,7 +233,7 @@ where they meet.
 | Blender | $170 | 110 px | 1.10s | 58px splash — the answer to clustered splits |
 | Knife Thrower | $130 | 145 px | 0.75s | Knives pierce 3 fruit and keep flying |
 | Spike Layer | $150 | 120 px | 3.60s | Lays spike piles onto the track all wave long |
-| Bomb Lobber | $320 | 125 px | 2.60s | A 110px blast that clears a whole cluster |
+| Bomb Lobber | $320 | 125 px | 2.60s | A 110px blast that clears a whole cluster; gets through shields |
 | Freezer | $140 | 120 px | 1.40s | No damage; chills fruit to 45% speed for 1.6s |
 
 The Blender and the Knife Thrower both beat crowds, but differently: splash hits
@@ -365,6 +365,39 @@ watermelon therefore takes 31 pops in total.
 | 2 | Lime | 19 px | ×1.00 | 1 | 2 × Strawberry | 3 |
 | 1 | Strawberry | 15 px | ×1.12 | 1 | 2 × Blueberry | 2 |
 | 0 | Blueberry | 11 px | ×1.38 | 1 | — | 1 |
+
+### Shielded fruit
+
+From **wave 10**, some fruit arrive inside a metal shield — a ring with rivets,
+drawn outside the fruit rather than tinted over it, so it can't be mistaken for
+the Freezer's frost. Only two things get through:
+
+- a **Bomb Lobber**'s shell, at any level, and
+- **any tower at Lv2 or above**.
+
+Everything else is simply turned away. That is the whole mechanic and it is
+deliberately not armour: a shield takes no damage, it isn't chipped down, and the
+fruit underneath still dies to a single hit that reaches it. What a shield
+changes is *who* can kill the fruit, never how much killing it takes — so it
+applies pressure to what you have built rather than to how much of it.
+
+The same rule holds for spikes, and there it matters more than it looks: a
+shielded fruit walking over a pile it can shrug off doesn't spend a spike. Were
+it otherwise, one shielded blueberry would strip a Lv1 Spike Layer's whole
+stretch on its way past.
+
+Two things are exempt. A **Durian is never shielded** — 60 points of armour and a
+shield would need one specific board rather than a good one, and the boss is
+already answered by the same towers a shield demands. And a shield is **not
+inherited**: a shielded watermelon bursts into ordinary oranges, because passing
+it down would turn one fruit into sixteen shielded blueberries.
+
+Shields start at one fruit in ten and climb by a point a wave to a third, which
+is where it stops — past that a wave stops being a mixed problem and becomes a
+check for one purchase. **Wave 23 is the exception**: every fruit in it is
+shielded. It is thirteen waves after the first shield appears, so it tests
+something you have had a long time to prepare for, and it deliberately avoids the
+five-wave boss schedule rather than stacking the game's two hardest ideas.
 
 ### The Durian
 

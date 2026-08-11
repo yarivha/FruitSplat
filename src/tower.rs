@@ -213,6 +213,19 @@ impl TowerKind {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Whether this tower's work gets through a shielded fruit.
+    //
+    // Two ways in, and they are meant to be different answers to the same
+    // problem: buy the tower that does it natively, or upgrade what you already
+    // have. The Bomb Lobber qualifies at any level because a shell is the
+    // obvious counter and pricing it at $320 is already the cost of admission;
+    // everything else has to reach Lv2 first.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn breaks_shield(&self, level: u8) -> bool {
+        matches!(self, TowerKind::BombLobber) || level >= 2
+    }
+
     /// Splash radius of this tower's shots. Zero means single-target.
     pub fn splash_radius(&self, level: u8) -> f32 {
         match self {
@@ -354,6 +367,10 @@ impl Tower {
         self.kind.spike_charges(self.level)
     }
 
+    pub fn breaks_shield(&self) -> bool {
+        self.kind.breaks_shield(self.level)
+    }
+
     pub fn slow_factor(&self) -> f32 {
         self.kind.slow_factor(self.level)
     }
@@ -428,10 +445,22 @@ pub struct SpikePile {
     /// Stable id of the Spike Layer that dropped this, for kill credit.
     pub owner: u32,
     pub rot: f32,
+    /// Whether these spikes get through a shielded fruit. Baked in when the pile
+    /// is laid, like the charge count, so a pile keeps the ability of the tower
+    /// that laid it even after that tower is upgraded or sold.
+    pub breaks_shield: bool,
 }
 
 impl SpikePile {
-    pub fn new(pos: Vec2, lane: usize, dist: f32, charges: u32, owner: u32, rot: f32) -> Self {
+    pub fn new(
+        pos: Vec2,
+        lane: usize,
+        dist: f32,
+        charges: u32,
+        owner: u32,
+        rot: f32,
+        breaks_shield: bool,
+    ) -> Self {
         SpikePile {
             pos,
             lane,
@@ -439,6 +468,7 @@ impl SpikePile {
             charges,
             owner,
             rot,
+            breaks_shield,
         }
     }
 
@@ -542,7 +572,7 @@ mod tests {
 
     #[test]
     fn a_pile_only_covers_fruit_near_it_along_the_track() {
-        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0);
+        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0, false);
 
         assert!(pile.covers(0, 500.0, 10.0), "fruit on the pile missed it");
         assert!(
@@ -560,7 +590,7 @@ mod tests {
         // On a two-entrance route both lanes converge on the same exit, so a
         // pile near the end of one sits close to fruit walking the other. Same
         // distance, different lane: it must not connect.
-        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0);
+        let pile = SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 0, 0.0, false);
 
         assert!(pile.covers(0, 500.0, 10.0), "own lane missed");
         assert!(!pile.covers(1, 500.0, 10.0), "pile reached across lanes");
@@ -568,7 +598,7 @@ mod tests {
 
     #[test]
     fn a_pile_is_spent_only_once_its_charges_run_out() {
-        let mut pile = SpikePile::new(Vec2::ZERO, 0, 0.0, 2, 0, 0.0);
+        let mut pile = SpikePile::new(Vec2::ZERO, 0, 0.0, 2, 0, 0.0, false);
         assert!(!pile.spent());
         pile.charges -= 1;
         assert!(!pile.spent());
@@ -795,6 +825,44 @@ mod tests {
                 "at Lv{level} the blast no longer spans a useful part of the range"
             );
         }
+    }
+
+    #[test]
+    fn a_shield_is_answered_by_a_bomb_or_by_an_upgrade() {
+        // The two ways through, and they are meant to be a choice: buy the
+        // tower that does it natively, or upgrade what is already on the board.
+        for kind in TowerKind::ALL {
+            let bomb = kind == TowerKind::BombLobber;
+
+            assert_eq!(
+                kind.breaks_shield(1),
+                bomb,
+                "{} at Lv1 should {}get through a shield",
+                kind.name(),
+                if bomb { "" } else { "not " }
+            );
+            for level in 2..=MAX_LEVEL {
+                assert!(
+                    kind.breaks_shield(level),
+                    "{} at Lv{level} should get through a shield",
+                    kind.name()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_bomb_lobber_answers_a_shield_the_moment_it_is_bought() {
+        // Worth pinning separately from the table above: it is the whole reason
+        // the tower is worth $320 the wave shields turn up, and an upgrade that
+        // accidentally granted it at Lv1 would quietly delete that.
+        let armed: Vec<&str> = TowerKind::ALL
+            .iter()
+            .filter(|k| k.breaks_shield(1))
+            .map(|k| k.name())
+            .collect();
+
+        assert_eq!(armed, vec!["Bomb Lobber"]);
     }
 
     #[test]

@@ -228,6 +228,15 @@ pub struct Fruit {
     /// so dies to the first thing that touches it; only the armoured boss ever
     /// sits above that.
     pub hp: u32,
+    /// Shielded fruit ignore anything that is not a shell or an upgraded
+    /// tower's work. Not armour — armour is hit points, and a shield takes no
+    /// damage at all from what it turns away.
+    ///
+    /// It belongs to this fruit and is not inherited: a shielded watermelon
+    /// bursts into ordinary oranges. Passing it down would multiply one shielded
+    /// fruit into sixteen shielded blueberries, and a wave of those cannot be
+    /// answered by any board a player could have built by wave 10.
+    pub shielded: bool,
 }
 
 impl Fruit {
@@ -246,6 +255,7 @@ impl Fruit {
             rot: gen_range(0.0, 360.0),
             spin: gen_range(-50.0, 50.0),
             hp: kind.armour(),
+            shielded: false,
         }
     }
 
@@ -255,12 +265,27 @@ impl Fruit {
     // one boss in a single frame, and the caller turns each `true` into a
     // removal from the fruit list.
     // ─────────────────────────────────────────────────────────────────────────
-    pub fn take_hit(&mut self) -> bool {
+    pub fn take_hit(&mut self, breaks_shield: bool) -> bool {
         if self.hp == 0 {
+            return false;
+        }
+        // A shield turns the hit away entirely rather than absorbing it: no
+        // damage, and nothing spent. What gets through is a Bomb Lobber's shell
+        // or anything an upgraded tower did.
+        if self.shielded && !breaks_shield {
             return false;
         }
         self.hp -= 1;
         self.hp == 0
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // The same fruit, shielded. A builder rather than another argument to new(),
+    // which is called from a dozen places that never want one.
+    // ─────────────────────────────────────────────────────────────────────────
+    pub fn with_shield(mut self) -> Self {
+        self.shielded = true;
+        self
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -445,6 +470,50 @@ impl Splat {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_shield_turns_away_anything_that_cannot_get_through_it() {
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let mut f = Fruit::new(FruitKind::Lime, 0, 10.0, &path, 1.0).with_shield();
+
+        // Ten hits from things that cannot break a shield leave it untouched —
+        // not chipped, not weakened. The shield is not hit points.
+        for _ in 0..10 {
+            assert!(!f.take_hit(false), "a shielded fruit burst to a plain hit");
+        }
+        assert_eq!(f.hp, FruitKind::Lime.armour(), "the shield absorbed damage");
+
+        // The first hit that can get through kills it like any other lime.
+        assert!(f.take_hit(true), "a shell should have burst it");
+    }
+
+    #[test]
+    fn a_shield_does_not_make_a_fruit_tougher_than_its_tier() {
+        // The point of the mechanic is *who* can kill it, never how much it
+        // takes. A shielded lime that needed two shells would be armour by
+        // another name.
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let plain = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0);
+        let mut shielded = Fruit::new(FruitKind::Lime, 0, 0.0, &path, 1.0).with_shield();
+
+        assert_eq!(shielded.hp, plain.hp);
+        assert!(
+            shielded.take_hit(true),
+            "one good hit should still be enough"
+        );
+    }
+
+    #[test]
+    fn children_of_a_shielded_fruit_are_not_shielded() {
+        // Inheriting would turn one shielded watermelon into sixteen shielded
+        // blueberries, which no board built by wave 10 could answer.
+        let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
+        let parent = Fruit::new(FruitKind::Watermelon, 0, 40.0, &path, 1.0).with_shield();
+
+        for child in parent.split(&path) {
+            assert!(!child.shielded, "a shield was passed down to a child");
+        }
+    }
+
     /// Hits needed to clear one fruit and everything below it in the ladder,
     /// armour included.
     fn subtree_hits(kind: FruitKind) -> u32 {
@@ -529,7 +598,7 @@ mod tests {
     fn an_ordinary_fruit_bursts_on_its_first_hit() {
         let path = Path::new(vec![vec2(0.0, 0.0), vec2(500.0, 0.0)]);
         let mut f = Fruit::new(FruitKind::Watermelon, 0, 100.0, &path, 1.0);
-        assert!(f.take_hit(), "a watermelon should not survive a hit");
+        assert!(f.take_hit(true), "a watermelon should not survive a hit");
     }
 
     #[test]
@@ -538,14 +607,17 @@ mod tests {
         let mut f = Fruit::new(FruitKind::Durian, 0, 100.0, &path, 1.0);
 
         for hit in 1..DURIAN_ARMOUR {
-            assert!(!f.take_hit(), "burst early, on hit {hit}");
+            assert!(!f.take_hit(true), "burst early, on hit {hit}");
         }
-        assert!(f.take_hit(), "the last point of armour did not burst it");
+        assert!(
+            f.take_hit(true),
+            "the last point of armour did not burst it"
+        );
 
         // Overkill lands on an already-burst fruit when several shots connect
         // in one frame. It must not report a second burst, or the fruit would
         // be removed from the field twice.
-        assert!(!f.take_hit(), "reported bursting twice");
+        assert!(!f.take_hit(true), "reported bursting twice");
         assert_eq!(f.hp, 0);
     }
 
@@ -556,7 +628,7 @@ mod tests {
         assert_eq!(f.health_fraction(), 1.0);
 
         for _ in 0..DURIAN_ARMOUR / 2 {
-            f.take_hit();
+            f.take_hit(true);
         }
         assert!((f.health_fraction() - 0.5).abs() < 0.01);
 

@@ -12,6 +12,21 @@ commit message and in the comments around the code it touched.
 
 ### Added
 
+- **Shielded fruit**, from wave 10. A ring of metal that only a Bomb Lobber's
+  shell or a Lv2-or-better tower gets through; everything else is turned away.
+  - Not armour. A shield takes no damage and is never chipped down, and the
+    fruit under it still dies to one hit that reaches it — what changes is
+    *who* can kill it, not how much killing it takes. So it presses on what the
+    player has built rather than on how much.
+  - A shielded fruit walking over spikes it can shrug off does not spend one,
+    or a single shielded blueberry would strip a Lv1 Spike Layer's whole stretch
+    on its way past.
+  - Never a Durian, and never inherited by a fruit's children: 60 points of
+    armour behind a shield would demand one specific board, and passing it down
+    would turn one fruit into sixteen shielded blueberries.
+  - The share climbs from one in ten to a third and stops there. **Wave 23 is
+    entirely shielded** — thirteen waves after the first one appears, and off
+    the five-wave boss schedule on purpose.
 - **Spiral Garden**, a seventh route: fruit wind all the way into the middle,
   turn, and wind back out through the channels between the arms they came in
   along. It gets its own backdrop, a clipped-hedge walled garden with the

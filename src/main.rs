@@ -88,6 +88,11 @@ const DEMO_TOWER_SPOTS: [Vec2; TowerKind::ALL.len()] = [
     Vec2::new(770.0, 235.0),
 ];
 
+/// One landed hit: which fruit, which tower to credit, and whether it gets
+/// through a shield. The flag rides along from whatever dealt the hit, because
+/// by the time it lands the tower that fired may have been upgraded or sold.
+type Hit = (usize, u32, bool);
+
 /// Seconds between a wave clearing and the next one going out on its own, once
 /// auto-send is armed.
 ///
@@ -738,13 +743,25 @@ impl Game {
 
                 // Fruit carry the wave's speed ramp, and pass it to their
                 // children when they split.
-                self.fruits.push(Fruit::new(
+                let fruit = Fruit::new(
                     kind,
                     lane,
                     0.0,
                     &self.paths[lane],
                     wave::speed_multiplier(self.wave, mode::mode(self.mode)),
-                ));
+                );
+
+                // Shields are rolled per fruit rather than allotted per wave, so
+                // a share of 0.3 is roughly three in ten rather than exactly
+                // three — the player reads the field, not a quota. A boss is
+                // never shielded: it already has 60 points of armour, and the
+                // two together would need a specific board rather than a good
+                // one.
+                let shielded = kind != FruitKind::Durian
+                    && gen_range(0.0, 1.0) < wave::shield_share(self.wave);
+
+                self.fruits
+                    .push(if shielded { fruit.with_shield() } else { fruit });
             }
             self.spawn_timer = wave::spawn_interval(self.wave);
         }
@@ -812,6 +829,7 @@ impl Game {
                     t.spike_charges(),
                     t.id,
                     gen_range(0.0, 360.0),
+                    t.breaks_shield(),
                 ));
                 t.cooldown = t.fire_cooldown();
                 t.shots_fired += 1;
@@ -872,6 +890,7 @@ impl Game {
                 _ => ProjectileKind::Seed,
             };
             let splash = t.splash_radius();
+            let breaks_shield = t.breaks_shield();
 
             if t.kind == TowerKind::BombLobber {
                 sort_by_crowd(&mut in_range, splash);
@@ -905,6 +924,7 @@ impl Game {
                     splash,
                     pierce,
                     t.id,
+                    breaks_shield,
                 ));
                 t.shots_fired += 1;
             }
@@ -931,8 +951,9 @@ impl Game {
             p.update(dt);
         }
 
-        // (fruit index, id of the tower that gets the credit)
-        let mut hits: Vec<(usize, u32)> = Vec::new();
+        // (fruit index, id of the tower that gets the credit, whether the hit
+        // gets through a shield)
+        let mut hits: Vec<Hit> = Vec::new();
         let mut spent: Vec<usize> = Vec::new();
         // Projectiles that connected this frame and owe a point of pierce.
         let mut connected: Vec<usize> = Vec::new();
@@ -960,7 +981,7 @@ impl Game {
                 let center = self.fruits[fi].pos;
                 for (i, f) in self.fruits.iter().enumerate() {
                     if f.pos.distance(center) <= splash {
-                        hits.push((i, p.owner));
+                        hits.push((i, p.owner, p.breaks_shield));
                     }
                 }
                 // A shell landing is the loudest thing on the field; pulp is a
@@ -972,7 +993,7 @@ impl Game {
                     self.audio.play_splash();
                 }
             } else {
-                hits.push((fi, p.owner));
+                hits.push((fi, p.owner, p.breaks_shield));
             }
         }
 
@@ -1004,7 +1025,7 @@ impl Game {
     // and each one has to count, including several arriving in one frame from
     // splash, pierce and separate towers.
     // ─────────────────────────────────────────────────────────────────────────
-    fn apply_hits(&mut self, hits: Vec<(usize, u32)>) {
+    fn apply_hits(&mut self, hits: Vec<Hit>) {
         if hits.is_empty() {
             return;
         }
@@ -1282,14 +1303,16 @@ fn sort_by_crowd<T: Copy>(targets: &mut Vec<(f32, Vec2, T, usize, f32)>, blast: 
 // Indices come back in ascending order, ready to be removed from the back. They
 // are unique, so the unstable sort has no ties to reorder.
 // ─────────────────────────────────────────────────────────────────────────────
-fn land_hits(fruits: &mut [Fruit], hits: Vec<(usize, u32)>) -> Vec<(usize, u32)> {
+fn land_hits(fruits: &mut [Fruit], hits: Vec<Hit>) -> Vec<(usize, u32)> {
     let mut burst: Vec<(usize, u32)> = Vec::new();
 
-    for (i, owner) in hits {
+    for (i, owner, breaks_shield) in hits {
         // A stale index simply misses. Nothing produces one today, but the
         // alternative is a panic in the middle of a wave.
         if let Some(f) = fruits.get_mut(i) {
-            if f.take_hit() {
+            // A shielded fruit turns away anything that cannot get through,
+            // and the hit is simply lost — no damage, and no burst to report.
+            if f.take_hit(breaks_shield) {
                 burst.push((i, owner));
             }
         }
@@ -1310,19 +1333,24 @@ fn land_hits(fruits: &mut [Fruit], hits: Vec<(usize, u32)>) -> Vec<(usize, u32)>
 // three spikes on a single fruit, which quietly broke the rule the tower is sold
 // on: a pile is worth one hit per spike.
 // ─────────────────────────────────────────────────────────────────────────────
-fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<(usize, u32)> {
+fn run_over_spikes(piles: &mut [SpikePile], fruits: &[Fruit]) -> Vec<Hit> {
     let mut hits = Vec::new();
 
     for (i, f) in fruits.iter().enumerate() {
         // Which of the covering piles pays is arbitrary — every spike is worth
         // the same — so it is simply the first one with any left.
-        let pile = piles
-            .iter_mut()
-            .find(|p| !p.spent() && p.covers(f.lane, f.dist, f.radius()));
+        //
+        // A shielded fruit only spends a spike from a pile that can actually
+        // get through it. Charging one that cannot would have the shield
+        // absorbing spikes rather than turning them away, and a single shielded
+        // blueberry could then walk a Lv1 tower's whole stretch clean.
+        let pile = piles.iter_mut().find(|p| {
+            !p.spent() && p.covers(f.lane, f.dist, f.radius()) && (!f.shielded || p.breaks_shield)
+        });
 
         if let Some(pile) = pile {
             pile.charges -= 1;
-            hits.push((i, pile.owner));
+            hits.push((i, pile.owner, pile.breaks_shield));
         }
     }
 
@@ -1445,6 +1473,10 @@ impl Game {
         }
         // Chill one so the frost treatment shows up too.
         self.fruits[2].chill(0.35, 5.0);
+        // And shield a different one. These are the two overlays most easily
+        // confused for each other, so the capture has to show them side by side
+        // rather than stacked on one fruit.
+        self.fruits[3].shielded = true;
 
         // The boss is staged near the end of the route rather than next in the
         // spacing, to keep it out of the staged Freezer's reach. Screenshot mode
@@ -1474,6 +1506,7 @@ impl Game {
                 *charges,
                 0,
                 i as f32 * 37.0,
+                false,
             ));
         }
 
@@ -1610,8 +1643,10 @@ mod tests {
         Fruit::new(kind, lane, dist, path, 1.0)
     }
 
+    /// A pile from a Lv1 tower: it cannot get through a shield. The tests that
+    /// care about shields build their own.
     fn pile_on(lane: usize, dist: f32, charges: u32, owner: u32) -> SpikePile {
-        SpikePile::new(Vec2::ZERO, lane, dist, charges, owner, 0.0)
+        SpikePile::new(Vec2::ZERO, lane, dist, charges, owner, 0.0, false)
     }
 
     fn pile_at(dist: f32, charges: u32, owner: u32) -> SpikePile {
@@ -1685,12 +1720,54 @@ mod tests {
     }
 
     #[test]
+    fn a_shielded_fruit_walks_over_spikes_it_can_shrug_off_without_spending_one() {
+        // The subtle half of the rule. A shield turns a hit away rather than
+        // absorbing it, so a pile that cannot get through must not be worn down
+        // by the fruit walking over it — otherwise one shielded blueberry
+        // strips a Lv1 tower's whole stretch on its way past, and the shield
+        // costs the player far more than the fruit is worth.
+        let path = straight_path();
+        let mut piles = vec![pile_at(500.0, 4, 7)];
+        let fruits = vec![fruit_at(FruitKind::Lime, 500.0, &path).with_shield()];
+
+        assert!(
+            run_over_spikes(&mut piles, &fruits).is_empty(),
+            "the shield was pierced"
+        );
+        assert_eq!(
+            piles[0].charges, 4,
+            "a spike was spent on a fruit it could not hurt"
+        );
+    }
+
+    #[test]
+    fn spikes_from_an_upgraded_layer_do_get_through_a_shield() {
+        let path = straight_path();
+        let mut piles = vec![SpikePile::new(Vec2::ZERO, 0, 500.0, 4, 7, 0.0, true)];
+        let fruits = vec![fruit_at(FruitKind::Lime, 500.0, &path).with_shield()];
+
+        assert_eq!(run_over_spikes(&mut piles, &fruits), vec![(0, 7, true)]);
+        assert_eq!(piles[0].charges, 3, "the pile should have spent a spike");
+    }
+
+    #[test]
+    fn a_shielded_fruit_ignores_a_hit_that_cannot_reach_it() {
+        // End to end through land_hits: the hit is simply lost, and nothing is
+        // reported as bursting.
+        let path = straight_path();
+        let mut fruits = vec![fruit_at(FruitKind::Lime, 100.0, &path).with_shield()];
+
+        assert!(land_hits(&mut fruits, vec![(0, 1, false)]).is_empty());
+        assert_eq!(land_hits(&mut fruits, vec![(0, 1, true)]), vec![(0, 1)]);
+    }
+
+    #[test]
     fn a_pop_is_credited_to_the_tower_that_dropped_the_pile() {
         let path = straight_path();
         let mut piles = vec![pile_at(200.0, 4, 11), pile_at(900.0, 4, 22)];
         let fruits = vec![fruit_at(FruitKind::Lime, 900.0, &path)];
 
-        assert_eq!(run_over_spikes(&mut piles, &fruits), vec![(0, 22)]);
+        assert_eq!(run_over_spikes(&mut piles, &fruits), vec![(0, 22, false)]);
     }
 
     #[test]
@@ -1762,7 +1839,7 @@ mod tests {
 
         let hits = run_over_spikes(&mut piles, &fruits);
 
-        assert_eq!(hits, vec![(1, 7)], "the wrong lane's fruit was hit");
+        assert_eq!(hits, vec![(1, 7, false)], "the wrong lane's fruit was hit");
         assert_eq!(piles[0].charges, 3, "exactly one spike spent");
     }
 
@@ -1958,7 +2035,7 @@ mod tests {
             fruit_at(FruitKind::Orange, 200.0, &path),
         ];
 
-        assert_eq!(land_hits(&mut fruits, vec![(1, 42)]), vec![(1, 42)]);
+        assert_eq!(land_hits(&mut fruits, vec![(1, 42, false)]), vec![(1, 42)]);
     }
 
     #[test]
@@ -1970,7 +2047,7 @@ mod tests {
         let mut fruits = vec![fruit_at(FruitKind::Durian, 100.0, &path)];
 
         let armour = FruitKind::Durian.armour() as usize;
-        let overkill: Vec<(usize, u32)> = (0..armour + 20).map(|_| (0, 7)).collect();
+        let overkill: Vec<Hit> = (0..armour + 20).map(|_| (0, 7, false)).collect();
 
         assert_eq!(land_hits(&mut fruits, overkill), vec![(0, 7)]);
         assert_eq!(fruits[0].hp, 0);
@@ -1982,7 +2059,7 @@ mod tests {
         let mut fruits = vec![fruit_at(FruitKind::Durian, 100.0, &path)];
 
         let armour = FruitKind::Durian.armour();
-        let batch: Vec<(usize, u32)> = (0..armour - 1).map(|_| (0, 7)).collect();
+        let batch: Vec<Hit> = (0..armour - 1).map(|_| (0, 7, false)).collect();
 
         assert!(land_hits(&mut fruits, batch).is_empty(), "burst too early");
         assert_eq!(fruits[0].hp, 1, "one point of armour should be left");
@@ -1998,7 +2075,16 @@ mod tests {
             .collect();
 
         // Out of order, with a fruit struck twice and one index past the end.
-        let burst = land_hits(&mut fruits, vec![(3, 1), (0, 2), (3, 3), (9, 4), (1, 5)]);
+        let burst = land_hits(
+            &mut fruits,
+            vec![
+                (3, 1, false),
+                (0, 2, false),
+                (3, 3, false),
+                (9, 4, false),
+                (1, 5, false),
+            ],
+        );
 
         let indices: Vec<usize> = burst.iter().map(|&(i, _)| i).collect();
         assert_eq!(indices, vec![0, 1, 3], "a stale index must simply miss");
@@ -2017,7 +2103,7 @@ mod tests {
         for frame in 1..=4 {
             let hits = run_over_spikes(&mut piles, &fruits);
             assert_eq!(hits.len(), 1, "frame {frame} landed no hit");
-            fruits[0].take_hit();
+            fruits[0].take_hit(true);
         }
 
         assert!(

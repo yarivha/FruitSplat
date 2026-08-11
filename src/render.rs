@@ -857,12 +857,68 @@ pub fn draw_fruit(f: &Fruit) {
         draw_circle_lines(c.x, c.y, r * 0.97, 2.0, Color::new(0.82, 0.95, 1.0, 0.60));
     }
 
+    if f.shielded {
+        draw_shield(c, r);
+    }
+
     // Armour readout, bosses only and only once one has actually been hit. An
     // untouched boss shows nothing, so the bar appearing is itself the signal
     // that the fight has started.
     if f.kind.is_boss() && f.hp < f.kind.armour() {
         draw_armour_bar(c, r, f.health_fraction());
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The bubble around a shielded fruit: a hard metallic ring with a faint fill and
+// four rivets.
+//
+// It has to be legible instantly and at a glance, because it is the difference
+// between a fruit a tower can kill and one it cannot — a player watching shots
+// bounce with no visible reason would read it as the game being broken. So it
+// sits *outside* the fruit's own silhouette rather than tinting it, which is
+// what the frost wash above already does and what the two must not be confused
+// for: frost is something a Freezer did, a shield is something the fruit came
+// with.
+// ─────────────────────────────────────────────────────────────────────────────
+fn draw_shield(center: Vec2, r: f32) {
+    let ring = r * 1.28;
+    let steel = Color::new(0.72, 0.80, 0.92, 1.0);
+
+    // A cold fill, kept faint so the fruit's own colour still reads through it.
+    draw_circle(center.x, center.y, ring, Color::new(0.62, 0.74, 0.95, 0.15));
+    // Two rings: a dark backing under a bright edge, so it reads against both
+    // the pale grass and the dark track.
+    draw_circle_lines(
+        center.x,
+        center.y,
+        ring,
+        4.0,
+        Color::new(0.16, 0.22, 0.34, 0.85),
+    );
+    draw_circle_lines(center.x, center.y, ring, 2.0, steel);
+
+    // Rivets at the quarters, which is what makes it read as a shell rather
+    // than another status wash.
+    for i in 0..4 {
+        let a = std::f32::consts::FRAC_PI_4 + i as f32 * std::f32::consts::FRAC_PI_2;
+        let p = center + vec2(a.cos(), a.sin()) * ring;
+        draw_circle(p.x, p.y, r * 0.13, shade(steel, 0.55));
+        draw_circle(p.x - r * 0.02, p.y - r * 0.03, r * 0.07, tint(steel, 0.5));
+    }
+
+    // A highlight arc on the lit side, so the ring reads as curved glass rather
+    // than a flat circle drawn on top.
+    draw_arc(
+        center.x - r * 0.10,
+        center.y - r * 0.12,
+        24,
+        ring * 0.92,
+        200.0,
+        2.0,
+        70.0,
+        Color::new(1.0, 1.0, 1.0, 0.45),
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

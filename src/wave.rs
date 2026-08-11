@@ -168,6 +168,42 @@ pub fn clear_bonus(wave: u32) -> u32 {
     25 + wave * 4
 }
 
+/// The first wave that can send a shielded fruit.
+///
+/// Ten, which is after the third tier unlocks and about when a player has a
+/// board worth upgrading. Earlier and the answer — a Lv2 tower or a $320 Bomb
+/// Lobber — is not affordable yet, which would not be a puzzle so much as a
+/// wave nobody can touch.
+pub const FIRST_SHIELD_WAVE: u32 = 10;
+
+/// The one wave in a run where *every* fruit arrives shielded.
+///
+/// Twenty-three: thirteen waves after shields first appear, so it is a test of
+/// something the player has had a long time to prepare for rather than a
+/// surprise. Deliberately not a multiple of five — a boss wave as well would
+/// stack the game's two hardest ideas on one wave, and the Durian is already
+/// answered by exactly the towers a shielded wave demands.
+pub const ALL_SHIELDED_WAVE: u32 = 23;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The share of a wave's fruit that arrive shielded, 0.0 before wave 10.
+//
+// Climbs slowly and stops at a third. A shielded fruit is not harder to kill —
+// it takes the same single hit — it is harder to *reach*, so the pressure it
+// applies is on what the player has built rather than on how much. Past about a
+// third the wave stops being a mixed problem and becomes a check for one
+// specific purchase, which is a worse thing to ask every wave.
+// ─────────────────────────────────────────────────────────────────────────────
+pub fn shield_share(wave: u32) -> f32 {
+    if wave < FIRST_SHIELD_WAVE {
+        return 0.0;
+    }
+    if wave == ALL_SHIELDED_WAVE {
+        return 1.0;
+    }
+    (0.10 + (wave - FIRST_SHIELD_WAVE) as f32 * 0.01).min(0.33)
+}
+
 /// How much faster fruit move each wave, and the ceiling on that, for the
 /// difficulty the game is balanced around. Modes may soften these; Medium is
 /// these numbers exactly.
@@ -485,6 +521,67 @@ mod tests {
         // saturating_sub guards this; a plain subtraction would wrap.
         for m in &crate::mode::MODES {
             assert_eq!(speed_multiplier(0, m), 1.0, "{}", m.name);
+        }
+    }
+
+    #[test]
+    fn shields_start_at_wave_ten_and_never_take_over_a_wave() {
+        for w in 1..FIRST_SHIELD_WAVE {
+            assert_eq!(shield_share(w), 0.0, "wave {w} sent a shielded fruit");
+        }
+        assert!(shield_share(FIRST_SHIELD_WAVE) > 0.0);
+
+        for w in FIRST_SHIELD_WAVE..=200 {
+            if w == ALL_SHIELDED_WAVE {
+                continue;
+            }
+            assert!(
+                shield_share(w) <= 0.34,
+                "wave {w} is {:.0}% shielded, which asks for one purchase rather \
+                 than a good board",
+                shield_share(w) * 100.0
+            );
+        }
+    }
+
+    #[test]
+    fn the_share_of_shields_only_ever_climbs() {
+        // Barring the one all-shielded wave, which is a spike on purpose.
+        let mut last = 0.0;
+        for w in 1..=200 {
+            if w == ALL_SHIELDED_WAVE {
+                continue;
+            }
+            let share = shield_share(w);
+            assert!(
+                share >= last,
+                "wave {w} sends fewer shields than the one before"
+            );
+            last = share;
+        }
+    }
+
+    #[test]
+    fn one_wave_in_a_run_is_entirely_shielded() {
+        assert_eq!(shield_share(ALL_SHIELDED_WAVE), 1.0);
+
+        // Not a boss wave. A Durian is already answered by the same towers a
+        // shielded wave demands, and stacking the two would make one wave the
+        // whole run's difficulty.
+        assert_eq!(
+            boss_count(ALL_SHIELDED_WAVE, 50),
+            0,
+            "the all-shielded wave landed on a boss wave"
+        );
+
+        // And it has to be a wave every route actually reaches.
+        for t in &crate::tracks::TRACKS {
+            assert!(
+                t.waves >= ALL_SHIELDED_WAVE,
+                "{} ends at wave {} and never sees the shielded wave",
+                t.name,
+                t.waves
+            );
         }
     }
 
