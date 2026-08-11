@@ -10,6 +10,13 @@ commit message and in the comments around the code it touched.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-09
+
+Shielded fruit, a spiral to fight them on, and a fast-forward button for the
+runs that got four times longer. The difficulty curve was rebuilt underneath all
+of it: waves 13 and 30 were the two places a run used to end or stop mattering,
+and neither does now.
+
 ### Added
 
 - **FAST x2**, a fast-forward toggle beside PAUSE. It doubles everything the
